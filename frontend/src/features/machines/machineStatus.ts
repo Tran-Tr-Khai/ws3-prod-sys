@@ -25,3 +25,11 @@ export function toHMIStatus(status: MachineStatus): HMIStatus {
 export function formatStatus(status: MachineStatus): string {
   return status.charAt(0) + status.slice(1).toLowerCase();
 }
+
+export type MachineHMIState = 'RUNNING' | 'STOPPED' | 'ALARM';
+
+export function toMachineHMIState(status: MachineStatus): MachineHMIState {
+  if (status === 'RUNNING') return 'RUNNING';
+  if (status === 'ALARM' || status === 'WARNING') return 'ALARM';
+  return 'STOPPED';
+}

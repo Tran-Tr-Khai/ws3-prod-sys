@@ -22,3 +22,11 @@ export async function fetchMachines(signal?: AbortSignal): Promise<MachineSnapsh
   }
   return (await response.json()) as MachineSnapshot[];
 }
+
+export async function fetchMachine(machineId: string, signal?: AbortSignal): Promise<MachineSnapshot> {
+  const response = await fetch(`${apiBaseUrl}/simulator/machines/${encodeURIComponent(machineId)}`, { signal });
+  if (!response.ok) {
+    throw new Error(response.status === 404 ? 'Machine not found.' : `Machine API returned HTTP ${response.status}`);
+  }
+  return (await response.json()) as MachineSnapshot;
+}

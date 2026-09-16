@@ -9,6 +9,8 @@ export { ParameterDisplay } from './ParameterDisplay';
 export { ProcessPanel } from './ProcessPanel';
 export { SetpointDisplay } from './SetpointDisplay';
 export { StatusLamp } from './StatusLamp';
+export { TrendChart } from './TrendChart';
 export { ValueDisplay } from './ValueDisplay';
+export type { TrendPoint } from './TrendChart';
 export type { FunctionKey } from './FunctionKeyBar';
 export type { HMIButtonSize, HMIButtonVariant, HMIStatus } from './types';
