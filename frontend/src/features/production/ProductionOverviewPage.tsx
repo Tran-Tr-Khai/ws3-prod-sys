@@ -77,7 +77,7 @@ export function ProductionOverviewPage() {
       <div className="mx-auto max-w-[1280px] space-y-3 p-3">
         <section className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
           {summaryCards.map((card) => (
-            <div key={card.key} className={`border-l-4 bg-white px-3 py-3 ${card.tone}`}>
+            <div key={card.key} className={`border border-line border-l-4 bg-panel px-3 py-2 ${card.tone}`}>
               <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{card.label}</div>
               <div className="mt-1 font-mono text-2xl font-bold tabular-nums">
                 {card.key === 'productionToday' ? formatProduction(summary[card.key]) : summary[card.key]}
@@ -87,8 +87,8 @@ export function ProductionOverviewPage() {
           ))}
         </section>
 
-        <section className="border border-line bg-white">
-          <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surfaceMuted px-3 py-2">
+        <section className="rounded-none border-2 border-line bg-panel">
+          <header className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-line bg-surfaceMuted px-3 py-1.5">
             <div>
               <h2 className="text-sm font-bold uppercase tracking-wide text-slate-700">Machine overview</h2>
               <p className="text-[11px] text-slate-500">Compact live status list</p>
@@ -113,7 +113,7 @@ export function ProductionOverviewPage() {
                 <button
                   key={machine.machineId}
                   type="button"
-                  className="grid grid-cols-[1fr_auto] gap-3 px-3 py-3 text-left hover:bg-blue-50"
+                  className="grid grid-cols-[1fr_auto] gap-3 px-3 py-2 text-left hover:bg-surfaceMuted"
                   onClick={() => navigate(`/machine/${machine.machineId}`)}
                 >
                   <span>

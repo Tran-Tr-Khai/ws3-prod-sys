@@ -69,7 +69,7 @@ export function MachineHMIPage() {
   if (error && !machine) {
     return (
       <main className="min-h-screen bg-navy p-6">
-        <div className="border border-alarm bg-white p-6">
+        <div className="border-2 border-alarm bg-panel p-6">
           <h1 className="font-bold text-alarm">Machine unavailable</h1>
           <p className="mt-2 text-sm text-slate-600">{error}</p>
           <HMIButton className="mt-5" variant="primary" onClick={() => void loadMachine()}>Retry</HMIButton>

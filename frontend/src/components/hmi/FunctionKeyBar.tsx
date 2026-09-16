@@ -12,7 +12,7 @@ type FunctionKeyBarProps = {
 
 export function FunctionKeyBar({ keys }: FunctionKeyBarProps) {
   return (
-    <nav className="grid grid-cols-2 gap-2 border-t border-line bg-surfaceMuted p-2 sm:grid-cols-4 lg:grid-cols-6">
+    <nav className="grid grid-cols-2 gap-1 border-t-2 border-line bg-surfaceMuted p-1 sm:grid-cols-4 lg:grid-cols-6">
       {keys.map((item) => (
         <HMIButton key={item.key} size="compact" disabled={item.disabled}>
           <span className="mr-2 font-mono text-industrial">{item.key}</span>
