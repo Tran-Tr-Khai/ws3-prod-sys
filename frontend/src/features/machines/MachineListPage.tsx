@@ -17,7 +17,7 @@ function formatStartTime(value: string): string {
 }
 
 function selectClassName(): string {
-  return 'min-h-10 border border-line bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-industrial focus:ring-2 focus:ring-blue-100';
+  return 'min-h-10 rounded-none border-2 border-line bg-panel px-3 text-sm font-medium text-slate-700 outline-none focus:border-industrial focus:ring-2 focus:ring-slate-300';
 }
 
 type MachineFilters = {
@@ -81,8 +81,8 @@ export function MachineListPage() {
       />
 
       <div className="mx-auto max-w-[1280px] space-y-3 p-3">
-        <section className="border border-line bg-white">
-          <div className="flex flex-wrap items-end gap-3 border-b border-line bg-surfaceMuted p-3">
+        <section className="rounded-none border-2 border-line bg-panel">
+          <div className="flex flex-wrap items-end gap-3 border-b-2 border-line bg-surfaceMuted p-3">
             <label className="grid min-w-40 gap-1 text-xs font-bold uppercase tracking-wide text-slate-600">
               Process
               <select
@@ -160,7 +160,7 @@ export function MachineListPage() {
                   {filteredMachines.map((machine) => (
                     <tr
                       key={machine.machineId}
-                      className="cursor-pointer border-b border-slate-100 hover:bg-blue-50 focus-within:bg-blue-50"
+                      className="cursor-pointer border-b border-slate-300 hover:bg-surfaceMuted focus-within:bg-surfaceMuted"
                       tabIndex={0}
                       onClick={() => navigate(`/machine/${machine.machineId}`)}
                       onKeyDown={(event) => {

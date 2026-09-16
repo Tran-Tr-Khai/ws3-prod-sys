@@ -19,10 +19,10 @@ export function HMIHeader({
   children,
 }: HMIHeaderProps) {
   return (
-    <header className="flex min-h-14 items-center justify-between gap-4 bg-industrial px-4 py-2 text-white">
+    <header className="flex min-h-12 items-center justify-between gap-4 border-b-2 border-industrialDark bg-industrial px-3 py-1.5 text-white">
       <div className="min-w-0">
-        <div className="truncate text-base font-bold tracking-wide">{title}</div>
-        {subtitle && <div className="truncate text-[11px] text-blue-100">{subtitle}</div>}
+        <div className="truncate text-sm font-bold uppercase tracking-wide">{title}</div>
+        {subtitle && <div className="truncate text-[11px] text-slate-200">{subtitle}</div>}
       </div>
       {machineName && (
         <div className="hidden items-center gap-3 border-l border-white/30 pl-4 text-xs sm:flex">
@@ -33,7 +33,7 @@ export function HMIHeader({
         </div>
       )}
       <div className="ml-auto flex items-center gap-3 text-xs">
-        <span className="font-mono tabular-nums text-blue-100">{time}</span>
+        <span className="font-mono tabular-nums text-slate-200">{time}</span>
         {children}
       </div>
     </header>

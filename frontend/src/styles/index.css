@@ -3,9 +3,10 @@
 @tailwind utilities;
 
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif;
   color: #1f2937;
-  background: #eef3f7;
+  background: #d9dfe3;
+  font-variant-numeric: tabular-nums;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -18,5 +19,5 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: #eef3f7;
+  background: #d9dfe3;
 }

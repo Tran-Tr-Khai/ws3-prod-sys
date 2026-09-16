@@ -23,22 +23,22 @@ function pointPath(series: TrendPoint[], width: number, height: number): string 
   }).join(' ');
 }
 
-export function TrendChart({ series, label, unit, color = '#164f86' }: TrendChartProps) {
+export function TrendChart({ series, label, unit, color = '#4b6475' }: TrendChartProps) {
   const width = 640;
   const height = 150;
   const path = pointPath(series, width, height);
   const latest = series.at(-1)?.value;
 
   return (
-    <section className="border border-line bg-white">
-      <header className="flex items-center justify-between border-b border-line bg-surfaceMuted px-3 py-2">
+    <section className="rounded-none border-2 border-line bg-panel shadow-none">
+      <header className="flex items-center justify-between border-b-2 border-line bg-surfaceMuted px-3 py-1.5">
         <h2 className="text-xs font-bold uppercase tracking-wide text-slate-700">Trend · {label}</h2>
         <span className="font-mono text-xs font-bold text-industrial">
           {latest === undefined ? 'Waiting for samples' : `${latest.toFixed(1)} ${unit}`}
         </span>
       </header>
       <div className="p-3">
-        <div className="h-40 w-full bg-[#f8fafc]">
+        <div className="h-40 w-full bg-[#eef1f2]">
           {series.length > 0 ? (
             <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" role="img" aria-label={`${label} trend chart`} preserveAspectRatio="none">
               <path d="M 0 25 H 640 M 0 75 H 640 M 0 125 H 640" stroke="#d8e1ea" strokeWidth="1" />
