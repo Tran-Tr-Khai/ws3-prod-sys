@@ -24,7 +24,7 @@ export function DesignSystemDemo() {
         <AlarmIndicator count={2} status="warning" label="ALM" />
       </HMIHeader>
 
-      <div className="mx-auto max-w-[1100px] space-y-3 p-3">
+      <div className="w-full space-y-3 p-3">
         <div className="grid gap-3 lg:grid-cols-[1.1fr_1.6fr_1fr]">
           <ParameterCard title="Machine status" code="SYS-001">
             <MachineStatus name="Demo Machine 01" code="M-001" status="running" detail="Simulator online" />
