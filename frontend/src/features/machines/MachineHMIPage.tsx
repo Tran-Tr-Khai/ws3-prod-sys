@@ -90,7 +90,7 @@ export function MachineHMIPage() {
         time={new Date().toLocaleTimeString('vi-VN')}
       />
 
-      <div className="mx-auto grid max-w-[1280px] gap-3 p-3 xl:grid-cols-[1fr_1.5fr_1fr]">
+      <div className="grid w-full gap-3 p-3 xl:grid-cols-[1fr_1.5fr_1fr]">
         <ProcessPanel title="Machine / process status" status={hmiStateStatus(state)} statusLabel={state}>
           <div className="flex min-h-36 flex-col items-center justify-center border border-line bg-surfaceMuted">
             <StatusLamp status={hmiStateStatus(state)} label={state} />
