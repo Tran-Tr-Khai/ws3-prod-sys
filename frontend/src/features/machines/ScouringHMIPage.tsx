@@ -97,7 +97,49 @@ export function ScouringHMIPage() {
         </aside>
         <section className="flex min-h-0 min-w-0 flex-col bg-panel">
           <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">Scouring parameters / Process values</h2><span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider"><StatusLamp status="info" showLabel={false} /> MANUAL INPUT</span></header>
-          <div className="min-h-0 flex-1 bg-surfaceMuted p-2"><div className="grid h-full grid-cols-2 grid-rows-[auto_auto_auto_auto] content-start items-start gap-px bg-line lg:grid-cols-4 lg:grid-rows-[auto_auto]">{validatedParameters.map((parameter) => <ParameterSetpoint key={parameter.label} {...parameter} actual={actualValues[parameter.label]} actualEditable onActualChange={(value) => updateActualValue(parameter.label, value)} onInvalidInput={() => logInvalidInput(parameter)} />)}</div></div>
+          <div className="min-h-0 flex-1 overflow-hidden bg-surfaceMuted p-2">
+            <div className="flex h-full min-h-0 flex-col gap-2">
+              <section className="min-h-0 flex-none overflow-hidden border border-line bg-hmiInstrument">
+                <div className="flex min-h-7 items-center justify-between border-b border-line bg-[#d7e0e4] px-2 py-1">
+                  <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-industrial">Live parameter grid</h3>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">8 readings</span>
+                </div>
+                <div className="grid grid-cols-2 content-start items-start gap-px bg-line lg:grid-cols-4">
+                  {validatedParameters.map((parameter) => <ParameterSetpoint key={parameter.label} {...parameter} actual={actualValues[parameter.label]} actualEditable onActualChange={(value) => updateActualValue(parameter.label, value)} onInvalidInput={() => logInvalidInput(parameter)} />)}
+                </div>
+              </section>
+              <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 lg:grid-cols-2">
+                <section className="min-h-0 overflow-hidden border border-line bg-hmiInstrument">
+                  <header className="flex min-h-7 items-center justify-between border-b border-line bg-[#d7e0e4] px-2 py-1">
+                    <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-industrial">Operation context</h3>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">Current job</span>
+                  </header>
+                  <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-2 py-2 text-[11px]">
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Machine</span><span className="font-mono font-bold text-industrial">SC-01</span>
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Process</span><span className="font-semibold">Scouring / 정련기</span>
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Batch</span><span className="font-mono font-bold text-industrial">SC-260917-01</span>
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Recipe</span><span>Cotton / Standard</span>
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Operator</span><span>N. Tran</span>
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Input mode</span><span className="font-semibold uppercase text-info">Manual readings</span>
+                  </div>
+                </section>
+                <section className="min-h-0 overflow-hidden border border-line bg-hmiInstrument">
+                  <header className="flex min-h-7 items-center justify-between border-b border-line bg-[#d7e0e4] px-2 py-1">
+                    <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-industrial">Validation / record summary</h3>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">WS3 check</span>
+                  </header>
+                  <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-2 py-2 text-[11px]">
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Readings</span><span className="font-mono font-bold text-industrial">{validatedParameters.length} / {validatedParameters.length}</span>
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Warning</span><span className="font-mono font-bold text-warning">{warningCount}</span>
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Alarm</span><span className="font-mono font-bold text-alarm">{alarmCount}</span>
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Record</span><span className="font-semibold uppercase text-slate-600">{savedRecord ? 'Confirmed / saved' : 'Pending confirmation'}</span>
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Last confirm</span><span className="font-mono text-slate-700">{savedRecord ? new Date(savedRecord.timestamp).toLocaleTimeString('vi-VN') : '—'}</span>
+                    <span className="font-bold uppercase tracking-wide text-slate-500">Alarm ack</span><span className="font-semibold uppercase text-slate-700">{alarmCount === 0 ? 'Not required' : alarmAcknowledged ? 'Acknowledged' : 'Required'}</span>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
     </div>
