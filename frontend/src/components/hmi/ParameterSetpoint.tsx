@@ -33,7 +33,7 @@ export function ParameterSetpoint({
 }: ParameterSetpointProps) {
   const hasRange = min !== undefined && max !== undefined;
   const actualTone = status === 'warning' ? 'text-warning' : status === 'alarm' ? 'text-alarm' : 'text-industrial';
-  const cellTone = status === 'warning' ? 'bg-[#fff7df]' : status === 'alarm' ? 'bg-[#f8e7e7]' : 'bg-[#eef2f3]';
+  const cellTone = status === 'warning' ? 'bg-hmiWarning' : status === 'alarm' ? 'bg-hmiAlarm' : 'bg-hmiInstrument';
   const handleActualChange = (event: ChangeEvent<HTMLInputElement>) => {
     const rawValue = event.target.value.trim();
     if (!rawValue) {
@@ -69,7 +69,7 @@ export function ParameterSetpoint({
                 max={typeof max === 'number' ? max : undefined}
                 value={actual}
                 onChange={handleActualChange}
-                className={`h-9 min-w-0 w-[6.3rem] border border-info bg-[#fffdf2] px-1 font-mono text-right text-[25px] font-bold leading-none tracking-tight tabular-nums outline-none focus:border-industrial focus:ring-1 focus:ring-industrial ${actualTone}`}
+                className={`h-9 min-w-0 w-[6.3rem] border border-info bg-hmiInput px-1 font-mono text-right text-[25px] font-bold leading-none tracking-tight tabular-nums outline-none focus:border-industrial focus:ring-1 focus:ring-industrial ${actualTone}`}
               />
               <span className="pb-1 text-[10px] font-semibold text-slate-500">{unit}</span>
             </span>
