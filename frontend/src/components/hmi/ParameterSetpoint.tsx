@@ -46,7 +46,7 @@ export function ParameterSetpoint({
   };
 
   return (
-    <section className={`flex h-full min-h-[132px] flex-col overflow-hidden shadow-[inset_0_-1px_0_rgba(255,255,255,0.7)] ${cellTone}`}>
+    <section className={`min-h-[132px] overflow-hidden shadow-[inset_0_-1px_0_rgba(255,255,255,0.7)] ${cellTone}`}>
       <header className="flex min-h-8 items-center justify-between border-b border-line px-2.5 py-1">
         <h3 className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-slate-800">{label}</h3>
         <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
@@ -55,7 +55,7 @@ export function ParameterSetpoint({
         </span>
       </header>
 
-      <div className="flex flex-1 flex-col px-2.5 py-2">
+      <div className="px-2.5 py-2">
         <div className="flex items-end justify-between gap-2">
           <span className="pb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Actual</span>
           {actualEditable ? (
@@ -80,7 +80,7 @@ export function ParameterSetpoint({
           )}
         </div>
 
-        <div className="mt-auto grid grid-cols-[auto_1fr] items-center gap-x-3 border-t border-line pt-1.5">
+        <div className="mt-2 grid grid-cols-[auto_1fr] items-center gap-x-3 border-t border-line pt-1.5">
           <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Set</span>
           <span className="font-mono text-right text-sm font-bold leading-none tabular-nums text-slate-700">
             {formatValue(setpoint)} <span className="text-[10px] font-normal text-slate-500">{unit}</span>
