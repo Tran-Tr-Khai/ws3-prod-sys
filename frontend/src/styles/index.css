@@ -21,3 +21,19 @@ body {
   margin: 0;
   background: #d9dfe3;
 }
+
+/* Engineering-grade HMI type calibration */
+@layer base {
+  h1, h2, h3, label, button, input, select {
+    line-height: 1.15;
+  }
+
+  button, input, select {
+    font-family: inherit;
+  }
+
+  .font-mono {
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: 0.015em;
+  }
+}

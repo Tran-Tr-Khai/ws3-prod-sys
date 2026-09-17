@@ -29,7 +29,7 @@ export function HMIButton({
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center rounded-none border-2 font-semibold active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-none border-2 font-semibold leading-tight tracking-wide active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...props}
     />
   );
