@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlarmIndicator } from '../../components/hmi/AlarmIndicator';
 import { FunctionKeyBar } from '../../components/hmi/FunctionKeyBar';
 import { HMIHeader } from '../../components/hmi/HMIHeader';
 import { HMIButton } from '../../components/hmi/HMIButton';
@@ -83,22 +82,22 @@ export function ScouringHMIPage() {
     <div className="mx-2 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-[#c7d0d4]">
       <div className="grid min-h-0 flex-1 lg:grid-cols-[278px_minmax(0,1fr)]">
         <aside className="flex flex-col border-b-2 border-industrialDark bg-[#d3dce0] lg:border-b-0 lg:border-r-2">
-          <section className="border-b-2 border-line">
+          <section className="border-b border-line">
             <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">Machine status</h2><StatusLamp status={machineStatus} label={running ? 'RUN' : 'STOP'} /></header>
             <div className="flex items-center justify-between gap-2 px-2 py-2.5"><div className="flex min-w-0 items-center gap-2"><StatusLamp status={machineStatus} showLabel={false} /><div><div className="font-mono text-xl font-bold tracking-[0.16em] text-industrial">{running ? 'RUNNING' : 'STOPPED'}</div><div className="text-[10px] uppercase tracking-wide text-slate-500">SC-01 · Scouring line</div></div></div><button type="button" className="min-h-11 min-w-[82px] border-2 border-industrialDark bg-industrial px-2 text-xs font-bold uppercase tracking-wide text-white active:translate-y-px active:bg-industrialDark" onClick={handleMachineToggle}>{running ? 'STOP' : 'START'}</button></div>
           </section>
-          <section className="border-b-2 border-line">
+          <section className="border-b border-line">
             <header className="flex min-h-8 items-center justify-between border-b border-line bg-[#dfe5e8] px-2 py-1"><h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">Batch information</h2><span className="font-mono text-[10px] text-slate-500">BATCH</span></header>
             <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 px-2 py-2 text-xs"><span className="font-bold uppercase tracking-wide text-slate-500">Batch</span><span className="font-mono font-bold text-industrial">SC-260917-01</span><span className="font-bold uppercase tracking-wide text-slate-500">Recipe</span><span className="font-semibold">Cotton / Standard</span><span className="font-bold uppercase tracking-wide text-slate-500">Operator</span><span>N. Tran</span></div>
           </section>
           <section>
             <header className="flex min-h-8 items-center justify-between border-b border-line bg-[#dfe5e8] px-2 py-1"><h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">Alarm / status</h2><span className="font-mono text-[10px] text-slate-500">ALM</span></header>
-            <div className="flex items-center justify-between gap-2 px-2 py-2"><div className="min-w-0"><AlarmIndicator count={alarmCount} status={alarmCount ? "alarm" : warningCount ? "warning" : "normal"} /><div className="mt-1 border-t border-line pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">WS3 validation · manual readings · {warningCount} warning / {alarmCount} alarm</div></div><div className="flex shrink-0 flex-col gap-1"><HMIButton size="compact" variant={alarmAcknowledged ? "secondary" : "danger"} disabled={alarmCount === 0 || alarmAcknowledged} onClick={acknowledgeAlarms}>{alarmAcknowledged ? "ACKNOWLEDGED" : "ACKNOWLEDGE ALARM"}</HMIButton><HMIButton size="compact" variant="primary" disabled={alarmCount > 0 && !alarmAcknowledged} onClick={confirmRecord}>{savedRecord ? "RECORD SAVED" : "CONFIRM RECORD"}</HMIButton></div></div>
+            <div className="flex items-center justify-between gap-2 px-2 py-2"><div className="min-w-0"><div className="flex items-center gap-2 py-1"><StatusLamp status={alarmCount ? "alarm" : warningCount ? "warning" : "normal"} showLabel={false} /><span className="text-xs font-bold uppercase tracking-wider text-slate-600">Alarms</span><span className="font-mono text-lg font-bold tabular-nums text-slate-800">{alarmCount}</span></div><div className="mt-1 border-t border-line pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">WS3 validation · manual readings · {warningCount} warning / {alarmCount} alarm</div></div><div className="flex shrink-0 flex-col gap-1"><HMIButton size="compact" variant={alarmAcknowledged ? "secondary" : "danger"} disabled={alarmCount === 0 || alarmAcknowledged} onClick={acknowledgeAlarms}>{alarmAcknowledged ? "ACKNOWLEDGED" : "ACKNOWLEDGE ALARM"}</HMIButton><HMIButton size="compact" variant="primary" disabled={alarmCount > 0 && !alarmAcknowledged} onClick={confirmRecord}>{savedRecord ? "RECORD SAVED" : "CONFIRM RECORD"}</HMIButton></div></div>
           </section>
         </aside>
         <section className="flex min-h-0 min-w-0 flex-col bg-panel">
           <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">Scouring parameters / Process values</h2><span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider"><StatusLamp status="info" showLabel={false} /> MANUAL INPUT</span></header>
-          <div className="min-h-0 flex-1 bg-[#dfe5e8] p-2"><div className="grid h-full grid-cols-2 grid-rows-4 gap-2 lg:grid-cols-4 lg:grid-rows-2">{validatedParameters.map((parameter) => <ParameterSetpoint key={parameter.label} {...parameter} actual={actualValues[parameter.label]} actualEditable onActualChange={(value) => updateActualValue(parameter.label, value)} onInvalidInput={() => logInvalidInput(parameter)} />)}</div></div>
+          <div className="min-h-0 flex-1 bg-[#dfe5e8] p-2"><div className="grid h-full grid-cols-2 grid-rows-4 gap-px bg-line lg:grid-cols-4 lg:grid-rows-2">{validatedParameters.map((parameter) => <ParameterSetpoint key={parameter.label} {...parameter} actual={actualValues[parameter.label]} actualEditable onActualChange={(value) => updateActualValue(parameter.label, value)} onInvalidInput={() => logInvalidInput(parameter)} />)}</div></div>
         </section>
       </div>
     </div>
