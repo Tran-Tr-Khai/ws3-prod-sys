@@ -43,7 +43,7 @@ export function ScouringHistoryPage() {
   const statuses = [...new Set(records.map((record) => record.recordStatus ?? 'CONFIRMED'))];
 
   return <main className="h-screen min-h-[600px] overflow-hidden bg-navy text-slate-800 flex flex-col">
-    <HMIHeader title="WS3 / Scouring History" subtitle="Digital operation records · Manual operator input" machineName="SC-01" status="info" time={new Date().toLocaleTimeString('vi-VN')} />
+    <HMIHeader variant="machine" title="WS3 / Scouring History" subtitle="Digital operation records · Manual operator input" machineName="SC-01" status="info" time={new Date().toLocaleTimeString('vi-VN')} />
     <div className="mx-2 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-[#c7d0d4]">
       <section className="border-b-2 border-industrialDark">
         <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">Record filters</h2><span className="font-mono text-[10px] uppercase tracking-wider">{filteredRecords.length} / {records.length}</span></header>
