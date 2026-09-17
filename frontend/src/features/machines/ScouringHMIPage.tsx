@@ -97,7 +97,7 @@ export function ScouringHMIPage() {
         </aside>
         <section className="flex min-h-0 min-w-0 flex-col bg-panel">
           <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">Scouring parameters / Process values</h2><span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider"><StatusLamp status="info" showLabel={false} /> MANUAL INPUT</span></header>
-          <div className="min-h-0 flex-1 bg-surfaceMuted p-2"><div className="grid h-full grid-cols-2 grid-rows-4 gap-px bg-line lg:grid-cols-4 lg:grid-rows-2">{validatedParameters.map((parameter) => <ParameterSetpoint key={parameter.label} {...parameter} actual={actualValues[parameter.label]} actualEditable onActualChange={(value) => updateActualValue(parameter.label, value)} onInvalidInput={() => logInvalidInput(parameter)} />)}</div></div>
+          <div className="min-h-0 flex-1 bg-surfaceMuted p-2"><div className="grid h-full grid-cols-2 grid-rows-[auto_auto_auto_auto] content-start items-start gap-px bg-line lg:grid-cols-4 lg:grid-rows-[auto_auto]">{validatedParameters.map((parameter) => <ParameterSetpoint key={parameter.label} {...parameter} actual={actualValues[parameter.label]} actualEditable onActualChange={(value) => updateActualValue(parameter.label, value)} onInvalidInput={() => logInvalidInput(parameter)} />)}</div></div>
         </section>
       </div>
     </div>
