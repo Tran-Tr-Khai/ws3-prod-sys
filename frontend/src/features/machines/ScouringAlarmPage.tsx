@@ -79,6 +79,6 @@ export function ScouringAlarmPage() {
         </section>
       </div>
     </div>
-    <div className="mx-2 mt-2"><FunctionKeyBar keys={[{ key: 'F1', label: 'Current HMI' }, { key: 'F4', label: 'History' }, { key: 'F5', label: 'Alarm' }, { key: 'F6', label: 'Menu' }]} /></div>
+    <div className="mx-2 mt-2"><FunctionKeyBar keys={[{ key: 'F1', label: 'Current HMI' }, { key: 'F4', label: 'History' }, { key: 'F5', label: 'Alarm', active: true }, { key: 'F6', label: 'Menu' }]} /></div>
   </main>;
 }
