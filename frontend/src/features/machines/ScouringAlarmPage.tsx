@@ -47,7 +47,7 @@ export function ScouringAlarmPage() {
   const selectedEvent = filteredEvents.find((event) => event.eventId === selectedId) ?? filteredEvents[0] ?? null;
   const clearFilters = () => { setDate(''); setMachine(''); setBatch(''); setOperator(''); setEventType(''); setStatus(''); };
 
-  return <main className="h-screen min-h-[600px] overflow-hidden bg-navy text-slate-800 flex flex-col">
+  return <main className="h-full min-h-0 overflow-hidden bg-navy text-slate-800 flex flex-col">
     <HMIHeader variant="machine" title="WS3 / Scouring Alarm Log" subtitle="WS3 validation and operator events · Manual input source" machineName="SC-01" status={activeAlarms.length ? 'alarm' : 'info'} time={new Date().toLocaleTimeString('vi-VN')} />
     <div className="mx-2 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
       <section className="flex-none border-b-2 border-industrialDark">

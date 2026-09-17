@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root {
+  --hmi-scale: 1.25;
   font-family: "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif;
   color: #1f2937;
   background: #c4cdd1;
@@ -36,4 +37,20 @@ body {
     font-variant-numeric: tabular-nums lining-nums;
     letter-spacing: 0.015em;
   }
+}
+/* Central HMI display scale: layout is authored at 80% viewport, then rendered at 125%. */
+#root {
+  width: calc(100vw / var(--hmi-scale));
+  height: calc(100vh / var(--hmi-scale));
+  min-height: calc(600px / var(--hmi-scale));
+  transform: scale(var(--hmi-scale));
+  transform-origin: top left;
+  overflow: hidden;
+}
+
+body {
+  overflow: hidden;
+}
+#root main.min-h-screen {
+  min-height: 100% !important;
 }

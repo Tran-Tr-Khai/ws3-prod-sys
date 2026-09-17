@@ -42,7 +42,7 @@ export function ScouringHistoryPage() {
   const machines = [...new Set(records.map((record) => record.machine))];
   const statuses = [...new Set(records.map((record) => record.recordStatus ?? 'CONFIRMED'))];
 
-  return <main className="h-screen min-h-[600px] overflow-hidden bg-navy text-slate-800 flex flex-col">
+  return <main className="h-full min-h-0 overflow-hidden bg-navy text-slate-800 flex flex-col">
     <HMIHeader variant="machine" title="WS3 / Scouring History" subtitle="Digital operation records · Manual operator input" machineName="SC-01" status="info" time={new Date().toLocaleTimeString('vi-VN')} />
     <div className="mx-2 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
       <section className="border-b-2 border-industrialDark">
