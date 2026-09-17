@@ -78,7 +78,7 @@ export function ScouringHMIPage() {
   };
 
   return <main className="h-screen min-h-[600px] overflow-hidden bg-navy text-slate-800 flex flex-col">
-    <HMIHeader title="WS3 / Scouring HMI" subtitle="Process: Scouring / 정련기 · Batch SC-260917-01 · Operator N. Tran" machineName="SC-01" status={machineStatus} time={new Date().toLocaleTimeString('vi-VN')} />
+    <HMIHeader variant="machine" title="WS3 / Scouring HMI" subtitle="Process: Scouring / 정련기 · Batch SC-260917-01 · Operator N. Tran" machineName="SC-01" status={machineStatus} time={new Date().toLocaleTimeString('vi-VN')} />
     <div className="mx-2 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-[#c7d0d4]">
       <div className="grid min-h-0 flex-1 lg:grid-cols-[278px_minmax(0,1fr)]">
         <aside className="flex flex-col border-b-2 border-industrialDark bg-[#c7d0d4] lg:border-b-0 lg:border-r-2">
