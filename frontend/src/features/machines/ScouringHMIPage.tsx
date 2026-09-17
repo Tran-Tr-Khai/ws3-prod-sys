@@ -99,17 +99,13 @@ export function ScouringHMIPage() {
           <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">Scouring parameters / Process values</h2><span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider"><StatusLamp status="info" showLabel={false} /> MANUAL INPUT</span></header>
           <div className="min-h-0 flex-1 overflow-hidden bg-surfaceMuted p-2">
             <div className="flex h-full min-h-0 flex-col gap-2">
-              <section className="min-h-0 flex-none overflow-hidden border border-line bg-hmiInstrument">
-                <div className="flex min-h-7 items-center justify-between border-b border-line bg-[#d7e0e4] px-2 py-1">
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-industrial">Live parameter grid</h3>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">8 readings</span>
-                </div>
+              <section className="min-h-0 flex-none overflow-hidden bg-hmiInstrument">
                 <div className="grid grid-cols-2 content-start items-start gap-px bg-line lg:grid-cols-4">
                   {validatedParameters.map((parameter) => <ParameterSetpoint key={parameter.label} {...parameter} actual={actualValues[parameter.label]} actualEditable onActualChange={(value) => updateActualValue(parameter.label, value)} onInvalidInput={() => logInvalidInput(parameter)} />)}
                 </div>
               </section>
-              <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 lg:grid-cols-2">
-                <section className="min-h-0 overflow-hidden border border-line bg-hmiInstrument">
+              <div className="grid min-h-0 flex-1 grid-cols-1 gap-px border-t border-line bg-line lg:grid-cols-2">
+                <section className="min-h-0 overflow-hidden bg-hmiInstrument">
                   <header className="flex min-h-7 items-center justify-between border-b border-line bg-[#d7e0e4] px-2 py-1">
                     <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-industrial">Operation context</h3>
                     <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">Current job</span>
@@ -123,7 +119,7 @@ export function ScouringHMIPage() {
                     <span className="font-bold uppercase tracking-wide text-slate-500">Input mode</span><span className="font-semibold uppercase text-info">Manual readings</span>
                   </div>
                 </section>
-                <section className="min-h-0 overflow-hidden border border-line bg-hmiInstrument">
+                <section className="min-h-0 overflow-hidden bg-hmiInstrument">
                   <header className="flex min-h-7 items-center justify-between border-b border-line bg-[#d7e0e4] px-2 py-1">
                     <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-industrial">Validation / record summary</h3>
                     <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">WS3 check</span>
