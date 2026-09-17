@@ -20,7 +20,7 @@ const statusStyles: Record<HMIStatus, { dot: string; label: string }> = {
 export function StatusLamp({ status, label, showLabel = true }: StatusLampProps) {
   const style = statusStyles[status];
   return (
-    <span className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
+    <span className="inline-flex items-center gap-2 text-xs font-semibold leading-none tracking-wide text-slate-700">
       <span className={`h-3 w-3 rounded-full border border-slate-500 ${style.dot}`} />
       {showLabel && <span>{label ?? style.label}</span>}
     </span>

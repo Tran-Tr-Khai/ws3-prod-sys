@@ -47,7 +47,7 @@ export function ParameterSetpoint({
 
   return (
     <section className={`flex h-full min-h-[132px] flex-col overflow-hidden shadow-[inset_0_-1px_0_rgba(255,255,255,0.7)] ${cellTone}`}>
-      <header className="flex min-h-8 items-center justify-between border-b border-line px-2.5 py-1.5">
+      <header className="flex min-h-8 items-center justify-between border-b border-line px-2.5 py-1">
         <h3 className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-slate-800">{label}</h3>
         <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
           <StatusLamp status={status} showLabel={false} />
@@ -69,12 +69,12 @@ export function ParameterSetpoint({
                 max={typeof max === 'number' ? max : undefined}
                 value={actual}
                 onChange={handleActualChange}
-                className={`h-9 min-w-0 w-[6.3rem] border border-info bg-[#fffdf2] px-1 font-mono text-right text-[25px] font-bold leading-none tabular-nums outline-none focus:border-industrial focus:ring-1 focus:ring-industrial ${actualTone}`}
+                className={`h-9 min-w-0 w-[6.3rem] border border-info bg-[#fffdf2] px-1 font-mono text-right text-[25px] font-bold leading-none tracking-tight tabular-nums outline-none focus:border-industrial focus:ring-1 focus:ring-industrial ${actualTone}`}
               />
               <span className="pb-1 text-[10px] font-semibold text-slate-500">{unit}</span>
             </span>
           ) : (
-            <span className={`font-mono text-right text-[25px] font-bold leading-none tabular-nums ${actualTone}`}>
+            <span className={`font-mono text-right text-[25px] font-bold leading-none tracking-tight tabular-nums ${actualTone}`}>
               {formatValue(actual)} <span className="text-[10px] font-semibold text-slate-500">{unit}</span>
             </span>
           )}
