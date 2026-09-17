@@ -5,7 +5,7 @@
 :root {
   font-family: "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif;
   color: #1f2937;
-  background: #d9dfe3;
+  background: #c4cdd1;
   font-variant-numeric: tabular-nums;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -19,7 +19,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: #d9dfe3;
+  background: #c4cdd1;
 }
 
 /* Engineering-grade HMI type calibration */
