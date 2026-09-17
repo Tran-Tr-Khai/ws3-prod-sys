@@ -101,6 +101,6 @@ export function ScouringHMIPage() {
         </section>
       </div>
     </div>
-    <div className="mx-2 mt-2 flex-none"><FunctionKeyBar keys={[{ key: 'F1', label: 'Overview' }, { key: 'F2', label: 'Parameters' }, { key: 'F3', label: 'Batch' }, { key: 'F4', label: 'History', onClick: () => navigate('/machine/scouring/history') }, { key: 'F5', label: 'Alarm', onClick: () => navigate('/machine/scouring/alarm') }, { key: 'F6', label: 'Menu' }]} /></div>
+    <div className="mx-2 mt-2 flex-none"><FunctionKeyBar keys={[{ key: 'F1', label: 'Overview' }, { key: 'F2', label: 'Parameters', active: true }, { key: 'F3', label: 'Batch' }, { key: 'F4', label: 'History', onClick: () => navigate('/machine/scouring/history') }, { key: 'F5', label: 'Alarm', onClick: () => navigate('/machine/scouring/alarm') }, { key: 'F6', label: 'Menu' }]} /></div>
   </main>;
 }
