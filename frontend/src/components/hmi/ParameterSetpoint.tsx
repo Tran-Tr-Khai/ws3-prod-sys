@@ -34,6 +34,7 @@ export function ParameterSetpoint({
   const hasRange = min !== undefined && max !== undefined;
   const actualTone = status === 'warning' ? 'text-warning' : status === 'alarm' ? 'text-alarm' : 'text-industrial';
   const cellTone = status === 'warning' ? 'bg-hmiWarning' : status === 'alarm' ? 'bg-hmiAlarm' : 'bg-hmiInstrument';
+  const needsAttention = status === 'warning' || status === 'alarm';
   const handleActualChange = (event: ChangeEvent<HTMLInputElement>) => {
     const rawValue = event.target.value.trim();
     if (!rawValue) {
@@ -49,11 +50,7 @@ export function ParameterSetpoint({
     <section className={`min-h-[132px] overflow-hidden shadow-[inset_0_-1px_0_rgba(255,255,255,0.7)] ${cellTone}`}>
       <header className="flex min-h-8 items-center justify-between border-b border-line px-2.5 py-1">
         <h3 className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-slate-800">{label}</h3>
-        <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-          <StatusLamp status={status} showLabel={false} />
-          {status}
-        </span>
-      </header>
+        <>{needsAttention && <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase leading-none tracking-wider text-slate-500"><StatusLamp status={status} showLabel={false} />{status}</span>}</>      </header>
 
       <div className="px-2.5 py-2">
         <div className="flex items-end justify-between gap-2">
