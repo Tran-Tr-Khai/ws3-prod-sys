@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.api.errors import register_exception_handlers
 from app.api.router import api_router
+from app.api.routes.scouring import router as scouring_router
 from app.config.middleware import configure_cors
 from app.config.settings import get_settings
 
@@ -24,3 +25,4 @@ app = FastAPI(
 register_exception_handlers(app)
 configure_cors(app, settings)
 app.include_router(api_router, prefix=settings.api_prefix)
+app.include_router(scouring_router, prefix="/api")
