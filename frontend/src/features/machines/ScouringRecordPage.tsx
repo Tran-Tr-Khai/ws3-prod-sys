@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { HMIHeader } from '../../components/hmi/HMIHeader';
+import { createScouringRecord, ScouringApiError } from './scouringApi';
 
 type RecordFieldKey =
   | 'naoh'
@@ -144,16 +145,85 @@ function FieldGroup({
   );
 }
 
+function ReviewSection({ title, fields, values }: { title: string; fields: FieldDefinition[]; values: RecordValues }) {
+  return (
+    <section className="scouring-record-group border border-industrialDark bg-hmiSection">
+      <header className="flex min-h-8 items-center justify-between border-b border-industrialDark bg-industrialDark px-2 py-1 text-white">
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em]">{title}</h2>
+        <span className="font-mono text-[9px] uppercase tracking-wider text-slate-300">REVIEW</span>
+      </header>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 bg-white px-3 py-2 lg:grid-cols-3">
+        {fields.map((field) => {
+          const message = fieldMessage(values[field.key], field);
+          return (
+            <div key={field.key} className="flex min-w-0 items-baseline justify-between gap-2 border-b border-line/60 py-1.5 text-[11px]">
+              <span className="truncate font-semibold uppercase tracking-wide text-slate-600">{field.label}</span>
+              <span className="shrink-0 text-right">
+                <span className={`font-mono text-[14px] font-bold ${message === 'warning' ? 'text-warning' : 'text-industrialDark'}`}>
+                  {values[field.key] || '—'} {values[field.key] && field.unit}
+                </span>
+                {message === 'warning' && <span className="ml-2 font-mono text-[9px] font-bold uppercase text-warning">WARNING</span>}
+                {message === 'missing' && <span className="ml-2 font-mono text-[9px] font-bold uppercase text-alarm">ERROR</span>}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function ScouringRecordPage() {
   const navigate = useNavigate();
   const [values, setValues] = useState<RecordValues>(initialValues);
   const [reviewAttempted, setReviewAttempted] = useState(false);
+  const [reviewState, setReviewState] = useState<'entry' | 'review'>('entry');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const updateValue = (key: RecordFieldKey, value: string) => {
     setValues((current) => ({ ...current, [key]: value }));
   };
 
-  const reviewRecord = () => setReviewAttempted(true);
+  const hasBlockingErrors = [...chemicalFields, ...processFields, ...productionFields]
+    .some((field) => fieldMessage(values[field.key], field) === 'missing');
+
+  const reviewRecord = () => {
+    setReviewAttempted(true);
+    setSaveError(null);
+    if (!hasBlockingErrors) setReviewState('review');
+  };
+
+  const confirmRecord = async () => {
+    if (saving || hasBlockingErrors) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await createScouringRecord({
+        machineId: 'SC-01',
+        recordedAt: new Date().toISOString(),
+        batchIdentifier: 'SC-260917-01',
+        operatorName: 'N. Tran',
+        naoh: Number(values.naoh),
+        soap: Number(values.soap),
+        desizer: Number(values.desizer),
+        h2o2: Number(values.h2o2),
+        chelate: Number(values.chelate),
+        speed: Number(values.speed),
+        temperature: Number(values.temperature),
+        cylinderTemperature: Number(values.cylinderTemperature),
+        inputFabricMeters: values.inputFabricMeters.trim() ? Number(values.inputFabricMeters) : null,
+        outputFabricMeters: values.outputFabricMeters.trim() ? Number(values.outputFabricMeters) : null,
+      });
+      setSaveSuccess(true);
+      window.setTimeout(() => navigate('/machine/scouring'), 900);
+    } catch (error) {
+      setSaveError(error instanceof ScouringApiError ? error.message : 'Unable to save the Scouring record. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
@@ -185,12 +255,37 @@ export function ScouringRecordPage() {
             </aside>
 
             <section className="flex min-w-0 flex-col gap-2">
-              <FieldGroup title="Chemical Input" fields={chemicalFields} values={values} showValidation={reviewAttempted} onChange={updateValue} columns={3} />
-              <FieldGroup title="Process Conditions" fields={processFields} values={values} showValidation={reviewAttempted} onChange={updateValue} columns={3} />
-              <FieldGroup title="Production" fields={productionFields} values={values} showValidation={reviewAttempted} onChange={updateValue} columns={2} />
+              {reviewState === 'entry' ? <>
+                <FieldGroup title="Chemical Input" fields={chemicalFields} values={values} showValidation={reviewAttempted} onChange={updateValue} columns={3} />
+                <FieldGroup title="Process Conditions" fields={processFields} values={values} showValidation={reviewAttempted} onChange={updateValue} columns={3} />
+                <FieldGroup title="Production" fields={productionFields} values={values} showValidation={reviewAttempted} onChange={updateValue} columns={2} />
+              </> : <>
+                <div className="border border-industrialDark bg-white px-3 py-2 text-[11px]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div><p className="font-bold uppercase tracking-wider text-industrialDark">Review record</p><p className="mt-0.5 text-slate-600">Check the entered values before sending this snapshot to PostgreSQL.</p></div>
+                    <span className="font-mono text-[10px] font-bold uppercase text-success">READY TO CONFIRM</span>
+                  </div>
+                </div>
+                <ReviewSection title="Chemical Input" fields={chemicalFields} values={values} />
+                <ReviewSection title="Process Conditions" fields={processFields} values={values} />
+                <ReviewSection title="Production" fields={productionFields} values={values} />
+                <div className="border border-warning bg-hmiWarning px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-warning">
+                  {processFields.some((field) => fieldMessage(values[field.key], field) === 'warning')
+                    ? 'DATA / PROCESS WARNING · One or more values are outside the expected operating range. Confirmation is still allowed.'
+                    : 'DATA CHECK · Review all values before confirmation.'}
+                </div>
+              </>}
+              {reviewAttempted && hasBlockingErrors && reviewState === 'entry' && <div className="border border-alarm bg-hmiAlarm px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-alarm">ERROR · Complete all required values before review.</div>}
+              {saveError && <div className="border border-alarm bg-hmiAlarm px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-alarm">SAVE ERROR · {saveError}</div>}
+              {saveSuccess && <div className="border border-success bg-hmiNormal px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-success">RECORD SAVED · Returning to Scouring overview...</div>}
               <div className="mt-auto flex justify-end gap-2 border-t-2 border-industrialDark bg-industrialDark p-2">
-                <HMIButton size="large" variant="secondary" onClick={() => navigate('/machine/scouring')}>CANCEL</HMIButton>
-                <HMIButton size="large" variant="primary" onClick={reviewRecord}>REVIEW RECORD</HMIButton>
+                {reviewState === 'entry' ? <>
+                  <HMIButton size="large" variant="secondary" onClick={() => navigate('/machine/scouring')}>CANCEL</HMIButton>
+                  <HMIButton size="large" variant="primary" onClick={reviewRecord}>REVIEW RECORD</HMIButton>
+                </> : <>
+                  <HMIButton size="large" variant="secondary" onClick={() => { setReviewState('entry'); setSaveError(null); }}>BACK TO ENTRY</HMIButton>
+                  <HMIButton size="large" variant="primary" disabled={saving || saveSuccess} onClick={confirmRecord}>{saving ? 'SAVING...' : 'CONFIRM RECORD'}</HMIButton>
+                </>}
               </div>
             </section>
 
