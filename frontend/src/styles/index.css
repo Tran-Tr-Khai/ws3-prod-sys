@@ -8,6 +8,9 @@
   color: #1f2937;
   background: #c4cdd1;
   font-variant-numeric: tabular-nums;
+  --hmi-border-strong: #6f828d;
+  --hmi-border-subtle: #9aa8af;
+  --hmi-surface-gap: #d9e2e6;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -50,6 +53,68 @@ body {
 
 body {
   overflow: hidden;
+}
+
+/* Keep Scouring entry grids explicit so the HMI remains stable even when the
+   utility CSS is cached. */
+.scouring-record-grid {
+  column-gap: 0.75rem;
+  row-gap: 0.25rem;
+}
+
+.scouring-record-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.scouring-record-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.scouring-record-field {
+  min-height: 112px;
+}
+
+.scouring-record-input-shell {
+  height: 58px;
+  background: #fff;
+  border-color: #8296a1;
+}
+
+.scouring-record-input {
+  background: #fff !important;
+  color: #243b4a;
+}
+
+.scouring-record-unit {
+  background: #edf3f5 !important;
+  color: #334d5c;
+}
+
+.scouring-record-group {
+  background: #dbe6ea;
+}
+
+.scouring-record-field .text-slate-500 {
+  color: #607783;
+}
+
+.scouring-record-workspace {
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.scouring-record-context {
+  background: #fff;
+}
+
+.scouring-record-context-content {
+  background: #fff;
+}
+
+.scouring-record-reference {
+  background: #f8fafb;
+  border-color: #c4d0d6;
 }
 #root main.min-h-screen {
   min-height: 100% !important;
