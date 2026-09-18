@@ -97,6 +97,7 @@ type ApiErrorBody = {
   error?: string;
   message?: string;
   details?: ScouringApiErrorDetails;
+  detail?: unknown;
 };
 
 type RequestOptions = {
@@ -167,8 +168,13 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const body = await readErrorBody(response);
+    const detailMessage = typeof body.detail === 'string'
+      ? body.detail
+      : Array.isArray(body.detail)
+        ? body.detail.map((item) => typeof item === 'object' && item !== null && 'msg' in item ? String(item.msg) : String(item)).join('; ')
+        : undefined;
     throw new ScouringApiError(
-      body.message || `Scouring API returned HTTP ${response.status}`,
+      body.message || detailMessage || `Scouring API returned HTTP ${response.status}`,
       { status: response.status, code: body.error || 'scouring_api_error', details: body.details },
     );
   }
