@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HMIButton } from '../../components/hmi/HMIButton';
-import { HMIHeader } from '../../components/hmi/HMIHeader';
+import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { createScouringRecord, ScouringApiError } from './scouringApi';
 
 type RecordFieldKey =
@@ -226,17 +226,9 @@ export function ScouringRecordPage() {
   };
 
   return (
-    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
-      <HMIHeader
-        variant="machine"
-        title="WS3 / Scouring Record"
-        subtitle="Operator data entry · Scouring / 정련기 · Batch SC-260917-01 · Operator N. Tran"
-        machineName="SC-01"
-        status="info"
-        time={new Date().toLocaleTimeString('vi-VN')}
-      />
-
-      <div className="mx-2 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
+    <WS3Shell title="WS3 / Scouring Record" subtitle="Operator data entry · Scouring / 정련기 · Batch SC-260917-01 · Operator N. Tran" machineId="SC-01" machineLabel="Scouring" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
+        <div className="scouring-screen-frame scouring-full-width-frame mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
         <div className="min-h-0 flex-1 overflow-auto p-2">
           <div className="scouring-record-workspace grid w-full min-h-full grid-cols-[220px_minmax(0,1fr)] gap-2">
             <aside className="scouring-record-context flex min-h-0 flex-col border border-line bg-white">
@@ -291,7 +283,8 @@ export function ScouringRecordPage() {
 
           </div>
         </div>
+        </div>
       </div>
-    </main>
+    </WS3Shell>
   );
 }
