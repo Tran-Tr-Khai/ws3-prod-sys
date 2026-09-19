@@ -1,17 +1,21 @@
 import { NavLink } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 type MachineNavigationProps = {
   machineId: string;
   machineLabel: string;
+  trailing?: ReactNode;
 };
 
 const tabs = [
-  { label: 'Overview', suffix: '' },
-  { label: 'Record Entry', suffix: '/record' },
-  { label: 'History', suffix: '/history' },
+  { key: 'recordEntry', suffix: '/record' },
+  { key: 'overview', suffix: '' },
+  { key: 'history', suffix: '/history' },
 ] as const;
 
-export function MachineNavigation({ machineId, machineLabel }: MachineNavigationProps) {
+export function MachineNavigation({ machineId, machineLabel, trailing }: MachineNavigationProps) {
+  const { t } = useLanguage();
   const basePath = `/machine/${machineLabel.toLowerCase()}`;
 
   return (
@@ -22,15 +26,16 @@ export function MachineNavigation({ machineId, machineLabel }: MachineNavigation
       <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
         {tabs.map((tab) => (
           <NavLink
-            key={tab.label}
+            key={tab.key}
             end={tab.suffix === ''}
             to={`${basePath}${tab.suffix}`}
             className={({ isActive }) => `inline-flex min-h-8 shrink-0 items-center border-2 px-3 text-[10px] font-bold uppercase tracking-[0.1em] transition-colors ${isActive ? 'border-industrialDark bg-industrialDark text-white shadow-[inset_0_-3px_0_#dbe6ea]' : 'border-line bg-white text-industrialDark hover:border-industrialDark hover:bg-hmiHover'}`}
           >
-            {tab.label}
+            {t(tab.key)}
           </NavLink>
         ))}
       </div>
+      {trailing}
     </nav>
   );
 }

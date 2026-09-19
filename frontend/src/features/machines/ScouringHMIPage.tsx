@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { getScouringRecords, type ScouringRecord } from './scouringApi';
@@ -21,8 +20,9 @@ const processDefinitions = (record: ScouringRecord): ValueDefinition[] => [
 ];
 
 const productionDefinitions = (record: ScouringRecord): ValueDefinition[] => [
-  { label: 'Input meters', value: record.inputFabricMeters, unit: 'm' },
-  { label: 'Output meters', value: record.outputFabricMeters, unit: 'm' },
+  { label: 'Fabric Input', value: record.inputFabricMeters, unit: 'm' },
+  { label: 'Fabric Output', value: record.outputFabricMeters, unit: 'm' },
+  { label: 'Production Quantity', value: record.productionQuantityMeters, unit: 'm' },
 ];
 
 function formatDateTime(timestamp: string): string {
@@ -40,45 +40,18 @@ function isComplete(record: ScouringRecord): boolean {
   return [...chemicalDefinitions(record), ...processDefinitions(record)].every(({ value }) => value !== null && Number.isFinite(value));
 }
 
-function ValueGroup({ title, values }: { title: string; values: ValueDefinition[] }) {
+function DataRow({ item, prominent = false }: { item: ValueDefinition; prominent?: boolean }) {
   return (
-    <section className="border-b border-line last:border-b-0">
-      <header className="flex min-h-8 items-center justify-between bg-industrialDark px-2 py-1 text-white">
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.14em]">{title}</h3>
-        <span className="font-mono text-[9px] uppercase tracking-wider text-slate-300">{values.length} VALUES</span>
-      </header>
-      <div className="grid grid-cols-2 divide-x divide-line/50 bg-white lg:grid-cols-3">
-        {values.map((item) => (
-          <div key={item.label} className="border-b border-line/50 px-3 py-2 last:border-b-0">
-            <div className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-500">{item.label}</div>
-            <div className="mt-1 font-mono text-[22px] font-bold leading-none text-industrialDark">
-              {item.value === null ? '—' : item.value} <span className="text-[11px] font-semibold text-slate-500">{item.value === null ? '' : item.unit}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function RecordStatus({ record }: { record: ScouringRecord }) {
-  const warnings = recordWarnings(record);
-  const complete = isComplete(record);
-  return (
-    <section className="border border-line bg-white">
-      <header className="flex min-h-8 items-center justify-between border-b border-line bg-surfaceMuted px-2 py-1 text-industrialDark">
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.14em]">Data status</h2>
-        <span className={`font-mono text-[10px] font-bold uppercase ${complete ? 'text-success' : 'text-alarm'}`}>{complete ? 'RECORD COMPLETE' : 'RECORD INCOMPLETE'}</span>
-      </header>
-      <div className="px-3 py-2 text-[10px]">
-        {warnings.length === 0 ? <span className="font-semibold uppercase tracking-wide text-success">No data/process warnings</span> : <div className="grid gap-1 text-warning">{warnings.map((warning) => <span key={warning}>WARNING · {warning}</span>)}</div>}
-      </div>
-    </section>
+    <div className="min-w-0">
+      <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-slate-500">{item.label}</span>
+      <span className={`mt-1 block truncate font-mono font-bold text-industrialDark ${prominent ? 'text-xl' : 'text-base'}`}>
+        {item.value === null ? '—' : item.value} <small className="text-[10px] font-semibold text-slate-500">{item.value === null ? '' : item.unit}</small>
+      </span>
+    </div>
   );
 }
 
 export function ScouringHMIPage() {
-  const navigate = useNavigate();
   const [records, setRecords] = useState<ScouringRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,32 +73,33 @@ export function ScouringHMIPage() {
   const latestRecord = records[0];
   const latestWarnings = useMemo(() => latestRecord ? recordWarnings(latestRecord) : [], [latestRecord]);
 
-  return <WS3Shell title="WS3 / Scouring Overview" subtitle="Read-only recorded data · Scouring / 정련기" machineId="SC-01" machineLabel="Scouring" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
-      <div className="scouring-screen-frame scouring-full-width-frame mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[278px_minmax(0,1fr)]">
-        <aside className="flex flex-col border-b-2 border-industrialDark bg-hmiConsole lg:border-b-0 lg:border-r-2">
-          <section>
-            <header className="flex min-h-8 items-center justify-between border-b border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">Scouring overview</h2><span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-300">READ ONLY</span></header>
-            <div className="border-l-4 border-info bg-white px-2 py-3"><div className="font-mono text-xl font-bold tracking-[0.12em] text-industrialDark">SC-01 / SCOURING</div><div className="mt-1 text-[10px] uppercase tracking-wide text-slate-500">Latest backend record</div></div>
-          </section>
-          <section className="mt-2 border-t border-line bg-white">
-            <header className="flex min-h-8 items-center justify-between bg-surfaceMuted px-2 py-1"><h2 className="text-xs font-bold uppercase tracking-wider text-industrialDark">Latest context</h2><span className="font-mono text-[10px] text-slate-500">RECORDED</span></header>
-            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 px-2 py-2 text-[11px]"><span className="font-bold uppercase tracking-wide text-slate-500">Time</span><span className="font-mono font-bold text-industrial">{latestRecord ? formatDateTime(latestRecord.recordedAt) : '—'}</span><span className="font-bold uppercase tracking-wide text-slate-500">Batch</span><span className="font-mono font-bold text-industrial">{latestRecord?.batchIdentifier || '—'}</span><span className="font-bold uppercase tracking-wide text-slate-500">Operator</span><span>{latestRecord?.operatorName || latestRecord?.operatorIdentifier || '—'}</span></div>
-          </section>
-          <section className="mt-auto grid gap-2 p-2"><HMIButton size="large" variant="primary" onClick={() => navigate('/machine/scouring/record')}>ENTER RECORD</HMIButton><HMIButton size="large" variant="secondary" onClick={() => navigate('/machine/scouring/history')}>VIEW HISTORY</HMIButton></section>
-        </aside>
-        <section className="flex min-h-0 min-w-0 flex-col bg-panel">
-          <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">Latest Scouring data</h2><span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-300">BACKEND RECORDS</span></header>
-          <div className="min-h-0 flex-1 overflow-auto bg-surfaceMuted p-2">
-            {loading && <div className="border border-line bg-white p-6 text-center text-xs font-bold uppercase tracking-wider text-slate-500">Loading Scouring records...</div>}
-            {!loading && error && <div className="border border-alarm bg-hmiAlarm p-4 text-center text-xs font-bold uppercase tracking-wide text-alarm"><p>Unable to load Scouring records.</p><p className="mt-1 font-normal normal-case">{error}</p><HMIButton size="compact" className="mt-3" onClick={() => void loadRecords()}>RETRY</HMIButton></div>}
-            {!loading && !error && !latestRecord && <div className="border border-line bg-white p-8 text-center text-xs font-bold uppercase tracking-wider text-slate-500">No Scouring records yet. Enter the first record to populate this overview.</div>}
-            {!loading && !error && latestRecord && <div className="grid gap-2"><RecordStatus record={latestRecord} /><div className="border border-line bg-white"><ValueGroup title="Chemical Input" values={chemicalDefinitions(latestRecord)} /><ValueGroup title="Process Conditions" values={processDefinitions(latestRecord)} /><ValueGroup title="Production" values={productionDefinitions(latestRecord)} /></div><section className="border border-line bg-white"><header className="flex min-h-8 items-center justify-between border-b border-line bg-surfaceMuted px-2 py-1 text-industrialDark"><h2 className="text-[11px] font-bold uppercase tracking-[0.14em]">Recent records</h2><span className="font-mono text-[9px] uppercase tracking-wider text-slate-500">{records.length} LOADED</span></header><div className="overflow-auto"><table className="w-full border-collapse text-left text-[10px]"><thead className="bg-industrial text-[9px] uppercase tracking-wider text-white"><tr><th className="px-2 py-1.5">Recorded</th><th className="px-2 py-1.5">Operator</th><th className="px-2 py-1.5">Speed</th><th className="px-2 py-1.5">Temp.</th><th className="px-2 py-1.5">Status</th></tr></thead><tbody>{records.slice(0, 5).map((record) => { const warnings = recordWarnings(record); return <tr key={record.id} className="border-b border-line"><td className="whitespace-nowrap px-2 py-1.5 font-mono font-semibold">{formatDateTime(record.recordedAt)}</td><td className="px-2 py-1.5">{record.operatorName || record.operatorIdentifier || '—'}</td><td className="px-2 py-1.5 font-mono font-bold text-industrial">{record.speed} m/min</td><td className="px-2 py-1.5 font-mono font-bold text-industrial">{record.temperature} °C</td><td className={`px-2 py-1.5 font-mono font-bold ${warnings.length ? 'text-warning' : 'text-success'}`}>{warnings.length ? `WARNING · ${warnings.length}` : 'COMPLETE'}</td></tr>; })}</tbody></table></div></section>{latestWarnings.length > 0 && <div className="text-[9px] font-bold uppercase tracking-wider text-warning">Warnings shown are data/process warnings, not machine alarms.</div>}</div>}
+  return (
+    <WS3Shell title="WS3 / Scouring Overview" subtitle="Read-only recorded data · Scouring / 정련기" machineId="SC-01" machineLabel="Scouring" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
+        <div className="scouring-screen-frame scouring-full-width-frame mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-white">
+          <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+            <section className="border-b border-line pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-industrialDark">Latest record</h2>
+                {latestRecord && <span className={`font-mono text-[10px] font-bold uppercase ${latestWarnings.length ? 'text-warning' : 'text-success'}`}>{latestWarnings.length ? 'Data warning' : 'Record complete'}</span>}
+              </div>
+              {loading && <div className="py-6 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">Loading Scouring records...</div>}
+              {!loading && error && <div className="py-4 text-center text-[10px] uppercase text-alarm"><p className="font-bold">Unable to load Scouring records.</p><p className="mt-1 font-normal normal-case">{error}</p><HMIButton size="compact" className="mt-2" onClick={() => void loadRecords()}>RETRY</HMIButton></div>}
+              {!loading && !error && !latestRecord && <div className="py-6 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">No Scouring records yet. Enter the first record to populate this overview.</div>}
+              {!loading && !error && latestRecord && <div className="mt-3 grid gap-x-5 gap-y-2 text-[10px] sm:grid-cols-4"><div><span className="block font-bold uppercase tracking-wide text-slate-500">Recorded time</span><span className="mt-0.5 block font-mono font-bold text-industrial">{formatDateTime(latestRecord.recordedAt)}</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">Batch</span><span className="mt-0.5 block font-mono font-bold text-industrial">{latestRecord.batchIdentifier || '—'}</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">Operator</span><span className="mt-0.5 block font-semibold">{latestRecord.operatorName || latestRecord.operatorIdentifier || '—'}</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">Status</span><span className={`mt-0.5 block font-bold uppercase ${isComplete(latestRecord) ? 'text-success' : 'text-alarm'}`}>{isComplete(latestRecord) ? 'Complete' : 'Incomplete'}</span></div></div>}
+            </section>
+
+            {!loading && !error && latestRecord && <>
+              <section className="border-b border-line py-3"><h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Process conditions</h3><div className="mt-2 grid grid-cols-3 divide-x divide-line">{processDefinitions(latestRecord).map((item) => <div key={item.label} className="px-3 first:pl-0 last:pr-0"><DataRow item={item} prominent /></div>)}</div></section>
+              <section className="border-b border-line py-3"><h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Production</h3><div className="mt-2 grid grid-cols-3 divide-x divide-line">{productionDefinitions(latestRecord).map((item) => <div key={item.label} className="px-3 first:pl-0 last:pr-0"><DataRow item={item} prominent /></div>)}</div></section>
+              <section className="border-b border-line py-3"><h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Chemical input</h3><div className="mt-2 grid grid-cols-5 divide-x divide-line">{chemicalDefinitions(latestRecord).map((item) => <div key={item.label} className="px-2 first:pl-0 last:pr-0"><DataRow item={item} /></div>)}</div></section>
+              {latestWarnings.length > 0 && <div className="py-2 text-[9px] font-bold uppercase tracking-wide text-warning">{latestWarnings.map((warning) => <div key={warning}>WARNING · {warning}</div>)}</div>}
+            </>}
+
+            <div className="min-h-[100px] flex-1" aria-hidden="true" />
           </div>
-        </section>
+        </div>
       </div>
-      </div>
-    </div>
-  </WS3Shell>;
+    </WS3Shell>
+  );
 }

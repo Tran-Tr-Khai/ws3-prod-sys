@@ -44,3 +44,7 @@ export function acknowledgeScouringAlarms(eventIds: string[]): void {
   const events = readScouringEvents().map((event) => ids.has(event.eventId) ? { ...event, eventStatus: 'ACKNOWLEDGED' as const, acknowledgementStatus: 'ACKNOWLEDGED' as const } : event);
   window.localStorage.setItem(storageKey, JSON.stringify(events));
 }
+
+export function clearScouringEvents(): void {
+  window.localStorage.removeItem(storageKey);
+}

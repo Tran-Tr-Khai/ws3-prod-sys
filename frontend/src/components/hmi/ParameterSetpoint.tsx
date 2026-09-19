@@ -10,6 +10,7 @@ export type ParameterSetpointProps = {
   min?: string | number;
   max?: string | number;
   status?: HMIStatus;
+  variant?: 'chemical' | 'condition';
   actualEditable?: boolean;
   onActualChange?: (value: number) => void;
   onInvalidInput?: () => void;
@@ -27,14 +28,17 @@ export function ParameterSetpoint({
   min,
   max,
   status = 'normal',
+  variant = 'condition',
   actualEditable = false,
   onActualChange,
   onInvalidInput,
 }: ParameterSetpointProps) {
   const hasRange = min !== undefined && max !== undefined;
   const actualTone = status === 'warning' ? 'text-warning' : status === 'alarm' ? 'text-alarm' : 'text-industrial';
-  const cellTone = status === 'warning' ? 'bg-hmiWarning' : status === 'alarm' ? 'bg-hmiAlarm' : 'bg-hmiInstrument';
   const needsAttention = status === 'warning' || status === 'alarm';
+  const cellTone = needsAttention ? (status === 'warning' ? 'bg-hmiWarning' : 'bg-hmiAlarm') : '';
+  const compactLabel = label.replace(' quantity', '');
+
   const handleActualChange = (event: ChangeEvent<HTMLInputElement>) => {
     const rawValue = event.target.value.trim();
     if (!rawValue) {
@@ -46,49 +50,57 @@ export function ParameterSetpoint({
     else onInvalidInput?.();
   };
 
+  const actualField = actualEditable ? (
+    <span className="flex min-w-0 items-end justify-end gap-0.5">
+      <input
+        aria-label={label + ' actual manual input'}
+        type="number"
+        inputMode="decimal"
+        step="any"
+        min={typeof min === 'number' ? min : undefined}
+        max={typeof max === 'number' ? max : undefined}
+        value={actual}
+        onChange={handleActualChange}
+        className={'min-w-0 appearance-none border-0 border-b border-info bg-transparent px-1 font-mono text-right font-bold leading-none tracking-tight tabular-nums outline-none focus:border-industrial focus:bg-slate-100/40 focus:ring-0 ' + (variant === 'chemical' ? 'h-9 w-[4.5rem] text-[23px] ' : 'h-11 w-[6.3rem] text-[31px] ') + actualTone}
+      />
+      <span className="pb-1 text-[9px] font-semibold text-slate-500">{unit}</span>
+    </span>
+  ) : (
+    <span className={'font-mono text-right font-bold leading-none tracking-tight tabular-nums ' + (variant === 'chemical' ? 'text-[21px] ' : 'text-[29px] ') + actualTone}>
+      {formatValue(actual)} <span className="text-[9px] font-semibold text-slate-500">{unit}</span>
+    </span>
+  );
+
+  if (variant === 'chemical') {
+    return (
+      <div className={'min-w-0 px-1.5 py-1 ' + (needsAttention ? cellTone : '')}>
+        <div className="flex items-center justify-between gap-1">
+          <h3 className="truncate text-[9px] font-bold uppercase tracking-[0.12em] text-slate-700">{compactLabel}</h3>
+          {needsAttention && <StatusLamp status={status} showLabel={false} />}
+        </div>
+        <div className="mt-1 flex items-end justify-start">{actualField}</div>
+        <div className="mt-1 whitespace-nowrap font-mono text-[9px] tabular-nums text-slate-500">
+          <span className="mr-1 text-[8px] font-semibold uppercase tracking-[0.12em]">Set</span>{formatValue(setpoint)} {unit}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <section className={`min-h-[132px] overflow-hidden shadow-[inset_0_-1px_0_rgba(255,255,255,0.7)] ${cellTone}`}>
-      <header className="flex min-h-8 items-center justify-between border-b border-line px-2.5 py-1">
-        <h3 className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-slate-800">{label}</h3>
-        <>{needsAttention && <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase leading-none tracking-wider text-slate-500"><StatusLamp status={status} showLabel={false} />{status}</span>}</>      </header>
-
-      <div className="px-2.5 py-2">
-        <div className="flex items-end justify-between gap-2">
-          <span className="pb-1 text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-500">Actual</span>
-          {actualEditable ? (
-            <span className="flex min-w-0 items-end justify-end gap-0.5">
-              <input
-                aria-label={`${label} actual manual input`}
-                type="number"
-                inputMode="decimal"
-                step="any"
-                min={typeof min === 'number' ? min : undefined}
-                max={typeof max === 'number' ? max : undefined}
-                value={actual}
-                onChange={handleActualChange}
-                className={`h-9 min-w-0 w-[6.3rem] appearance-none border-0 border-b-2 border-info bg-hmiInput px-1 font-mono text-right text-[28px] font-bold leading-none tracking-tight tabular-nums outline-none shadow-[inset_0_-1px_0_rgba(255,255,255,0.8)] focus:border-industrial focus:bg-white focus:ring-0 ${actualTone}`}
-              />
-              <span className="pb-1 text-[9px] font-semibold text-slate-500">{unit}</span>
-            </span>
-          ) : (
-            <span className={`font-mono text-right text-[28px] font-bold leading-none tracking-tight tabular-nums ${actualTone}`}>
-              {formatValue(actual)} <span className="text-[9px] font-semibold text-slate-500">{unit}</span>
-            </span>
-          )}
-        </div>
-
-        <div className="mt-2 grid grid-cols-[auto_1fr] items-center gap-x-3 border-t border-line pt-1.5">
-          <span className="text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-500">Set</span>
-          <span className="font-mono text-right text-[14px] font-semibold leading-none tabular-nums text-slate-700">
-            {formatValue(setpoint)} <span className="text-[10px] font-normal text-slate-500">{unit}</span>
-          </span>
-        </div>
-        <div className="mt-1 grid grid-cols-[auto_1fr] items-center gap-x-3">
-          <span className="text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-500">Limit</span>
-          <span className="font-mono text-right text-[9px] font-medium leading-none tabular-nums text-slate-500">
-            {hasRange ? `${formatValue(min)}–${formatValue(max)} ${unit}` : '—'}
-          </span>
-        </div>
+    <section className={'min-h-[142px] min-w-0 overflow-hidden px-3 py-2 ' + cellTone}>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-slate-800">{label}</h3>
+        {needsAttention && <span className="flex items-center gap-1 text-[8px] font-bold uppercase leading-none tracking-wider text-slate-500"><StatusLamp status={status} showLabel={false} />{status}</span>}
+      </div>
+      <div className="mt-2 flex items-end justify-end">{actualField}</div>
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-1.5">
+        <span className="font-mono text-[12px] font-semibold leading-none tabular-nums text-slate-600">
+          <span className="mr-2 text-[8px] font-semibold uppercase tracking-[0.16em] text-slate-500">Set</span>
+          {formatValue(setpoint)} <span className="text-[9px] font-normal text-slate-500">{unit}</span>
+        </span>
+        {hasRange && <span className="font-mono text-right text-[9px] font-medium leading-none tabular-nums text-slate-500">
+          <span className="mr-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-slate-500">Range</span>{formatValue(min)}–{formatValue(max)} {unit}
+        </span>}
       </div>
     </section>
   );

@@ -15,6 +15,10 @@ class ScouringRecordCreate(BaseModel):
     machine_id: str = Field(min_length=1, max_length=50)
     recorded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     batch_identifier: str | None = Field(default=None, max_length=80)
+    order_number: str | None = Field(default=None, max_length=80)
+    item: str | None = Field(default=None, max_length=120)
+    lot_yarn: str | None = Field(default=None, max_length=80)
+    lot_number: str | None = Field(default=None, max_length=80)
     operator_name: str | None = Field(default=None, max_length=160)
     operator_identifier: str | None = Field(default=None, max_length=80)
 
@@ -28,6 +32,7 @@ class ScouringRecordCreate(BaseModel):
     cylinder_temperature: float
     input_fabric_meters: float | None = Field(default=None, ge=0)
     output_fabric_meters: float | None = Field(default=None, ge=0)
+    production_quantity_meters: float | None = Field(default=None, ge=0)
 
     _validate_naoh = field_validator("naoh")(_finite_number)
     _validate_soap = field_validator("soap")(_finite_number)

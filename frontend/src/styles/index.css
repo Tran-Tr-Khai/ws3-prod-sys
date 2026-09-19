@@ -41,14 +41,23 @@ body {
     letter-spacing: 0.015em;
   }
 }
-/* Central HMI display scale: layout is authored at 80% viewport, then rendered at 125%. */
+/* Keep the legacy HMI scale only for the compact operator display. Larger
+   viewports use their real CSS dimensions so Scouring can constrain its work area. */
 #root {
-  width: calc(100vw / var(--hmi-scale));
-  height: calc(100vh / var(--hmi-scale));
-  min-height: calc(600px / var(--hmi-scale));
-  transform: scale(var(--hmi-scale));
-  transform-origin: top left;
+  width: 100vw;
+  height: 100vh;
+  min-height: 600px;
   overflow: hidden;
+}
+
+@media (max-width: 1100px), (max-height: 650px) {
+  #root {
+    width: calc(100vw / var(--hmi-scale));
+    height: calc(100vh / var(--hmi-scale));
+    min-height: calc(600px / var(--hmi-scale));
+    transform: scale(var(--hmi-scale));
+    transform-origin: top left;
+  }
 }
 
 body {
@@ -60,6 +69,7 @@ body {
 .scouring-record-grid {
   column-gap: 0.75rem;
   row-gap: 0.25rem;
+  width: 100%;
 }
 
 .scouring-record-grid-2 {
@@ -70,8 +80,25 @@ body {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.scouring-record-grid-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  min-width: 900px;
+}
+
+.scouring-record-grid-5 .scouring-record-field {
+  width: 100%;
+}
+
 .scouring-record-field {
-  min-height: 112px;
+  min-height: 0;
+}
+
+/* Vietnamese diacritics extend above the cap height. Give the compact form
+   labels a taller line box without changing the HMI font or control sizing. */
+.scouring-record-field > span:first-child,
+.scouring-record-group h3 {
+  line-height: 1.35;
+  overflow: visible;
 }
 
 .scouring-record-input-shell {
@@ -86,12 +113,23 @@ body {
 }
 
 .scouring-record-unit {
-  background: #edf3f5 !important;
+  background: #f1f6f9 !important;
   color: #334d5c;
 }
 
 .scouring-record-group {
-  background: #dbe6ea;
+  background: #fff;
+}
+
+/* Keep the three parameter groups visually unified; spacing, not rules,
+   separates them inside the bordered Scouring Parameters block. */
+.scouring-record-group > div > div {
+  border-bottom: 0;
+  padding-bottom: 0.75rem;
+}
+
+.scouring-record-group > div > div:last-child {
+  padding-bottom: 1rem;
 }
 
 .scouring-record-field .text-slate-500 {
@@ -99,9 +137,29 @@ body {
 }
 
 .scouring-record-workspace {
+  width: 100%;
   max-width: none;
   margin-left: 0;
   margin-right: 0;
+}
+
+.scouring-screen-frame {
+  width: calc(100% - 1rem);
+  max-width: 1440px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.scouring-full-width-frame {
+  max-width: none;
+  margin-left: 0.5rem;
+  margin-right: 0.5rem;
+}
+
+@media (max-width: 1100px) {
+  .scouring-screen-frame {
+    width: calc(100% - 0.5rem);
+  }
 }
 
 .scouring-record-context {
