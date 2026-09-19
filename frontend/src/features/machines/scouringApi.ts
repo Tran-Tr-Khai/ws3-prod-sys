@@ -4,6 +4,10 @@ export type ScouringRecord = {
   recordedAt: string;
   createdAt: string;
   batchIdentifier: string | null;
+  orderNumber: string | null;
+  item: string | null;
+  lotYarn: string | null;
+  lotNumber: string | null;
   operatorName: string | null;
   operatorIdentifier: string | null;
   naoh: number;
@@ -16,12 +20,17 @@ export type ScouringRecord = {
   cylinderTemperature: number;
   inputFabricMeters: number | null;
   outputFabricMeters: number | null;
+  productionQuantityMeters: number | null;
 };
 
 export type ScouringRecordCreatePayload = {
   machineId: string;
   recordedAt?: string;
   batchIdentifier?: string | null;
+  orderNumber?: string | null;
+  item?: string | null;
+  lotYarn?: string | null;
+  lotNumber?: string | null;
   operatorName?: string | null;
   operatorIdentifier?: string | null;
   naoh: number;
@@ -34,6 +43,7 @@ export type ScouringRecordCreatePayload = {
   cylinderTemperature: number;
   inputFabricMeters?: number | null;
   outputFabricMeters?: number | null;
+  productionQuantityMeters?: number | null;
 };
 
 export type ScouringRecordApiResponse = {
@@ -42,6 +52,10 @@ export type ScouringRecordApiResponse = {
   recorded_at: string;
   created_at: string;
   batch_identifier: string | null;
+  order_number: string | null;
+  item: string | null;
+  lot_yarn: string | null;
+  lot_number: string | null;
   operator_name: string | null;
   operator_identifier: string | null;
   naoh: number;
@@ -54,12 +68,17 @@ export type ScouringRecordApiResponse = {
   cylinder_temperature: number;
   input_fabric_meters: number | null;
   output_fabric_meters: number | null;
+  production_quantity_meters: number | null;
 };
 
 type ScouringRecordApiRequest = {
   machine_id: string;
   recorded_at?: string;
   batch_identifier?: string | null;
+  order_number?: string | null;
+  item?: string | null;
+  lot_yarn?: string | null;
+  lot_number?: string | null;
   operator_name?: string | null;
   operator_identifier?: string | null;
   naoh: number;
@@ -72,6 +91,7 @@ type ScouringRecordApiRequest = {
   cylinder_temperature: number;
   input_fabric_meters?: number | null;
   output_fabric_meters?: number | null;
+  production_quantity_meters?: number | null;
 };
 
 export type ScouringApiErrorDetails = unknown;
@@ -112,6 +132,10 @@ function toApiRequest(payload: ScouringRecordCreatePayload): ScouringRecordApiRe
     machine_id: payload.machineId,
     ...(payload.recordedAt === undefined ? {} : { recorded_at: payload.recordedAt }),
     ...(payload.batchIdentifier === undefined ? {} : { batch_identifier: payload.batchIdentifier }),
+    ...(payload.orderNumber === undefined ? {} : { order_number: payload.orderNumber }),
+    ...(payload.item === undefined ? {} : { item: payload.item }),
+    ...(payload.lotYarn === undefined ? {} : { lot_yarn: payload.lotYarn }),
+    ...(payload.lotNumber === undefined ? {} : { lot_number: payload.lotNumber }),
     ...(payload.operatorName === undefined ? {} : { operator_name: payload.operatorName }),
     ...(payload.operatorIdentifier === undefined ? {} : { operator_identifier: payload.operatorIdentifier }),
     naoh: payload.naoh,
@@ -124,6 +148,7 @@ function toApiRequest(payload: ScouringRecordCreatePayload): ScouringRecordApiRe
     cylinder_temperature: payload.cylinderTemperature,
     ...(payload.inputFabricMeters === undefined ? {} : { input_fabric_meters: payload.inputFabricMeters }),
     ...(payload.outputFabricMeters === undefined ? {} : { output_fabric_meters: payload.outputFabricMeters }),
+    ...(payload.productionQuantityMeters === undefined ? {} : { production_quantity_meters: payload.productionQuantityMeters }),
   };
 }
 
@@ -134,6 +159,10 @@ function fromApiResponse(record: ScouringRecordApiResponse): ScouringRecord {
     recordedAt: record.recorded_at,
     createdAt: record.created_at,
     batchIdentifier: record.batch_identifier,
+    orderNumber: record.order_number,
+    item: record.item,
+    lotYarn: record.lot_yarn,
+    lotNumber: record.lot_number,
     operatorName: record.operator_name,
     operatorIdentifier: record.operator_identifier,
     naoh: record.naoh,
@@ -146,6 +175,7 @@ function fromApiResponse(record: ScouringRecordApiResponse): ScouringRecord {
     cylinderTemperature: record.cylinder_temperature,
     inputFabricMeters: record.input_fabric_meters,
     outputFabricMeters: record.output_fabric_meters,
+    productionQuantityMeters: record.production_quantity_meters,
   };
 }
 
