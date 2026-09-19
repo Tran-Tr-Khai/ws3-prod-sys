@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HMIButton } from '../../components/hmi/HMIButton';
-import { HMIHeader } from '../../components/hmi/HMIHeader';
+import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { getScouringRecords, type ScouringRecord } from './scouringApi';
 
 type ValueDefinition = { label: string; value: number | null; unit: string };
@@ -100,9 +100,9 @@ export function ScouringHMIPage() {
   const latestRecord = records[0];
   const latestWarnings = useMemo(() => latestRecord ? recordWarnings(latestRecord) : [], [latestRecord]);
 
-  return <main className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
-    <HMIHeader variant="machine" title="WS3 / Scouring Overview" subtitle="Read-only recorded data · Scouring / 정련기" machineName="SC-01" status="info" time={new Date().toLocaleTimeString('vi-VN')} />
-    <div className="mx-2 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
+  return <WS3Shell title="WS3 / Scouring Overview" subtitle="Read-only recorded data · Scouring / 정련기" machineId="SC-01" machineLabel="Scouring" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
+      <div className="scouring-screen-frame scouring-full-width-frame mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
       <div className="grid min-h-0 flex-1 lg:grid-cols-[278px_minmax(0,1fr)]">
         <aside className="flex flex-col border-b-2 border-industrialDark bg-hmiConsole lg:border-b-0 lg:border-r-2">
           <section>
@@ -125,6 +125,7 @@ export function ScouringHMIPage() {
           </div>
         </section>
       </div>
+      </div>
     </div>
-  </main>;
+  </WS3Shell>;
 }
