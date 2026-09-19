@@ -26,7 +26,7 @@ export function WS3Shell({
   showMachineNavigation = Boolean(machineId && machineLabel),
 }: WS3ShellProps) {
   return (
-    <main className="flex min-h-screen flex-col overflow-hidden bg-navy text-slate-800">
+    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
       <HMIHeader
         variant="machine"
         title={title}
