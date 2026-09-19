@@ -12,7 +12,7 @@ import { WS3OverviewPage } from '../features/production/WS3OverviewPage';
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/setup" replace />} />
+      <Route path="/" element={<Navigate to="/ws3" replace />} />
       <Route path="/setup" element={<DesignSystemDemo />} />
       <Route path="/machines" element={<MachineListPage />} />
       <Route path="/dashboard" element={<ProductionOverviewPage />} />
@@ -22,7 +22,7 @@ export default function App() {
       <Route path="/machine/scouring/record" element={<ScouringRecordPage />} />
       <Route path="/machine/scouring" element={<ScouringHMIPage />} />
       <Route path="/machine/:machineId" element={<MachineHMIPage />} />
-      <Route path="*" element={<Navigate to="/setup" replace />} />
+      <Route path="*" element={<Navigate to="/ws3" replace />} />
     </Routes>
   );
 }
