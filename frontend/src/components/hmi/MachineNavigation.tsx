@@ -15,9 +15,9 @@ export function MachineNavigation({ machineId, machineLabel }: MachineNavigation
   const basePath = `/machine/${machineLabel.toLowerCase()}`;
 
   return (
-    <nav aria-label={`${machineLabel} navigation`} className="flex min-h-10 items-center gap-1 border-b-2 border-industrialDark bg-hmiSection px-2 py-1">
+    <nav aria-label={`${machineId} ${machineLabel} navigation`} className="flex min-h-10 items-center gap-1 border-b-2 border-industrialDark bg-hmiSection px-2 py-1">
       <div className="mr-2 shrink-0 border-r border-line pr-3 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-industrialDark">
-        {machineId} / {machineLabel}
+        {machineLabel}
       </div>
       <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
         {tabs.map((tab) => (
@@ -25,7 +25,7 @@ export function MachineNavigation({ machineId, machineLabel }: MachineNavigation
             key={tab.label}
             end={tab.suffix === ''}
             to={`${basePath}${tab.suffix}`}
-            className={({ isActive }) => `inline-flex min-h-8 shrink-0 items-center border-2 px-3 text-[10px] font-bold uppercase tracking-[0.1em] transition-colors ${isActive ? 'border-industrialDark bg-industrialDark text-white' : 'border-line bg-white text-industrialDark hover:bg-hmiHover'}`}
+            className={({ isActive }) => `inline-flex min-h-8 shrink-0 items-center border-2 px-3 text-[10px] font-bold uppercase tracking-[0.1em] transition-colors ${isActive ? 'border-industrialDark bg-industrialDark text-white shadow-[inset_0_-3px_0_#dbe6ea]' : 'border-line bg-white text-industrialDark hover:border-industrialDark hover:bg-hmiHover'}`}
           >
             {tab.label}
           </NavLink>
