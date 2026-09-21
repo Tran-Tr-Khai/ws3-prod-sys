@@ -37,7 +37,7 @@ export function WS3Shell({
   const localizedTitle = language === 'vi'
     ? title.includes('Scouring History') ? `WS3 / ${t('scouringHistory')}`
       : title.includes('Scouring Record') ? `WS3 / ${t('scouringRecord')}`
-        : title.includes('Scouring Overview') ? `WS3 / ${t('scouringOverview')}`
+        : title.includes('Scouring Report') ? `WS3 / ${t('scouringReport')}`
           : title
     : title;
   return (

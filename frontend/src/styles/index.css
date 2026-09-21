@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Buffing checklist interval belongs to the lower-left status area. */
+section.border-t-2.border-industrialDark > div.text-right {
+  text-align: left;
+}
+
 :root {
   --hmi-scale: 1.25;
   font-family: "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif;
@@ -41,23 +46,16 @@ body {
     letter-spacing: 0.015em;
   }
 }
-/* Keep the legacy HMI scale only for the compact operator display. Larger
-   viewports use their real CSS dimensions so Scouring can constrain its work area. */
+/* The HMI is designed for an operator display density of 125%.  Keep this
+   inside the application instead of relying on a browser's per-site zoom
+   preference: localhost and the LAN address are different browser origins. */
 #root {
-  width: 100vw;
-  height: 100vh;
-  min-height: 600px;
+  width: calc(100vw / var(--hmi-scale));
+  height: calc(100vh / var(--hmi-scale));
+  min-height: calc(600px / var(--hmi-scale));
   overflow: hidden;
-}
-
-@media (max-width: 1100px), (max-height: 650px) {
-  #root {
-    width: calc(100vw / var(--hmi-scale));
-    height: calc(100vh / var(--hmi-scale));
-    min-height: calc(600px / var(--hmi-scale));
-    transform: scale(var(--hmi-scale));
-    transform-origin: top left;
-  }
+  transform: scale(var(--hmi-scale));
+  transform-origin: top left;
 }
 
 body {
@@ -154,6 +152,13 @@ body {
   max-width: none;
   margin-left: 0.5rem;
   margin-right: 0.5rem;
+}
+
+.scouring-inspection-frame {
+  width: calc(100% - 1rem);
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 @media (max-width: 1100px) {

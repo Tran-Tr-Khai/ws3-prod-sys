@@ -102,7 +102,6 @@ function RecordField({
     <label className="scouring-record-field flex min-w-0 w-full flex-col bg-transparent px-1 py-1.5">
       <span className="flex items-start justify-between gap-2 text-[10px] font-bold uppercase leading-normal tracking-[0.1em] text-industrial">
         <span className="truncate">{label}{field.required && <span className="ml-1 text-alarm">*</span>}</span>
-        {!field.required && <span className="shrink-0 text-[9px] font-normal normal-case tracking-normal text-slate-500">{t('optional')}</span>}
       </span>
       <span className={`scouring-record-input-shell mt-2 flex min-w-0 items-stretch border-2 bg-white ${isError ? 'border-alarm' : isWarning ? 'border-warning' : 'border-line'}`}>
         <input
