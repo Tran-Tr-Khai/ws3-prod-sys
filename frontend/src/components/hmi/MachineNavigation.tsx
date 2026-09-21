@@ -10,13 +10,19 @@ type MachineNavigationProps = {
 
 const tabs = [
   { key: 'recordEntry', suffix: '/record' },
-  { key: 'overview', suffix: '' },
   { key: 'history', suffix: '/history' },
+  { key: 'overview', suffix: '' },
 ] as const;
 
 export function MachineNavigation({ machineId, machineLabel, trailing }: MachineNavigationProps) {
   const { t } = useLanguage();
   const basePath = `/machine/${machineLabel.toLowerCase()}`;
+  const machineKey = machineLabel.toLowerCase();
+  const visibleTabs = machineKey === 'scouring'
+    ? tabs.filter((tab) => tab.key !== 'overview')
+    : machineKey === 'buffing'
+      ? tabs.filter((tab) => tab.key === 'recordEntry')
+      : tabs;
 
   return (
     <nav aria-label={`${machineId} ${machineLabel} navigation`} className="flex min-h-10 items-center gap-1 border-b-2 border-industrialDark bg-hmiSection px-2 py-1">
@@ -24,7 +30,7 @@ export function MachineNavigation({ machineId, machineLabel, trailing }: Machine
         {machineLabel}
       </div>
       <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <NavLink
             key={tab.key}
             end={tab.suffix === ''}

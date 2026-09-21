@@ -51,3 +51,36 @@ class ScouringRecordResponse(ScouringRecordCreate):
 
     id: int
     created_at: datetime
+
+
+class ScouringPhInspectionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scouring_record_id: int = Field(gt=0)
+    inspected_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    operator_name: str | None = Field(default=None, max_length=160)
+    tank_0_ph: float | None = None
+    tank_1_ph: float | None = None
+    tank_2_ph: float | None = None
+    tank_3_ph: float | None = None
+    tank_4_ph: float | None = None
+    tank_5_ph: float | None = None
+    tank_6_ph: float | None = None
+    tank_7_ph: float | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+    @field_validator(
+        "tank_0_ph", "tank_1_ph", "tank_2_ph", "tank_3_ph",
+        "tank_4_ph", "tank_5_ph", "tank_6_ph", "tank_7_ph",
+    )
+    @classmethod
+    def validate_ph(cls, value: float | None) -> float | None:
+        if value is not None:
+            _finite_number(value)
+        return value
+
+class ScouringPhInspectionResponse(ScouringPhInspectionCreate):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+    id: int
+    created_at: datetime

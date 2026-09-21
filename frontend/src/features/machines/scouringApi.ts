@@ -71,6 +71,61 @@ export type ScouringRecordApiResponse = {
   production_quantity_meters: number | null;
 };
 
+export type ScouringPhInspection = {
+  id: number;
+  scouringRecordId: number;
+  inspectedAt: string;
+  operatorName: string | null;
+  tankPh: Array<number | null>;
+  note: string | null;
+  createdAt: string;
+};
+
+export type ScouringPhInspectionCreatePayload = {
+  scouringRecordId: number;
+  inspectedAt?: string;
+  operatorName?: string | null;
+  tankPh: Array<number | null>;
+  note?: string | null;
+};
+
+export type BuffingCheck = {
+  id: number;
+  machineId: string;
+  checkDate: string;
+  checkedAt: string;
+  operatorName: string | null;
+  checks: boolean[];
+  remark: string | null;
+  createdAt: string;
+};
+
+export type BuffingCheckCreatePayload = {
+  machineId?: string;
+  checkDate: string;
+  checkedAt?: string;
+  operatorName: string;
+  checks: boolean[];
+  remark?: string | null;
+};
+
+type ScouringPhInspectionApiResponse = {
+  id: number;
+  scouring_record_id: number;
+  inspected_at: string;
+  operator_name: string | null;
+  tank_0_ph: number | null;
+  tank_1_ph: number | null;
+  tank_2_ph: number | null;
+  tank_3_ph: number | null;
+  tank_4_ph: number | null;
+  tank_5_ph: number | null;
+  tank_6_ph: number | null;
+  tank_7_ph: number | null;
+  note: string | null;
+  created_at: string;
+};
+
 type ScouringRecordApiRequest = {
   machine_id: string;
   recorded_at?: string;
@@ -126,6 +181,8 @@ type RequestOptions = {
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 const scouringRecordsPath = `${apiBaseUrl}/api/scouring/records`;
+const scouringInspectionsPath = `${apiBaseUrl}/api/scouring/inspections`;
+const buffingChecksPath = `${apiBaseUrl}/api/buffing/checks`;
 
 function toApiRequest(payload: ScouringRecordCreatePayload): ScouringRecordApiRequest {
   return {
@@ -177,6 +234,22 @@ function fromApiResponse(record: ScouringRecordApiResponse): ScouringRecord {
     outputFabricMeters: record.output_fabric_meters,
     productionQuantityMeters: record.production_quantity_meters,
   };
+}
+
+function fromInspectionApiResponse(record: ScouringPhInspectionApiResponse): ScouringPhInspection {
+  return { id: record.id, scouringRecordId: record.scouring_record_id, inspectedAt: record.inspected_at, operatorName: record.operator_name, tankPh: [record.tank_0_ph, record.tank_1_ph, record.tank_2_ph, record.tank_3_ph, record.tank_4_ph, record.tank_5_ph, record.tank_6_ph, record.tank_7_ph], note: record.note, createdAt: record.created_at };
+}
+
+function toInspectionApiRequest(payload: ScouringPhInspectionCreatePayload) {
+  return { scouring_record_id: payload.scouringRecordId, ...(payload.inspectedAt === undefined ? {} : { inspected_at: payload.inspectedAt }), ...(payload.operatorName === undefined ? {} : { operator_name: payload.operatorName }), ...Object.fromEntries(payload.tankPh.map((value, index) => [`tank_${index}_ph`, value])), ...(payload.note === undefined ? {} : { note: payload.note }) };
+}
+
+function fromBuffingApiResponse(check: { id: number; machine_id: string; check_date: string; checked_at: string; operator_name: string | null; check_1: boolean; check_2: boolean; check_3: boolean; check_4: boolean; check_5: boolean; remark: string | null; created_at: string }): BuffingCheck {
+  return { id: check.id, machineId: check.machine_id, checkDate: check.check_date, checkedAt: check.checked_at, operatorName: check.operator_name, checks: [check.check_1, check.check_2, check.check_3, check.check_4, check.check_5], remark: check.remark, createdAt: check.created_at };
+}
+
+function toBuffingApiRequest(payload: BuffingCheckCreatePayload) {
+  return { machine_id: payload.machineId ?? 'BU-01', check_date: payload.checkDate, checked_at: payload.checkedAt, operator_name: payload.operatorName, check_1: payload.checks[0] ?? false, check_2: payload.checks[1] ?? false, check_3: payload.checks[2] ?? false, check_4: payload.checks[3] ?? false, check_5: payload.checks[4] ?? false, remark: payload.remark ?? null };
 }
 
 async function readErrorBody(response: Response): Promise<ApiErrorBody> {
@@ -238,4 +311,25 @@ export async function createScouringRecord(
     signal: options.signal,
   });
   return fromApiResponse(response);
+}
+
+export async function getScouringPhInspections(recordId?: number, options: RequestOptions = {}): Promise<ScouringPhInspection[]> {
+  const url = recordId === undefined ? scouringInspectionsPath : `${scouringInspectionsPath}?scouring_record_id=${encodeURIComponent(recordId)}`;
+  const response = await request<ScouringPhInspectionApiResponse[]>(url, { signal: options.signal });
+  return response.map(fromInspectionApiResponse);
+}
+
+export async function createScouringPhInspection(payload: ScouringPhInspectionCreatePayload, options: RequestOptions = {}): Promise<ScouringPhInspection> {
+  const response = await request<ScouringPhInspectionApiResponse>(scouringInspectionsPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(toInspectionApiRequest(payload)), signal: options.signal });
+  return fromInspectionApiResponse(response);
+}
+
+export async function getBuffingChecks(checkDate: string, options: RequestOptions = {}): Promise<BuffingCheck[]> {
+  const response = await request<Array<{ id: number; machine_id: string; check_date: string; checked_at: string; operator_name: string | null; check_1: boolean; check_2: boolean; check_3: boolean; check_4: boolean; check_5: boolean; remark: string | null; created_at: string }>>(`${buffingChecksPath}?check_date=${encodeURIComponent(checkDate)}`, { signal: options.signal });
+  return response.map(fromBuffingApiResponse);
+}
+
+export async function createBuffingCheck(payload: BuffingCheckCreatePayload, options: RequestOptions = {}): Promise<BuffingCheck> {
+  const response = await request<Parameters<typeof fromBuffingApiResponse>[0]>(buffingChecksPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(toBuffingApiRequest(payload)), signal: options.signal });
+  return fromBuffingApiResponse(response);
 }
