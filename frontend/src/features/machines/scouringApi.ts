@@ -338,8 +338,9 @@ export async function createScouringPhInspection(payload: ScouringPhInspectionCr
   return fromInspectionApiResponse(response);
 }
 
-export async function getBuffingChecks(checkDate: string, options: RequestOptions = {}): Promise<BuffingCheck[]> {
-  const response = await request<BuffingApiResponse[]>(`${buffingChecksPath}?check_date=${encodeURIComponent(checkDate)}`, { signal: options.signal });
+export async function getBuffingChecks(checkDate?: string, options: RequestOptions = {}): Promise<BuffingCheck[]> {
+  const query = checkDate ? `?check_date=${encodeURIComponent(checkDate)}` : '';
+  const response = await request<BuffingApiResponse[]>(`${buffingChecksPath}${query}`, { signal: options.signal });
   return response.map(fromBuffingApiResponse);
 }
 
