@@ -18,6 +18,18 @@ class BuffingCheckCreate(BaseModel):
     remark: str | None = Field(default=None, max_length=500)
 
 
+class BuffingImageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    original_name: str
+    mime_type: str
+    file_size: int
+    sort_order: int
+    is_primary: bool
+    url: str
+
+
 class BuffingCheckResponse(BuffingCheckCreate):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
@@ -26,3 +38,4 @@ class BuffingCheckResponse(BuffingCheckCreate):
     # Legacy checks may predate the required-operator rule.
     # New records remain protected by BuffingCheckCreate above.
     operator_name: str | None = None
+    images: list[BuffingImageResponse] = Field(default_factory=list)

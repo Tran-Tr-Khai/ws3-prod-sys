@@ -98,6 +98,17 @@ export type BuffingCheck = {
   checks: boolean[];
   remark: string | null;
   createdAt: string;
+  images: BuffingImage[];
+};
+
+export type BuffingImage = {
+  id: number;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  sortOrder: number;
+  isPrimary: boolean;
+  url: string;
 };
 
 export type BuffingCheckCreatePayload = {
@@ -183,6 +194,7 @@ const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const scouringRecordsPath = `${apiBaseUrl}/api/scouring/records`;
 const scouringInspectionsPath = `${apiBaseUrl}/api/scouring/inspections`;
 const buffingChecksPath = `${apiBaseUrl}/api/buffing/checks`;
+const toApiUrl = (path: string) => path.startsWith('http') ? path : apiBaseUrl === '/' ? path : `${apiBaseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
 
 function toApiRequest(payload: ScouringRecordCreatePayload): ScouringRecordApiRequest {
   return {
@@ -244,8 +256,10 @@ function toInspectionApiRequest(payload: ScouringPhInspectionCreatePayload) {
   return { scouring_record_id: payload.scouringRecordId, ...(payload.inspectedAt === undefined ? {} : { inspected_at: payload.inspectedAt }), ...(payload.operatorName === undefined ? {} : { operator_name: payload.operatorName }), ...Object.fromEntries(payload.tankPh.map((value, index) => [`tank_${index}_ph`, value])), ...(payload.note === undefined ? {} : { note: payload.note }) };
 }
 
-function fromBuffingApiResponse(check: { id: number; machine_id: string; check_date: string; checked_at: string; operator_name: string | null; check_1: boolean; check_2: boolean; check_3: boolean; check_4: boolean; check_5: boolean; remark: string | null; created_at: string }): BuffingCheck {
-  return { id: check.id, machineId: check.machine_id, checkDate: check.check_date, checkedAt: check.checked_at, operatorName: check.operator_name, checks: [check.check_1, check.check_2, check.check_3, check.check_4, check.check_5], remark: check.remark, createdAt: check.created_at };
+type BuffingApiResponse = { id: number; machine_id: string; check_date: string; checked_at: string; operator_name: string | null; check_1: boolean; check_2: boolean; check_3: boolean; check_4: boolean; check_5: boolean; remark: string | null; created_at: string; images?: Array<{ id: number; original_name: string; mime_type: string; file_size: number; sort_order: number; is_primary: boolean; url: string }> };
+
+function fromBuffingApiResponse(check: BuffingApiResponse): BuffingCheck {
+  return { id: check.id, machineId: check.machine_id, checkDate: check.check_date, checkedAt: check.checked_at, operatorName: check.operator_name, checks: [check.check_1, check.check_2, check.check_3, check.check_4, check.check_5], remark: check.remark, createdAt: check.created_at, images: (check.images ?? []).map((image) => ({ id: image.id, originalName: image.original_name, mimeType: image.mime_type, fileSize: image.file_size, sortOrder: image.sort_order, isPrimary: image.is_primary, url: toApiUrl(image.url) })) };
 }
 
 function toBuffingApiRequest(payload: BuffingCheckCreatePayload) {
@@ -325,11 +339,18 @@ export async function createScouringPhInspection(payload: ScouringPhInspectionCr
 }
 
 export async function getBuffingChecks(checkDate: string, options: RequestOptions = {}): Promise<BuffingCheck[]> {
-  const response = await request<Array<{ id: number; machine_id: string; check_date: string; checked_at: string; operator_name: string | null; check_1: boolean; check_2: boolean; check_3: boolean; check_4: boolean; check_5: boolean; remark: string | null; created_at: string }>>(`${buffingChecksPath}?check_date=${encodeURIComponent(checkDate)}`, { signal: options.signal });
+  const response = await request<BuffingApiResponse[]>(`${buffingChecksPath}?check_date=${encodeURIComponent(checkDate)}`, { signal: options.signal });
   return response.map(fromBuffingApiResponse);
 }
 
 export async function createBuffingCheck(payload: BuffingCheckCreatePayload, options: RequestOptions = {}): Promise<BuffingCheck> {
-  const response = await request<Parameters<typeof fromBuffingApiResponse>[0]>(buffingChecksPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(toBuffingApiRequest(payload)), signal: options.signal });
+  const response = await request<BuffingApiResponse>(buffingChecksPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(toBuffingApiRequest(payload)), signal: options.signal });
   return fromBuffingApiResponse(response);
+}
+
+export async function uploadBuffingImages(checkId: number, files: File[], options: RequestOptions = {}): Promise<BuffingImage[]> {
+  const body = new FormData();
+  files.forEach((file) => body.append('files', file));
+  const response = await request<Array<{ id: number; original_name: string; mime_type: string; file_size: number; sort_order: number; is_primary: boolean; url: string }>>(`${buffingChecksPath}/${checkId}/images`, { method: 'POST', body, signal: options.signal });
+  return response.map((image) => ({ id: image.id, originalName: image.original_name, mimeType: image.mime_type, fileSize: image.file_size, sortOrder: image.sort_order, isPrimary: image.is_primary, url: toApiUrl(image.url) }));
 }
