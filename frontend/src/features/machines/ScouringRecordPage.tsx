@@ -253,11 +253,11 @@ export function ScouringRecordPage() {
 
           </div>
         </div>
-        <div className="grid shrink-0 grid-cols-[220px_minmax(0,1fr)] gap-2 border-t border-line bg-hmiConsole p-2">
-          <div className="flex items-center">
+        <div className="scouring-record-actions grid shrink-0 grid-cols-[220px_minmax(0,1fr)] gap-2 border-t border-line bg-hmiConsole p-2">
+          <div className="scouring-record-back-action flex items-center">
             <HMIButton size="large" variant="secondary" className="border-line bg-white" onClick={() => navigate('/machine/scouring')}>{t('back')}</HMIButton>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="scouring-record-action-buttons flex justify-end gap-2">
             <HMIButton size="large" variant="secondary" className="border-line bg-white" onClick={() => navigate('/machine/scouring')}>{t('cancel')}</HMIButton>
             <HMIButton size="large" variant="primary" disabled={saving || saveSuccess} onClick={saveRecord}>{saving ? t('saving') : t('saveRecord')}</HMIButton>
           </div>
