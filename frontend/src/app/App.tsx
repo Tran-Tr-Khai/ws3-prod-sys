@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { DesignSystemDemo } from '../components/DesignSystemDemo';
 import { MachineListPage } from '../features/machines/MachineListPage';
 import { MachineHMIPage } from '../features/machines/MachineHMIPage';
@@ -10,10 +10,19 @@ import { ScouringAlarmPage } from '../features/machines/ScouringAlarmPage';
 import { BuffingPage } from '../features/machines/BuffingPage';
 import { ProductionOverviewPage } from '../features/production/ProductionOverviewPage';
 import { WS3OverviewPage } from '../features/production/WS3OverviewPage';
+import { LoginPage } from '../features/auth/LoginPage';
+import { useAuth } from '../auth/AuthContext';
 
 export default function App() {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return <main className="flex min-h-screen items-center justify-center bg-navy text-xs font-bold uppercase text-white">Loading...</main>;
+  if (!user) return <Routes><Route path="/login" element={<LoginPage />} /><Route path="*" element={<Navigate to="/login" replace />} /></Routes>;
+  const restrictedMachine = location.pathname.startsWith('/machine/scouring') ? 'SC-01' : location.pathname.startsWith('/machine/buffing') ? 'BU-01' : null;
+  if (user.role === 'OPERATOR' && restrictedMachine && !user.machineIds.includes(restrictedMachine)) return <Navigate to="/ws3" replace />;
   return (
     <Routes>
+      <Route path="/login" element={<Navigate to="/ws3" replace />} />
       <Route path="/" element={<Navigate to="/ws3" replace />} />
       <Route path="/setup" element={<DesignSystemDemo />} />
       <Route path="/machines" element={<MachineListPage />} />
