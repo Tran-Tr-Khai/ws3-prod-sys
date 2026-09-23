@@ -55,7 +55,7 @@ export function WS3OverviewPage() {
   }, []);
 
   useEffect(() => {
-    void getBuffingChecks(new Date().toISOString().slice(0, 10))
+    void getBuffingChecks()
       .then((checks) => setLatestBuffingCheck(checks[0] ?? null))
       .catch(() => setLatestBuffingCheck(null));
   }, []);

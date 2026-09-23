@@ -67,14 +67,14 @@ def create_buffing_check(payload: BuffingCheckCreate, db: Session = Depends(get_
 
 @router.get("", response_model=list[BuffingCheckResponse])
 def list_buffing_checks(
-    check_date: date = Query(...),
+    check_date: date | None = Query(default=None),
     machine_id: str = Query(default="BU-01", min_length=1, max_length=50),
     db: Session = Depends(get_db),
 ) -> list[BuffingCheckResponse]:
-    statement = select(BuffingCheck).where(
-        BuffingCheck.machine_id == machine_id,
-        BuffingCheck.check_date == check_date,
-    ).order_by(desc(BuffingCheck.checked_at), desc(BuffingCheck.id))
+    statement = select(BuffingCheck).where(BuffingCheck.machine_id == machine_id)
+    if check_date is not None:
+        statement = statement.where(BuffingCheck.check_date == check_date)
+    statement = statement.order_by(desc(BuffingCheck.checked_at), desc(BuffingCheck.id))
     return [check_response(check) for check in db.scalars(statement).all()]
 
 
