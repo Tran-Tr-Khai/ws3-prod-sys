@@ -4,6 +4,7 @@ import { HMIButton } from '../../components/hmi/HMIButton';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { getBuffingChecks, getScouringRecords, type BuffingCheck, type ScouringRecord } from '../machines/scouringApi';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { useAuth } from '../../auth/AuthContext';
 
 const processes = [
   { name: 'Scouring', code: 'SC-01', available: true },
@@ -33,6 +34,7 @@ function hasCompleteProcessData(record: ScouringRecord): boolean {
 
 export function WS3OverviewPage() {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [latestRecord, setLatestRecord] = useState<ScouringRecord | null>(null);
   const [latestBuffingCheck, setLatestBuffingCheck] = useState<BuffingCheck | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,7 +70,7 @@ export function WS3OverviewPage() {
     <WS3Shell title={t('systemTitle')} subtitle={t('productionOverview')} status="info" time={new Date().toLocaleTimeString('vi-VN')} showGlobalNavigation={false}>
       <div className="h-full overflow-auto bg-hmiConsole p-2 text-slate-800">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {processes.map((process) => (
+          {processes.filter((process) => user?.role === 'ADMIN' || user?.machineIds.includes(process.code)).map((process) => (
             <article key={process.name} className={`flex min-w-0 flex-col bg-white ${process.available ? 'border-2 border-industrial' : 'border border-line'}`}>
               <header className={`flex min-h-9 items-center justify-between px-3 py-2 text-white ${process.available ? 'bg-industrial' : 'bg-industrialDark'}`}>
                 <h2 className="font-mono text-sm font-bold uppercase tracking-[0.1em]">{process.name}</h2>

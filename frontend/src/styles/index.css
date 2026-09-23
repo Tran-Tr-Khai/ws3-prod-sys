@@ -182,3 +182,214 @@ body {
 #root main.min-h-screen {
   min-height: 100% !important;
 }
+
+/* Mobile uses the device width directly. The desktop HMI intentionally scales
+   to 125%, but retaining that scale on a phone squeezes fixed-width panels. */
+@media (max-width: 640px) {
+  :root {
+    --hmi-scale: 1;
+  }
+
+  body {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  #root {
+    width: 100vw;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+    transform: none;
+  }
+
+  #root > main {
+    height: auto !important;
+    min-height: 100vh;
+    overflow: visible !important;
+  }
+
+  #root > main > .min-h-0.flex-1 {
+    flex: none;
+    height: auto !important;
+    min-height: 0;
+    overflow: visible !important;
+  }
+
+  .scouring-screen-frame,
+  .scouring-full-width-frame {
+    width: calc(100% - 0.75rem);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .scouring-record-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .scouring-record-context,
+  .scouring-record-workspace > section {
+    height: auto !important;
+  }
+
+  .scouring-record-context-content {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    min-width: 0;
+  }
+
+  .scouring-record-context-content > * {
+    min-width: 0;
+  }
+
+  .scouring-record-context-content input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .scouring-record-context-content > div {
+    grid-column: span 2;
+  }
+
+  .scouring-history-layout {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .scouring-history-layout > section {
+    flex: none;
+    min-height: auto;
+  }
+
+  .scouring-history-layout > section:first-child {
+    min-height: 15rem;
+  }
+
+  .scouring-history-detail-scroll {
+    overflow: visible;
+  }
+
+  .scouring-history-layout > .scouring-history-detail {
+    display: none;
+  }
+
+  .scouring-history-layout > .scouring-history-detail.mobile-detail-open {
+    display: flex;
+    position: fixed;
+    inset: 0.5rem;
+    z-index: 60;
+    min-height: 0;
+    border: 2px solid #364d5d;
+    box-shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
+  }
+
+  .scouring-history-detail.mobile-detail-open .scouring-history-detail-scroll {
+    overflow: auto;
+  }
+
+  .scouring-history-detail.mobile-detail-open .mobile-detail-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .scouring-record-grid-5 {
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 0.5rem;
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
+
+  .scouring-record-group .overflow-x-auto {
+    overflow-x: visible;
+  }
+
+  .scouring-record-input-shell {
+    height: 48px;
+  }
+
+  .scouring-record-input {
+    font-size: 22px;
+  }
+
+  .scouring-record-unit {
+    min-width: 2.75rem;
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+    font-size: 11px;
+  }
+
+  .scouring-record-actions {
+    grid-template-columns: minmax(0, 1fr);
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+  }
+
+  .scouring-record-back-action {
+    display: none;
+  }
+
+  .scouring-record-action-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scouring-record-action-buttons > button {
+    width: 100%;
+  }
+
+  .buffing-page-shell {
+    height: auto !important;
+    min-height: 100%;
+    overflow: auto !important;
+  }
+
+  .buffing-page-content {
+    height: auto !important;
+    flex: none;
+    min-height: 100%;
+  }
+
+  .buffing-card {
+    height: auto !important;
+    min-height: max-content;
+    overflow: visible !important;
+  }
+
+  .buffing-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .buffing-meta label,
+  .buffing-meta input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .buffing-history {
+    display: block;
+    flex: none;
+    min-height: 0;
+  }
+
+  .buffing-history-scroll {
+    display: block;
+    flex: none;
+    height: auto;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4rem;
+  }
+}
