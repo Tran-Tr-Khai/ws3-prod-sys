@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     )
     host: str = Field(default="0.0.0.0", validation_alias="HOST")
     port: int = Field(default=8000, validation_alias="PORT")
+    auth_secret_key: str = Field(default="change-me-before-production", validation_alias="AUTH_SECRET_KEY")
+    auth_session_ttl_hours: int = Field(default=8, validation_alias="AUTH_SESSION_TTL_HOURS")
+    auth_cookie_secure: bool = Field(default=False, validation_alias="AUTH_COOKIE_SECURE")
+    media_root: str = Field(default="backend/media", validation_alias="MEDIA_ROOT")
 
     database_url: str = Field(
         default="postgresql+psycopg://ws3:ws3_password@localhost:5432/ws3",
@@ -39,5 +43,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-
-
