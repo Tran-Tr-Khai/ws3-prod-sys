@@ -12,6 +12,12 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # The initial migration registers the current model metadata and may have
+    # already created this table on a fresh database. Keep this revision safe
+    # for both fresh and existing databases.
+    if sa.inspect(op.get_bind()).has_table("support_ticket_reads"):
+        return
+
     op.create_table(
         "support_ticket_reads",
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),

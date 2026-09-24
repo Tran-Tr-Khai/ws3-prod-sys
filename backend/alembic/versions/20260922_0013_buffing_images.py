@@ -15,6 +15,12 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # The initial migration registers the current model metadata and may have
+    # already created this table on a fresh database. Keep this revision safe
+    # for both fresh and existing databases.
+    if sa.inspect(op.get_bind()).has_table("buffing_check_images"):
+        return
+
     op.create_table(
         "buffing_check_images",
         sa.Column("id", sa.Integer(), primary_key=True),
