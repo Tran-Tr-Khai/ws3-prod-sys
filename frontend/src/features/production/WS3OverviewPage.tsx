@@ -7,13 +7,14 @@ import { useLanguage } from '../../i18n/LanguageContext';
 import { useAuth } from '../../auth/AuthContext';
 
 const processes = [
-  { name: 'Scouring', code: 'SC-01', available: true },
+  { name: 'Unrolling', code: 'UN-01', available: false },
   { name: 'Buffing', code: 'BU-01', available: true },
-  { name: 'Tenter', code: 'TE-01', available: false },
+  { name: 'Scouring', code: 'SC-01', available: true },
   { name: 'Dyeing', code: 'DY-01', available: false },
-  { name: 'Suction', code: 'SU-01', available: false },
-  { name: 'Calendar', code: 'CA-01', available: false },
-  { name: 'Rapid', code: 'RA-01', available: false },
+  { name: 'Washing', code: 'WA-01', available: false },
+  { name: 'Skachar', code: 'SK-01', available: false },
+  { name: 'Tentering', code: 'TE-01', available: false },
+  { name: 'Calendaring', code: 'CA-01', available: false },
 ] as const;
 
 function formatDateTime(timestamp: string): string {
@@ -65,12 +66,14 @@ export function WS3OverviewPage() {
   const recordStatus = !recordComplete ? 'INCOMPLETE' : warnings.length > 0 ? 'WARNING' : 'COMPLETE';
   const buffingStatus = latestBuffingCheck ? (latestBuffingCheck.checks.every(Boolean) ? 'COMPLETE' : 'WARNING') : null;
   const failedBuffingPoints = latestBuffingCheck?.checks.map((checked, index) => checked ? null : index + 1).filter((point): point is number => point !== null) ?? [];
+  const canManageOrders = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
 
   return (
     <WS3Shell title={t('systemTitle')} subtitle={t('productionOverview')} status="info" time={new Date().toLocaleTimeString('vi-VN')} showGlobalNavigation={false}>
       <div className="h-full overflow-auto bg-hmiConsole p-2 text-slate-800">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {processes.filter((process) => user?.role === 'ADMIN' || user?.machineIds.includes(process.code)).map((process) => (
+          {canManageOrders && <article className="flex min-w-0 flex-col border-2 border-industrial bg-white sm:col-span-2 lg:col-span-3"><header className="flex min-h-9 items-center justify-between bg-industrial px-3 py-2 text-white"><h2 className="font-mono text-sm font-bold uppercase tracking-[0.1em]">{t('productionOrders')}</h2><span className="font-mono text-[9px] text-slate-300">SUPERVISOR</span></header><div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3"><div><p className="text-xs font-bold uppercase tracking-wide text-industrialDark">{t('createOrderFromMes')}</p><p className="mt-1 text-[10px] text-slate-500">{t('createOrderFromMesDescription')}</p></div><Link to="/ws3/supervisor/orders/new" className="inline-flex"><HMIButton size="normal" variant="primary">{t('createWs3Order')}</HMIButton></Link></div></article>}
+          {processes.filter((process) => canManageOrders || user?.machineIds.includes(process.code)).map((process) => (
             <article key={process.name} className={`flex min-w-0 flex-col bg-white ${process.available ? 'border-2 border-industrial' : 'border border-line'}`}>
               <header className={`flex min-h-9 items-center justify-between px-3 py-2 text-white ${process.available ? 'bg-industrial' : 'bg-industrialDark'}`}>
                 <h2 className="font-mono text-sm font-bold uppercase tracking-[0.1em]">{process.name}</h2>
@@ -83,6 +86,8 @@ export function WS3OverviewPage() {
                 </div>
               ) : process.name === 'Buffing' ? (
                 <div className="flex min-h-[260px] flex-1 flex-col px-3 py-3"><div className="grid grid-cols-2 gap-3 text-[10px]"><div className="border-r border-line pr-3"><div className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase tracking-wider text-industrial">{t('operation')}</div><div className="grid gap-2"><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('machine')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">{process.code}</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('operator')}</span><span className="mt-0.5 block font-semibold">{latestBuffingCheck?.operatorName || '—'}</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">{latestBuffingCheck ? formatDateTime(latestBuffingCheck.checkedAt) : '—'}</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('status')}</span><span className={`mt-0.5 block font-bold uppercase ${buffingStatus === 'COMPLETE' ? 'text-success' : buffingStatus === 'WARNING' ? 'text-warning' : 'text-slate-500'}`}>{buffingStatus === 'COMPLETE' ? t('complete') : buffingStatus === 'WARNING' ? t('warning') : t('noData')}</span></div></div></div><div><div className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase tracking-wider text-industrial">{t('production')}</div><div className="pt-1 font-semibold uppercase text-slate-500">{t('noData')}</div></div></div>{failedBuffingPoints.length > 0 && <div className="mt-3 border-t border-warning/60 pt-2 text-[9px] font-bold uppercase tracking-wide text-warning">{t('buffingCheckWarning').replace('{points}', failedBuffingPoints.join(', '))}</div>}<Link to="/machine/buffing/record" className="mt-auto inline-flex pt-4"><HMIButton size="normal" variant="primary" className="w-full">{t('openBuffing')}</HMIButton></Link></div>
+              ) : process.name === 'Tentering' ? (
+                <div className="flex min-h-[260px] flex-1 flex-col px-3 py-3"><div className="grid grid-cols-2 gap-3 text-[10px]"><div className="border-r border-line pr-3"><div className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase tracking-wider text-industrial">{t('operation')}</div><div className="grid gap-2"><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('machine')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">{process.code}</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('operator')}</span><span className="mt-0.5 block font-semibold">—</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">—</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('status')}</span><span className="mt-0.5 block font-bold uppercase text-slate-500">{t('notImplemented')}</span></div></div></div><div><div className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase tracking-wider text-industrial">{t('production')}</div><div className="pt-1 font-semibold uppercase text-slate-500">{t('noData')}</div></div></div><Link to="/machine/tenter/record" className="mt-auto inline-flex pt-4"><HMIButton size="normal" variant="primary" className="w-full">{t('openTenter')}</HMIButton></Link></div>
               ) : process.available ? (
                 <div className="flex min-h-[260px] flex-1 flex-col px-3 py-3">
                   {loading && <p className="py-6 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t('loadingRecorded')}</p>}
