@@ -8,6 +8,7 @@ from app.models.scouring_inspection import ScouringPhInspection
 from app.models.buffing import BuffingCheck, BuffingCheckImage
 from app.models.user import Role, User, UserSession
 from app.models.support import SupportMessage, SupportTicket, SupportTicketRead
+from app.models.ws3_order import WS3ImportBatch, WS3ImportRow, WS3Order, WS3OrderRoll
 
 __all__ = [
     "Alarm",
@@ -30,4 +31,8 @@ __all__ = [
     "SupportMessage",
     "SupportTicket",
     "SupportTicketRead",
+    "WS3Order",
+    "WS3OrderRoll",
+    "WS3ImportBatch",
+    "WS3ImportRow",
 ]
