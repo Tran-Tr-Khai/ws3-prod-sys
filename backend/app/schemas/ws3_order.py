@@ -11,6 +11,7 @@ class WS3OrderImport(BaseModel):
     mapping: dict[str, str] = Field(default_factory=dict)
     selected_row_indexes: list[int] | None = None
     import_batch_id: int | None = None
+    import_row_ids: list[int] | None = None
 
 
 class WS3ImportBatchCreate(WS3OrderImport):
@@ -26,6 +27,30 @@ class WS3ImportBatchResponse(BaseModel):
     available_count: int
     duplicate_count: int = 0
     incomplete_key_count: int = 0
+
+
+class WS3ImportRowResponse(BaseModel):
+    id: int
+    source_row_index: int
+    source_key: str | None
+    raw_data: dict[str, str]
+    status: str
+    order_id: int | None
+
+
+class WS3ImportBatchDetailResponse(WS3ImportBatchResponse):
+    columns: list[str]
+    mapping: dict[str, str]
+    rows: list[WS3ImportRowResponse]
+
+
+class WS3ImportWarehouseResponse(BaseModel):
+    columns: list[str]
+    rows: list[WS3ImportRowResponse]
+
+
+class WS3WarehouseRowUpdate(BaseModel):
+    raw_data: dict[str, str]
 
 
 class WS3OrderRollResponse(BaseModel):

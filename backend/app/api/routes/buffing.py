@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -83,6 +83,27 @@ def get_check(check_id: int, db: Session) -> BuffingCheck:
     if check is None:
         raise HTTPException(status_code=404, detail="Buffing check not found")
     return check
+
+
+@router.delete("/{check_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_buffing_check(check_id: int, db: Session = Depends(get_db), _user=Depends(get_current_user)) -> Response:
+    check = get_check(check_id, db)
+    file_paths = [image.file_path for image in check.images]
+    db.delete(check)
+    db.commit()
+
+    root = media_root()
+    for file_path in file_paths:
+        target = (root / file_path).resolve()
+        if root in target.parents and target.is_file():
+            target.unlink()
+    check_directory = (root / str(check_id)).resolve()
+    if root in check_directory.parents:
+        try:
+            check_directory.rmdir()
+        except OSError:
+            pass
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{check_id}/images", response_model=list[BuffingImageResponse], status_code=status.HTTP_201_CREATED)

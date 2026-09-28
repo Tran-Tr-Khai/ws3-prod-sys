@@ -43,6 +43,21 @@ export type WS3ImportBatch = {
   incomplete_key_count: number;
 };
 
+export type WS3ImportRow = {
+  id: number;
+  source_row_index: number;
+  source_key: string | null;
+  raw_data: ImportedRow;
+  status: string;
+  order_id: number | null;
+};
+
+export type WS3ImportBatchDetail = WS3ImportBatch & {
+  columns: string[];
+  mapping: Record<string, string>;
+  rows: WS3ImportRow[];
+};
+
 export async function createWS3Order(payload: {
   source_filename?: string | null;
   source_format: string;
@@ -51,6 +66,7 @@ export async function createWS3Order(payload: {
   mapping: Record<string, string>;
   selected_row_indexes?: number[];
   import_batch_id?: number | null;
+  import_row_ids?: number[];
 }): Promise<WS3Order> {
   const response = await fetch(`${apiBaseUrl}/api/ws3/orders`, {
     method: 'POST',
@@ -78,6 +94,37 @@ export async function createWS3ImportBatch(payload: {
   });
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || `Import API returned HTTP ${response.status}`);
   return (await response.json()) as WS3ImportBatch;
+}
+
+export async function listWS3ImportBatches(): Promise<WS3ImportBatch[]> {
+  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/imports`, { credentials: 'include' });
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || `Import API returned HTTP ${response.status}`);
+  return (await response.json()) as WS3ImportBatch[];
+}
+
+export async function getWS3ImportBatch(id: number): Promise<WS3ImportBatchDetail> {
+  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/imports/${id}`, { credentials: 'include' });
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || `Import API returned HTTP ${response.status}`);
+  return (await response.json()) as WS3ImportBatchDetail;
+}
+
+export async function getWS3ImportWarehouse(): Promise<{ columns: string[]; rows: WS3ImportRow[] }> {
+  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/imports/data`, { credentials: 'include' });
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || `Warehouse API returned HTTP ${response.status}`);
+  return (await response.json()) as { columns: string[]; rows: WS3ImportRow[] };
+}
+
+export async function updateWS3WarehouseRow(id: number, raw_data: ImportedRow): Promise<WS3ImportRow> {
+  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/imports/data/${id}`, {
+    method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ raw_data }),
+  });
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || `Warehouse API returned HTTP ${response.status}`);
+  return (await response.json()) as WS3ImportRow;
+}
+
+export async function archiveWS3WarehouseRow(id: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/imports/data/${id}`, { method: 'DELETE', credentials: 'include' });
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || `Warehouse API returned HTTP ${response.status}`);
 }
 
 export async function parseWS3SourceFile(file: File): Promise<{ filename: string; format: string; text?: string; columns?: string[]; rows?: ImportedRow[]; normalization_message?: string; normalization_message_en?: string; new_row_indexes?: number[]; duplicate_row_indexes?: number[]; incomplete_key_indexes?: number[]; duplicate_count?: number; new_count?: number; incomplete_key_count?: number }> {

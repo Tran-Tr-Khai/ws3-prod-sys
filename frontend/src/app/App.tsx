@@ -30,7 +30,9 @@ export default function App() {
       <Route path="/machines" element={<MachineListPage />} />
       <Route path="/dashboard" element={<ProductionOverviewPage />} />
       <Route path="/ws3" element={<WS3OverviewPage />} />
-      <Route path="/ws3/supervisor/orders/new" element={<CreateWS3OrderPage />} />
+      <Route path="/ws3/supervisor/data" element={<CreateWS3OrderPage initialWorkflow="import" />} />
+      <Route path="/ws3/supervisor/orders/new" element={<CreateWS3OrderPage initialWorkflow="order" />} />
+      <Route path="/supervisor/data" element={<Navigate to="/ws3/supervisor/data" replace />} />
       <Route path="/supervisor/orders/new" element={<Navigate to="/ws3/supervisor/orders/new" replace />} />
       <Route path="/machine/scouring/alarm" element={<ScouringAlarmPage />} />
       <Route path="/machine/scouring/history" element={<ScouringHistoryPage />} />
