@@ -62,7 +62,7 @@ export function WS3Shell({
         />
       )}
       {!showMachineNavigation && showGlobalNavigation && <GlobalNavigation />}
-      <div className="min-h-0 flex-1 bg-hmiConsole">
+      <div className="min-h-0 flex-1 overflow-hidden bg-hmiConsole">
         {children}
       </div>
       <SupportChatWidget />

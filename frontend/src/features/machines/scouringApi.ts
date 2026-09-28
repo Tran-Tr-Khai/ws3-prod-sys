@@ -296,6 +296,7 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
     );
   }
 
+  if (response.status === 204) return undefined as T;
   return await response.json() as T;
 }
 
@@ -347,6 +348,10 @@ export async function getBuffingChecks(checkDate?: string, options: RequestOptio
 export async function createBuffingCheck(payload: BuffingCheckCreatePayload, options: RequestOptions = {}): Promise<BuffingCheck> {
   const response = await request<BuffingApiResponse>(buffingChecksPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(toBuffingApiRequest(payload)), signal: options.signal });
   return fromBuffingApiResponse(response);
+}
+
+export async function deleteBuffingCheck(checkId: number, options: RequestOptions = {}): Promise<void> {
+  await request<void>(`${buffingChecksPath}/${checkId}`, { method: 'DELETE', signal: options.signal });
 }
 
 export async function uploadBuffingImages(checkId: number, files: File[], options: RequestOptions = {}): Promise<BuffingImage[]> {

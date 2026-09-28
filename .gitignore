@@ -10,3 +10,5 @@ __pycache__/
 .venv/
 .uv-cache/
 backend/.env
+infra/tls/*
+!infra/tls/.gitkeep

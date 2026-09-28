@@ -41,6 +41,9 @@ class WS3ImportBatch(TimestampMixin, Base):
     source_columns_json: Mapped[str] = mapped_column(Text, default="[]")
     selected_mapping_json: Mapped[str] = mapped_column(Text, default="{}")
     status: Mapped[str] = mapped_column(String(30), default="READY", index=True)
+    source_row_count: Mapped[int | None] = mapped_column(Integer)
+    duplicate_count: Mapped[int | None] = mapped_column(Integer)
+    incomplete_key_count: Mapped[int | None] = mapped_column(Integer)
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
     rows: Mapped[list["WS3ImportRow"]] = relationship(back_populates="batch", cascade="all, delete-orphan")
