@@ -13,9 +13,11 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("ws3_import_batches", sa.Column("source_row_count", sa.Integer(), nullable=True))
-    op.add_column("ws3_import_batches", sa.Column("duplicate_count", sa.Integer(), nullable=True))
-    op.add_column("ws3_import_batches", sa.Column("incomplete_key_count", sa.Integer(), nullable=True))
+    inspector = sa.inspect(op.get_bind())
+    columns = {column["name"] for column in inspector.get_columns("ws3_import_batches")}
+    for name in ("source_row_count", "duplicate_count", "incomplete_key_count"):
+        if name not in columns:
+            op.add_column("ws3_import_batches", sa.Column(name, sa.Integer(), nullable=True))
 
 
 def downgrade() -> None:
