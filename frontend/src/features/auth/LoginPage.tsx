@@ -19,8 +19,9 @@ export function LoginPage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!await login(username, password)) {
-      setError(t('invalidCredentials'));
+    const result = await login(username, password);
+    if (result !== 'success') {
+      setError(result === 'sessionCookieRejected' ? t('loginSessionCookieError') : t('invalidCredentials'));
       return;
     }
     const from = (location.state as { from?: string } | null)?.from ?? '/ws3';

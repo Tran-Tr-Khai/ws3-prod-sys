@@ -13,6 +13,7 @@ class SupportTicket(TimestampMixin, Base):
     machine_id: Mapped[str] = mapped_column(String(50), index=True)
     created_by: Mapped[str] = mapped_column(String(80), index=True)
     creator_role: Mapped[str] = mapped_column(String(30))
+    recipient_role: Mapped[str] = mapped_column(String(20), default="SUPERVISOR", index=True)
     subject: Mapped[str] = mapped_column(String(160))
     priority: Mapped[str] = mapped_column(String(20), default="NORMAL")
     status: Mapped[str] = mapped_column(String(20), default="NEW", index=True)

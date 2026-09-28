@@ -10,6 +10,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? undefined as T : await response.json() as T;
 }
 
-export async function login(username: string, password: string): Promise<SessionUser> { return fromApi(await request<UserApi>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })); }
+export async function login(username: string, password: string): Promise<SessionUser> {
+  await request<UserApi>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+  try {
+    return fromApi(await request<UserApi>('/api/auth/me'));
+  } catch {
+    throw new Error('SESSION_COOKIE_REJECTED');
+  }
+}
 export async function getCurrentUser(): Promise<SessionUser | null> { try { return fromApi(await request<UserApi>('/api/auth/me')); } catch { return null; } }
 export async function logout(): Promise<void> { await request<void>('/api/auth/logout', { method: 'POST' }); }

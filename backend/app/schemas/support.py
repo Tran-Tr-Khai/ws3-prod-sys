@@ -15,6 +15,7 @@ class SupportMessageResponse(SupportMessageCreate):
     id: int
     ticket_id: int
     sender: str
+    sender_name: str = ""
     sender_role: str
     sent_at: datetime
 
@@ -23,6 +24,7 @@ class SupportTicketCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     machine_id: str = Field(min_length=1, max_length=50)
+    recipient_role: str = Field(default="SUPERVISOR", max_length=20)
     subject: str = Field(min_length=1, max_length=160)
     priority: str = Field(default="NORMAL", max_length=20)
     message: str = Field(min_length=1, max_length=2000)
@@ -34,12 +36,16 @@ class SupportTicketResponse(BaseModel):
     id: int
     machine_id: str
     created_by: str
+    created_by_name: str = ""
     creator_role: str
+    recipient_role: str
     subject: str
     priority: str
     status: str
     created_at: datetime
     updated_at: datetime
+    last_message_sender_name: str = ""
+    last_message: str = ""
     unread_count: int = 0
 
 

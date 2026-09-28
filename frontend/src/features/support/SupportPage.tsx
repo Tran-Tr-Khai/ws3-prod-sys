@@ -37,7 +37,7 @@ export function SupportPage() {
 
   const submitTicket = async () => {
     if (!user || !subject.trim() || !message.trim()) return;
-    try { const ticket = await createSupportTicket({ machineId, subject: subject.trim(), priority, message: message.trim() }); setSubject(''); setMessage(''); setSelectedId(ticket.id); await loadTickets(); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Không thể tạo yêu cầu.'); }
+    try { const ticket = await createSupportTicket({ machineId, recipientRole: 'SUPERVISOR', subject: subject.trim(), priority, message: message.trim() }); setSubject(''); setMessage(''); setSelectedId(ticket.id); await loadTickets(); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Không thể tạo yêu cầu.'); }
   };
 
   const sendMessage = async () => {

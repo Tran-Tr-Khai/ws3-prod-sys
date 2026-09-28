@@ -58,7 +58,7 @@ export function WS3Shell({
         <MachineNavigation
           machineId={machineId}
           machineLabel={machineLabel}
-          trailing={showGlobalNavigation ? <GlobalNavigation /> : undefined}
+          trailing={showGlobalNavigation ? <GlobalNavigation showCreateOrder={machineLabel?.toLowerCase() !== 'scouring'} /> : undefined}
         />
       )}
       {!showMachineNavigation && showGlobalNavigation && <GlobalNavigation />}

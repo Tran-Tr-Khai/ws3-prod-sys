@@ -11,6 +11,8 @@ from app.schemas.support import SupportMessageCreate, SupportMessageResponse, Su
 from app.security.auth import get_current_user, role_codes
 
 router = APIRouter(prefix="/support", tags=["support"])
+RECIPIENT_ROLES = {"ADMIN", "SUPERVISOR", "ALL"}
+MACHINE_RECIPIENT = "MACHINE"
 
 
 def frontend_role(user: User) -> str:
@@ -23,7 +25,15 @@ def can_manage(user: User) -> bool:
 
 
 def can_view_ticket(ticket: SupportTicket, user: User) -> bool:
-    return can_manage(user) or ticket.created_by == user.username
+    role = frontend_role(user)
+    if role == "ADMIN":
+        return True
+    if role == "SUPERVISOR":
+        return ticket.created_by == user.username or ticket.recipient_role in {"SUPERVISOR", "ALL", MACHINE_RECIPIENT}
+    return ticket.created_by == user.username or (
+        ticket.recipient_role == "ALL"
+        or (ticket.recipient_role == MACHINE_RECIPIENT and ticket.machine_id in (user.machine_ids or []))
+    )
 
 
 def unread_count(ticket: SupportTicket, user: User, db: Session) -> int:
@@ -32,13 +42,26 @@ def unread_count(ticket: SupportTicket, user: User, db: Session) -> int:
     if read is not None:
         statement = statement.where(SupportMessage.sent_at > read.read_at)
     messages = list(db.scalars(statement).all())
-    if can_manage(user):
-        return sum(item.sender_role not in {"ADMIN", "SUPERVISOR"} for item in messages)
-    return sum(item.sender_role in {"ADMIN", "SUPERVISOR"} for item in messages)
+    return sum(item.sender.casefold() != user.username.casefold() for item in messages)
+
+
+def display_name(username: str, db: Session) -> str:
+    return db.scalar(select(User.full_name).where(User.username == username)) or username
 
 
 def ticket_response(ticket: SupportTicket, user: User, db: Session) -> SupportTicketResponse:
-    return SupportTicketResponse.model_validate(ticket).model_copy(update={"unread_count": unread_count(ticket, user, db)})
+    latest = db.scalar(
+        select(SupportMessage)
+        .where(SupportMessage.ticket_id == ticket.id)
+        .order_by(desc(SupportMessage.sent_at), desc(SupportMessage.id))
+        .limit(1)
+    )
+    return SupportTicketResponse.model_validate(ticket).model_copy(update={
+        "created_by_name": display_name(ticket.created_by, db),
+        "last_message_sender_name": display_name(latest.sender, db) if latest else "",
+        "last_message": latest.message if latest else "",
+        "unread_count": unread_count(ticket, user, db),
+    })
 
 
 @router.get("/tickets", response_model=list[SupportTicketResponse])
@@ -49,8 +72,20 @@ def list_tickets(
     user: User = Depends(get_current_user),
 ) -> list[SupportTicketResponse]:
     statement = select(SupportTicket).order_by(desc(SupportTicket.updated_at), desc(SupportTicket.id))
-    if not can_manage(user):
-        statement = statement.where(SupportTicket.created_by == user.username)
+    if frontend_role(user) == "OPERATOR":
+        statement = statement.where(
+            (SupportTicket.created_by == user.username)
+            | (SupportTicket.recipient_role == "ALL")
+            | (
+                (SupportTicket.recipient_role == MACHINE_RECIPIENT)
+                & SupportTicket.machine_id.in_(user.machine_ids or ["__no_machine__"])
+            )
+        )
+    elif frontend_role(user) == "SUPERVISOR":
+        statement = statement.where(
+            (SupportTicket.created_by == user.username)
+            | (SupportTicket.recipient_role.in_({"SUPERVISOR", "ALL", MACHINE_RECIPIENT}))
+        )
     return [ticket_response(ticket, user, db) for ticket in db.scalars(statement).all()]
 
 
@@ -59,7 +94,12 @@ def create_ticket(payload: SupportTicketCreate, db: Session = Depends(get_db), u
     if frontend_role(user) == "OPERATOR" and payload.machine_id not in (user.machine_ids or []):
         raise HTTPException(status_code=403, detail="Machine access denied")
     role = frontend_role(user)
-    ticket = SupportTicket(machine_id=payload.machine_id, created_by=user.username, creator_role=role, subject=payload.subject, priority=payload.priority, status="NEW")
+    recipient_role = payload.recipient_role.strip().upper()
+    if role == "OPERATOR":
+        recipient_role = "SUPERVISOR"
+    elif recipient_role not in RECIPIENT_ROLES | {MACHINE_RECIPIENT}:
+        raise HTTPException(status_code=422, detail="Invalid support recipient")
+    ticket = SupportTicket(machine_id=payload.machine_id, created_by=user.username, creator_role=role, recipient_role=recipient_role, subject=payload.subject, priority=payload.priority, status="NEW")
     ticket.messages.append(SupportMessage(sender=user.username, sender_role=role, message=payload.message))
     db.add(ticket)
     db.commit()
@@ -75,9 +115,10 @@ def get_ticket_or_404(ticket_id: int, user: User, db: Session) -> SupportTicket:
 
 
 @router.get("/tickets/{ticket_id}/messages", response_model=list[SupportMessageResponse])
-def list_messages(ticket_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[SupportMessage]:
+def list_messages(ticket_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[SupportMessageResponse]:
     get_ticket_or_404(ticket_id, user, db)
-    return list(db.scalars(select(SupportMessage).where(SupportMessage.ticket_id == ticket_id).order_by(SupportMessage.sent_at, SupportMessage.id)).all())
+    messages = list(db.scalars(select(SupportMessage).where(SupportMessage.ticket_id == ticket_id).order_by(SupportMessage.sent_at, SupportMessage.id)).all())
+    return [SupportMessageResponse.model_validate(item).model_copy(update={"sender_name": display_name(item.sender, db)}) for item in messages]
 
 
 @router.post("/tickets/{ticket_id}/read", status_code=204)
@@ -94,7 +135,7 @@ def mark_ticket_read(ticket_id: int, db: Session = Depends(get_db), user: User =
 
 
 @router.post("/tickets/{ticket_id}/messages", response_model=SupportMessageResponse, status_code=201)
-def create_message(ticket_id: int, payload: SupportMessageCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> SupportMessage:
+def create_message(ticket_id: int, payload: SupportMessageCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> SupportMessageResponse:
     ticket = get_ticket_or_404(ticket_id, user, db)
     role = frontend_role(user)
     message = SupportMessage(ticket_id=ticket_id, sender=user.username, sender_role=role, message=payload.message)
@@ -102,7 +143,7 @@ def create_message(ticket_id: int, payload: SupportMessageCreate, db: Session = 
     db.add(message)
     db.commit()
     db.refresh(message)
-    return message
+    return SupportMessageResponse.model_validate(message).model_copy(update={"sender_name": display_name(message.sender, db)})
 
 
 @router.patch("/tickets/{ticket_id}", response_model=SupportTicketResponse)
