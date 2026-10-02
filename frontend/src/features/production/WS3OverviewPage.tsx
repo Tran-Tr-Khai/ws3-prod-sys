@@ -5,6 +5,7 @@ import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { getBuffingChecks, getScouringRecords, type BuffingCheck, type ScouringRecord } from '../machines/scouringApi';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useAuth } from '../../auth/AuthContext';
+import { getMachineNotices, type MachineNotice } from '../support/supportApi';
 
 const processes = [
   { name: 'Unrolling', code: 'UN-01', available: false },
@@ -40,6 +41,8 @@ export function WS3OverviewPage() {
   const [latestBuffingCheck, setLatestBuffingCheck] = useState<BuffingCheck | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notices, setNotices] = useState<MachineNotice[]>([]);
+  const [showProduction, setShowProduction] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -56,6 +59,14 @@ export function WS3OverviewPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    const refresh = () => { void getMachineNotices().then((items) => { if (active) setNotices(items); }).catch(() => undefined); };
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  useEffect(() => {
     void getBuffingChecks()
       .then((checks) => setLatestBuffingCheck(checks[0] ?? null))
       .catch(() => setLatestBuffingCheck(null));
@@ -65,63 +76,45 @@ export function WS3OverviewPage() {
   const recordComplete = latestRecord ? hasCompleteProcessData(latestRecord) : false;
   const recordStatus = !recordComplete ? 'INCOMPLETE' : warnings.length > 0 ? 'WARNING' : 'COMPLETE';
   const buffingStatus = latestBuffingCheck ? (latestBuffingCheck.checks.every(Boolean) ? 'COMPLETE' : 'WARNING') : null;
-  const failedBuffingPoints = latestBuffingCheck?.checks.map((checked, index) => checked ? null : index + 1).filter((point): point is number => point !== null) ?? [];
   const canManageOrders = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
+  const prefix = (code: string) => code.split('-')[0];
+  const groupForPrefix: Record<string, string> = { UN: 'UNROLLING', BU: 'BUFFING', SC: 'SCOURING', DY: 'DYEING', WA: 'WASHING', SK: 'SKACHAR', TE: 'TENTERING', CA: 'CALENDARING' };
+  const machineGroup = (processCode: string) => groupForPrefix[prefix(processCode)];
+  const noticeByGroup = new Map(notices.map((notice) => [notice.recipientGroup, notice]));
+  const visibleProcesses = canManageOrders ? processes : processes.filter((process) => user?.machineIds.some((id) => prefix(id) === prefix(process.code)));
 
   return (
     <WS3Shell title={t('systemTitle')} subtitle={t('productionOverview')} status="info" time={new Date().toLocaleTimeString('vi-VN')} showGlobalNavigation={false}>
       <div className="h-full overflow-auto bg-hmiConsole p-2 text-slate-800">
+        {canManageOrders && <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div role="group" aria-label={t('productionViewMode')} className="inline-flex border-2 border-line bg-white p-0.5"><button type="button" aria-pressed={showProduction} onClick={() => setShowProduction(true)} className={`min-h-8 px-3 text-[10px] font-bold uppercase tracking-wide ${showProduction ? 'bg-industrial text-white' : 'text-industrialDark hover:bg-hmiHover'}`}>{t('productionDashboard')}</button><button type="button" aria-pressed={!showProduction} onClick={() => setShowProduction(false)} className={`min-h-8 px-3 text-[10px] font-bold uppercase tracking-wide ${!showProduction ? 'bg-industrial text-white' : 'text-industrialDark hover:bg-hmiHover'}`}>{t('operationAndNotices')}</button></div><Link to="/ws3/supervisor/orders/new"><HMIButton size="compact" variant="primary">{t('createWs3Order')}</HMIButton></Link></div>}
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {canManageOrders && <article className="flex min-w-0 flex-col border-2 border-industrial bg-white sm:col-span-2 lg:col-span-3"><header className="flex min-h-9 items-center justify-between bg-industrial px-3 py-2 text-white"><h2 className="font-mono text-sm font-bold uppercase tracking-normal">{t('productionOrders')}</h2><span className="font-mono text-[9px] text-slate-300">SUPERVISOR</span></header><div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3"><div><p className="text-xs font-bold uppercase tracking-wide text-industrialDark">{t('createOrderFromMes')}</p><p className="mt-1 text-[10px] text-slate-500">{t('createOrderFromMesDescription')}</p></div><Link to="/ws3/supervisor/orders/new" className="inline-flex"><HMIButton size="normal" variant="primary">{t('createWs3Order')}</HMIButton></Link></div></article>}
-          {processes.filter((process) => canManageOrders || user?.machineIds.includes(process.code)).map((process) => (
+          {visibleProcesses.map((process) => (
             <article key={process.name} className={`flex min-w-0 flex-col bg-white ${process.available ? 'border-2 border-industrial' : 'border border-line'}`}>
               <header className={`flex min-h-9 items-center justify-between px-3 py-2 text-white ${process.available ? 'bg-industrial' : 'bg-industrialDark'}`}>
                 <h2 className="font-mono text-sm font-bold uppercase tracking-[0.1em]">{process.name}</h2>
-                <span className="font-mono text-[9px] text-slate-300">{process.code}</span>
+                <span className="font-mono text-[9px] text-slate-300">{canManageOrders ? process.code : user?.machineIds.filter((id) => prefix(id) === prefix(process.code)).join(' · ')}</span>
               </header>
-              {process.name === 'Buffing' && !latestBuffingCheck ? (
-                <div className="flex min-h-[260px] flex-1 flex-col px-3 py-3">
-                  <p className="py-6 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t('noBuffingRecords')}</p>
-                  <Link to="/machine/buffing/record" className="mt-auto inline-flex pt-4"><HMIButton size="normal" variant="primary" className="w-full">{t('openBuffing')}</HMIButton></Link>
-                </div>
-              ) : process.name === 'Buffing' ? (
-                <div className="flex min-h-[260px] flex-1 flex-col px-3 py-3"><div className="grid grid-cols-2 gap-3 text-[10px]"><div className="border-r border-line pr-3"><div className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase tracking-wider text-industrial">{t('operation')}</div><div className="grid gap-2"><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('machine')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">{process.code}</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('operator')}</span><span className="mt-0.5 block font-semibold">{latestBuffingCheck?.operatorName || '—'}</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">{latestBuffingCheck ? formatDateTime(latestBuffingCheck.checkedAt) : '—'}</span></div><div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('status')}</span><span className={`mt-0.5 block font-bold uppercase ${buffingStatus === 'COMPLETE' ? 'text-success' : buffingStatus === 'WARNING' ? 'text-warning' : 'text-slate-500'}`}>{buffingStatus === 'COMPLETE' ? t('complete') : buffingStatus === 'WARNING' ? t('warning') : t('noData')}</span></div></div></div><div><div className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase tracking-wider text-industrial">{t('production')}</div><div className="pt-1 font-semibold uppercase text-slate-500">{t('noData')}</div></div></div>{failedBuffingPoints.length > 0 && <div className="mt-3 border-t border-warning/60 pt-2 text-[9px] font-bold uppercase tracking-wide text-warning">{t('buffingCheckWarning').replace('{points}', failedBuffingPoints.join(', '))}</div>}<Link to="/machine/buffing/record" className="mt-auto inline-flex pt-4"><HMIButton size="normal" variant="primary" className="w-full">{t('openBuffing')}</HMIButton></Link></div>
-              ) : process.name === 'Tentering' ? (
-                <div className="flex min-h-[260px] flex-1 flex-col px-3 py-3"><p className="py-6 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t('noTenterRecords')}</p><Link to="/machine/tenter/record" className="mt-auto inline-flex pt-4"><HMIButton size="normal" variant="primary" className="w-full">{t('openTenter')}</HMIButton></Link></div>
-              ) : process.available ? (
-                <div className="flex min-h-[260px] flex-1 flex-col px-3 py-3">
-                  {loading && <p className="py-6 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t('loadingRecorded')}</p>}
-                  {!loading && error && <div className="py-6 text-center text-[10px] uppercase"><p className="font-bold text-alarm">{t('scouringUnavailable')}</p><p className="mt-1 normal-case text-slate-600">{error}</p></div>}
-                  {!loading && !error && !latestRecord && <p className="py-6 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t('noScouringRecords')}</p>}
-                  {!loading && !error && latestRecord && <>
-                    <div className="grid grid-cols-2 gap-3 text-[10px]">
-                      <div className="border-r border-line pr-3">
-                        <div className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase tracking-wider text-industrial">{t('operation')}</div>
-                        <div className="grid gap-2">
-                          <div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('machine')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">{latestRecord.machineId}</span></div>
-                          <div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('operator')}</span><span className="mt-0.5 block font-semibold">{latestRecord.operatorName || latestRecord.operatorIdentifier || '—'}</span></div>
-                          <div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">{formatDateTime(latestRecord.recordedAt)}</span></div>
-                          <div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('status')}</span><span className={`mt-0.5 block font-bold uppercase ${recordStatus === 'COMPLETE' ? 'text-success' : recordStatus === 'WARNING' ? 'text-warning' : 'text-alarm'}`}>{recordStatus === 'COMPLETE' ? t('complete') : recordStatus === 'WARNING' ? t('warning') : t('incomplete')}</span></div>
-                        </div>
-                      </div>
-                      <div className="pl-0">
-                        <div className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase tracking-wider text-industrial">{t('production')}</div>
-                        <div className="grid gap-2">
-                          <div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('fabricInOut')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">{latestRecord.inputFabricMeters ?? '—'} / {latestRecord.outputFabricMeters ?? '—'} m</span></div>
-                          <div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('productionQuantity')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">{latestRecord.productionQuantityMeters ?? '—'} m</span></div>
-                          <div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('orderNumber')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">{latestRecord.orderNumber || '—'}</span></div>
-                          <div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('item')}</span><span className="mt-0.5 block font-semibold">{latestRecord.item || '—'}</span></div>
-                          <div><span className="block font-bold uppercase tracking-wide text-slate-500">{t('lotYarn')} / {t('lotNumber')}</span><span className="mt-0.5 block font-mono font-bold text-industrial">{latestRecord.lotYarn || '—'} / {latestRecord.lotNumber || '—'}</span></div>
-                        </div>
-                      </div>
-                    </div>
-                    {warnings.length > 0 && <div className="mt-3 border-t border-warning/40 pt-2 text-[9px] font-bold uppercase tracking-wide text-warning">{warnings.map((warning) => <div key={warning}>{warning.includes('Temperature') ? t('temperatureWarning') : t('speedWarning')}</div>)}</div>}
-                  </>}
-                  <Link to="/machine/scouring/record" className="mt-auto inline-flex pt-4"><HMIButton size="normal" variant="primary" className="w-full">{t('openScouring')}</HMIButton></Link>
-                </div>
-              ) : (
-                <div className="flex min-h-[120px] flex-1 items-start px-3 py-3"><span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">{t('notImplemented')}</span></div>
-              )}
+              {showProduction && canManageOrders ? <section className="min-h-[150px] flex-1 px-3 py-3">
+                <h3 className="mb-2 border-b border-line pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('production')}</h3>
+                {process.name === 'Scouring' && latestRecord ? <div className="grid gap-2 text-[10px] sm:grid-cols-2"><div><span className="block font-bold uppercase text-slate-500">{t('productionQuantity')}</span><span className="font-mono text-lg font-bold text-industrial">{latestRecord.productionQuantityMeters ?? '—'} m</span></div><div><span className="block font-bold uppercase text-slate-500">{t('fabricInOut')}</span><span className="font-mono font-bold">{latestRecord.inputFabricMeters ?? '—'} / {latestRecord.outputFabricMeters ?? '—'} m</span></div><div><span className="block font-bold uppercase text-slate-500">{t('orderNumber')}</span><span className="font-mono font-bold">{latestRecord.orderNumber || '—'}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('item')}</span><span className="font-semibold">{latestRecord.item || '—'}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('lastRecorded')}</span><span className="font-mono font-bold">{formatDateTime(latestRecord.recordedAt)}</span></div></div> : process.name === 'Buffing' && latestBuffingCheck ? <div className="grid gap-2 text-[10px] sm:grid-cols-2"><div><span className="block font-bold uppercase text-slate-500">{t('checkPoints')}</span><span className="font-mono text-lg font-bold text-industrial">{latestBuffingCheck.checks.filter(Boolean).length}/{latestBuffingCheck.checks.length}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('lastRecorded')}</span><span className="font-mono font-bold">{formatDateTime(latestBuffingCheck.checkedAt)}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('operator')}</span><span className="font-semibold">{latestBuffingCheck.operatorName || '—'}</span></div></div> : <p className="text-xs text-slate-500">{process.name === 'Scouring' && loading ? t('loadingRecorded') : t('noData')}</p>}
+              </section> : <div className="grid flex-1 divide-y divide-line md:grid-cols-2 md:divide-x md:divide-y-0">
+                <section className="min-w-0 px-3 py-3">
+                  <h3 className="mb-2 border-b border-line pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('operation')}</h3>
+                  <dl className="grid gap-2 text-[10px]">
+                    <div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('machine')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{canManageOrders ? process.code : user?.machineIds.filter((id) => prefix(id) === prefix(process.code)).join(' · ')}</dd></div>
+                    {process.name === 'Scouring' && latestRecord && (canManageOrders || user?.machineIds.includes(latestRecord.machineId)) && <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestRecord.operatorName || latestRecord.operatorIdentifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestRecord.recordedAt)}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('status')}</dt><dd className={`mt-0.5 font-bold ${recordStatus === 'COMPLETE' ? 'text-success' : recordStatus === 'WARNING' ? 'text-warning' : 'text-slate-500'}`}>{recordStatus === 'COMPLETE' ? t('complete') : recordStatus === 'WARNING' ? t('warning') : t('incomplete')}</dd></div></>}
+                    {process.name === 'Buffing' && latestBuffingCheck && (canManageOrders || user?.machineIds.includes(latestBuffingCheck.machineId)) && <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestBuffingCheck.operatorName || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestBuffingCheck.checkedAt)}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('status')}</dt><dd className={`mt-0.5 font-bold ${buffingStatus === 'COMPLETE' ? 'text-success' : 'text-warning'}`}>{buffingStatus === 'COMPLETE' ? t('complete') : t('warning')}</dd></div></>}
+                    {process.name === 'Scouring' && !latestRecord && <dd className="text-slate-500">{loading ? t('loadingRecorded') : t('noScouringRecords')}</dd>}
+                    {process.name === 'Buffing' && !latestBuffingCheck && <dd className="text-slate-500">{t('noBuffingRecords')}</dd>}
+                    {!process.available && <dd className="text-slate-500">{t('notImplemented')}</dd>}
+                  </dl>
+                  {(process.name === 'Buffing' || process.name === 'Scouring' || process.name === 'Tentering') && <Link to={process.name === 'Buffing' ? '/machine/buffing/record' : process.name === 'Scouring' ? '/machine/scouring/record' : '/machine/tenter/record'} className="mt-3 inline-flex w-full"><HMIButton size="compact" variant="secondary" className="w-full">{process.name === 'Buffing' ? t('openBuffing') : process.name === 'Scouring' ? t('openScouring') : t('openTenter')}</HMIButton></Link>}
+                </section>
+                <section className="min-w-0 px-3 py-3">
+                  <div className="mb-2 flex items-center justify-between gap-2 border-b border-line pb-2"><h3 className="font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">Thông báo</h3>{noticeByGroup.get(machineGroup(process.code)) && <time className="shrink-0 text-[9px] text-slate-500">{formatDateTime(noticeByGroup.get(machineGroup(process.code))!.sentAt)}</time>}</div>
+                  {noticeByGroup.get(machineGroup(process.code)) ? <>{noticeByGroup.get(machineGroup(process.code))!.subject.trim().toLocaleLowerCase() !== process.name.toLocaleLowerCase() && <p className="text-xs font-bold text-industrialDark">{noticeByGroup.get(machineGroup(process.code))!.subject}</p>}<p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-700">{noticeByGroup.get(machineGroup(process.code))!.message}</p><p className="mt-2 text-[9px] text-slate-500">{noticeByGroup.get(machineGroup(process.code))!.senderName}</p></> : <p className="text-xs text-slate-500">Chưa có thông báo mới.</p>}
+                </section>
+              </div>}
             </article>
           ))}
         </div>

@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.support import SupportMessage, SupportTicket, SupportTicketRead
 from app.models.user import User
-from app.schemas.support import SupportMessageCreate, SupportMessageResponse, SupportStatusUpdate, SupportTicketCreate, SupportTicketResponse
+from app.schemas.support import SupportMachineNoticeResponse, SupportMessageCreate, SupportMessageResponse, SupportStatusUpdate, SupportTicketCreate, SupportTicketResponse
 from app.security.auth import get_current_user, role_codes
+from app.support_groups import MACHINE_GROUP_CODES, machine_group_for_id, user_machine_groups
 
 router = APIRouter(prefix="/support", tags=["support"])
 RECIPIENT_ROLES = {"ADMIN", "SUPERVISOR", "ALL"}
@@ -30,9 +31,10 @@ def can_view_ticket(ticket: SupportTicket, user: User) -> bool:
         return True
     if role == "SUPERVISOR":
         return ticket.created_by == user.username or ticket.recipient_role in {"SUPERVISOR", "ALL", MACHINE_RECIPIENT}
+    ticket_group = ticket.recipient_group or machine_group_for_id(ticket.machine_id)
     return ticket.created_by == user.username or (
         ticket.recipient_role == "ALL"
-        or (ticket.recipient_role == MACHINE_RECIPIENT and ticket.machine_id in (user.machine_ids or []))
+        or (ticket.recipient_role == MACHINE_RECIPIENT and ticket_group in user_machine_groups(user.machine_ids))
     )
 
 
@@ -72,13 +74,17 @@ def list_tickets(
     user: User = Depends(get_current_user),
 ) -> list[SupportTicketResponse]:
     statement = select(SupportTicket).order_by(desc(SupportTicket.updated_at), desc(SupportTicket.id))
+    groups = user_machine_groups(user.machine_ids)
     if frontend_role(user) == "OPERATOR":
         statement = statement.where(
             (SupportTicket.created_by == user.username)
             | (SupportTicket.recipient_role == "ALL")
             | (
                 (SupportTicket.recipient_role == MACHINE_RECIPIENT)
-                & SupportTicket.machine_id.in_(user.machine_ids or ["__no_machine__"])
+                & (
+                    SupportTicket.recipient_group.in_(groups or {"__no_machine_group__"})
+                    | SupportTicket.machine_id.in_(user.machine_ids or ["__no_machine__"])
+                )
             )
         )
     elif frontend_role(user) == "SUPERVISOR":
@@ -89,19 +95,82 @@ def list_tickets(
     return [ticket_response(ticket, user, db) for ticket in db.scalars(statement).all()]
 
 
+@router.get("/machine-notices", response_model=list[SupportMachineNoticeResponse])
+def list_machine_notices(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[SupportMachineNoticeResponse]:
+    groups = MACHINE_GROUP_CODES if can_manage(user) else user_machine_groups(user.machine_ids)
+    if not groups:
+        return []
+    tickets = db.scalars(
+        select(SupportTicket).where(
+            SupportTicket.recipient_role == MACHINE_RECIPIENT,
+            SupportTicket.recipient_group.in_(groups),
+        )
+    ).all()
+    latest_by_group: dict[str, tuple[SupportTicket, SupportMessage]] = {}
+    for ticket in tickets:
+        latest_notice = db.scalar(
+            select(SupportMessage)
+            .where(
+                SupportMessage.ticket_id == ticket.id,
+                SupportMessage.sender_role.in_({"ADMIN", "SUPERVISOR"}),
+            )
+            .order_by(desc(SupportMessage.sent_at), desc(SupportMessage.id))
+            .limit(1)
+        )
+        if latest_notice is None:
+            continue
+        group = ticket.recipient_group or machine_group_for_id(ticket.machine_id)
+        current = latest_by_group.get(group) if group else None
+        if group and (current is None or latest_notice.sent_at > current[1].sent_at):
+            latest_by_group[group] = (ticket, latest_notice)
+    result = []
+    for group, (ticket, message) in latest_by_group.items():
+        result.append(SupportMachineNoticeResponse(
+            recipient_group=group,
+            subject=ticket.subject,
+            message=message.message,
+            sender_name=display_name(message.sender, db),
+            sent_at=message.sent_at,
+            priority=ticket.priority,
+        ))
+    return sorted(result, key=lambda item: (item.recipient_group, item.sent_at), reverse=False)
+
+
 @router.post("/tickets", response_model=SupportTicketResponse, status_code=201)
 def create_ticket(payload: SupportTicketCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> SupportTicketResponse:
     if frontend_role(user) == "OPERATOR" and payload.machine_id not in (user.machine_ids or []):
         raise HTTPException(status_code=403, detail="Machine access denied")
     role = frontend_role(user)
     recipient_role = payload.recipient_role.strip().upper()
+    recipient_group = payload.recipient_group.strip().upper() if payload.recipient_group else None
     if role == "OPERATOR":
         recipient_role = "SUPERVISOR"
     elif recipient_role not in RECIPIENT_ROLES | {MACHINE_RECIPIENT}:
         raise HTTPException(status_code=422, detail="Invalid support recipient")
-    ticket = SupportTicket(machine_id=payload.machine_id, created_by=user.username, creator_role=role, recipient_role=recipient_role, subject=payload.subject, priority=payload.priority, status="NEW")
+    if recipient_role == MACHINE_RECIPIENT:
+        if recipient_group not in MACHINE_GROUP_CODES:
+            raise HTTPException(status_code=422, detail="Invalid machine group recipient")
+    else:
+        recipient_group = None
+    ticket = None
+    if recipient_role == MACHINE_RECIPIENT:
+        ticket = db.scalar(
+            select(SupportTicket)
+            .where(
+                SupportTicket.recipient_role == MACHINE_RECIPIENT,
+                SupportTicket.recipient_group == recipient_group,
+            )
+            .order_by(desc(SupportTicket.updated_at), desc(SupportTicket.id))
+            .limit(1)
+        )
+    if ticket is None:
+        ticket = SupportTicket(machine_id=payload.machine_id, created_by=user.username, creator_role=role, recipient_role=recipient_role, recipient_group=recipient_group, subject=payload.subject, priority=payload.priority, status="NEW")
+        db.add(ticket)
+    else:
+        ticket.subject = payload.subject
+        ticket.priority = payload.priority
+        ticket.status = "NEW"
     ticket.messages.append(SupportMessage(sender=user.username, sender_role=role, message=payload.message))
-    db.add(ticket)
     db.commit()
     db.refresh(ticket)
     return ticket_response(ticket, user, db)

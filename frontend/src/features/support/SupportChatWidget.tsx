@@ -15,6 +15,19 @@ const machineNames: Record<string, { vi: string; en: string }> = {
   'RA-01': { vi: 'Raising', en: 'Raising' }, 'SU-01': { vi: 'Sueding', en: 'Sueding' },
 };
 
+const machineGroups: Record<string, { vi: string; en: string }> = {
+  UNROLLING: { vi: 'UNROLLING', en: 'UNROLLING' }, BUFFING: { vi: 'BUFFING', en: 'BUFFING' },
+  SCOURING: { vi: 'SCOURING', en: 'SCOURING' }, DYEING: { vi: 'DYEING', en: 'DYEING' },
+  WASHING: { vi: 'WASHING', en: 'WASHING' }, SKACHAR: { vi: 'SKACHAR', en: 'SKACHAR' },
+  TENTERING: { vi: 'TENTERING', en: 'TENTERING' }, CALENDARING: { vi: 'CALENDARING', en: 'CALENDARING' },
+  RAISING: { vi: 'RAISING', en: 'RAISING' }, SUEDING: { vi: 'SUEDING', en: 'SUEDING' },
+};
+
+const machineGroupForId = (machineId: string) => {
+  const prefix = machineId.trim().toUpperCase().split('-', 1)[0];
+  return Object.keys(machineGroups).find((group) => group.startsWith(prefix)) ?? machineId;
+};
+
 export function SupportChatWidget() {
   const { user } = useAuth();
   const { language, t } = useLanguage();
@@ -75,9 +88,9 @@ export function SupportChatWidget() {
       { value: 'ADMIN|WS3', label: 'Admin' },
       { value: 'SUPERVISOR|WS3', label: 'Supervisor' },
       { value: 'ALL|WS3', label: language === 'vi' ? 'Tất cả' : 'All' },
-      ...[...new Set(['BU-01', 'SC-01', 'DY-01', 'TE-01', 'UN-01', 'WA-01', 'SK-01', 'CA-01', 'RA-01', 'SU-01'])].map((machineId) => ({
-        value: `MACHINE|${machineId}`,
-        label: machineNames[machineId]?.[language] ?? machineId,
+      ...Object.keys(machineGroups).map((group) => ({
+        value: `MACHINE|${group}`,
+        label: machineGroups[group][language],
       })),
     ];
   }, [canManage, language, user?.machineIds]);
@@ -96,7 +109,7 @@ export function SupportChatWidget() {
   const submitNewTicket = async () => {
     if (!user || !subject.trim() || !draft.trim()) return;
     setLoading(true);
-    try { const [recipientRole, machineId] = subject.split('|'); const ticket = await createSupportTicket({ machineId, recipientRole, subject: recipientOptions.find((option) => option.value === subject)?.label ?? subject, priority: 'NORMAL', message: draft.trim() }); setSubject(''); setDraft(''); setNewTicket(false); setSelectedId(ticket.id); await refreshTickets(); }
+    try { const [recipientRole, recipientTarget] = subject.split('|'); const recipientGroup = recipientRole === 'MACHINE' ? recipientTarget : undefined; const ticket = await createSupportTicket({ machineId: recipientGroup ?? recipientTarget, recipientRole, recipientGroup, subject: recipientOptions.find((option) => option.value === subject)?.label ?? subject, priority: 'NORMAL', message: draft.trim() }); setSubject(''); setDraft(''); setNewTicket(false); setSelectedId(ticket.id); await refreshTickets(); }
     catch (reason) { setError(reason instanceof Error && reason.message === 'SUPPORT_SESSION_EXPIRED' ? t('supportSessionExpired') : reason instanceof Error ? reason.message : t('supportCreateError')); }
     finally { setLoading(false); }
   };
@@ -111,10 +124,13 @@ export function SupportChatWidget() {
 
   const selectTicket = async (ticketId: number) => { setSelectedId(ticketId); setNewTicket(false); setDraft(''); await markSupportTicketRead(ticketId); await refreshTickets(); };
   const removeTicket = async () => { if (!selectedId || !window.confirm('Xóa yêu cầu này và toàn bộ tin nhắn?')) return; await deleteSupportTicket(selectedId); setSelectedId(null); setMessages([]); await refreshTickets(); };
-  const conversationName = (ticket: SupportTicket) => ticket.createdBy.toLowerCase() === user.username.toLowerCase() ? ticket.subject : ticket.createdByName;
+  const conversationName = (ticket: SupportTicket) => {
+    const group = ticket.recipientGroup ?? machineGroupForId(ticket.machineId);
+    return machineGroups[group]?.[language] ?? (ticket.createdBy.toLowerCase() === user.username.toLowerCase() ? ticket.subject : ticket.createdByName);
+  };
   const requestList = <div className="shrink-0 border-b border-line bg-hmiSection"><div className="flex items-center justify-between px-2 pt-1.5 text-[9px] font-bold uppercase text-industrialDark"><span>{t('requestList')}</span><button type="button" className="text-industrial underline" onClick={() => { setSelectedId(null); setDraft(''); setSubject(recipientOptions[0]?.value ?? ''); setNewTicket(true); }}>{t('createRequest')}</button></div><div className="flex gap-1 overflow-x-auto p-2">{tickets.length === 0 ? <span className="px-1 text-[10px] text-slate-500">{t('noRequests')}</span> : tickets.map((ticket) => <button key={ticket.id} type="button" title={`${ticket.lastMessageSenderName}: ${ticket.lastMessage}`} className={`relative min-w-[130px] border px-2 py-2 pr-7 text-left text-[9px] ${selectedId === ticket.id ? 'border-industrialDark bg-industrialDark text-white' : 'border-line bg-white text-industrialDark'}`} onClick={() => void selectTicket(ticket.id)}><span className="block truncate font-bold">{conversationName(ticket)}</span>{ticket.unreadCount > 0 && <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-alarm px-1 text-[9px] font-bold text-white">{ticket.unreadCount}</span>}</button>)}</div></div>;
   const isOwnMessage = (sender: string) => sender.trim().toLowerCase() === user.username.trim().toLowerCase();
-  const messageArea = selected ? <><div className="flex shrink-0 items-center justify-between border-b border-line bg-white px-2 py-1 text-[9px] font-bold uppercase text-industrialDark"><span>{conversationName(selected)} · {machineNames[selected.machineId]?.[language] ?? selected.machineId}</span>{canManage && <button type="button" className="text-alarm" onClick={() => void removeTicket()}>×</button>}</div><div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto bg-hmiConsole p-2">{messages.map((item) => <div key={item.id} className={`max-w-[88%] border border-line px-2 py-1.5 text-[10px] ${isOwnMessage(item.sender) ? 'ml-auto bg-industrial text-white' : 'bg-white'}`}><div className="mb-1 text-[8px] font-bold uppercase opacity-70">{item.senderName} · {formatTime(item.sentAt)}</div>{item.message}</div>)}</div><div className="flex shrink-0 gap-1 border-t border-line bg-hmiSection p-2"><textarea className="min-h-9 flex-1 resize-none border border-line bg-white px-2 py-1 text-[10px]" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t('messagePlaceholder')} /><HMIButton size="compact" variant="primary" onClick={() => void sendReply()} disabled={loading || !draft.trim()}>{t('send')}</HMIButton></div></> : <div className="flex flex-1 items-center justify-center p-4 text-center text-[10px] text-slate-500">{t('chooseRequest')}</div>;
+  const messageArea = selected ? <><div className="flex shrink-0 items-center justify-between border-b border-line bg-white px-2 py-1 text-[9px] font-bold uppercase text-industrialDark"><span>{conversationName(selected)}</span>{canManage && <button type="button" className="text-alarm" onClick={() => void removeTicket()}>×</button>}</div><div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto bg-hmiConsole p-2">{messages.map((item) => <div key={item.id} className={`max-w-[88%] whitespace-pre-wrap break-words border border-line px-2 py-1.5 text-[10px] ${isOwnMessage(item.sender) ? 'ml-auto bg-industrial text-white' : 'bg-white'}`}><div className="mb-1 text-[8px] font-bold uppercase opacity-70">{item.senderName} · {formatTime(item.sentAt)}</div>{item.message}</div>)}</div><div className="flex shrink-0 gap-1 border-t border-line bg-hmiSection p-2"><textarea className="min-h-9 flex-1 resize-none border border-line bg-white px-2 py-1 text-[10px]" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t('messagePlaceholder')} /><HMIButton size="compact" variant="primary" onClick={() => void sendReply()} disabled={loading || !draft.trim()}>{t('send')}</HMIButton></div></> : <div className="flex flex-1 items-center justify-center p-4 text-center text-[10px] text-slate-500">{t('chooseRequest')}</div>;
   const body = <>{requestList}{newTicket ? <div className="flex min-h-0 flex-1 flex-col gap-2 bg-hmiConsole p-3"><label className="grid gap-1 text-[9px] font-bold uppercase text-slate-600">{t('subject')}<select className="min-h-8 border-2 border-line bg-white px-2 text-xs" value={subject} onChange={(event) => setSubject(event.target.value)}><option value="">{t('subjectPlaceholder')}</option>{recipientOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><textarea className="min-h-0 flex-1 resize-none border-2 border-line bg-white p-2 text-xs" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t('requestPlaceholder')} /><div className="flex justify-end gap-2"><HMIButton size="compact" onClick={() => setNewTicket(false)}>{t('cancel')}</HMIButton><HMIButton size="compact" variant="primary" onClick={() => void submitNewTicket()} disabled={loading || !subject.trim() || !draft.trim()}>{t('send')}</HMIButton></div></div> : messageArea}</>;
 
   if (hidden) return <button type="button" aria-label={t('support')} title={t('support')} className="fixed bottom-3 right-0 z-50 rounded-l border-2 border-r-0 border-industrialDark bg-industrial px-1.5 py-3 text-[9px] font-bold uppercase text-white shadow sm:bottom-4" onClick={() => { setHidden(false); window.localStorage.removeItem(SUPPORT_WIDGET_HIDDEN_KEY); }}>?</button>;

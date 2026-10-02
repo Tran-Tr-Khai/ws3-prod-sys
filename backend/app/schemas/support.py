@@ -25,6 +25,7 @@ class SupportTicketCreate(BaseModel):
 
     machine_id: str = Field(min_length=1, max_length=50)
     recipient_role: str = Field(default="SUPERVISOR", max_length=20)
+    recipient_group: str | None = Field(default=None, max_length=50)
     subject: str = Field(min_length=1, max_length=160)
     priority: str = Field(default="NORMAL", max_length=20)
     message: str = Field(min_length=1, max_length=2000)
@@ -39,6 +40,7 @@ class SupportTicketResponse(BaseModel):
     created_by_name: str = ""
     creator_role: str
     recipient_role: str
+    recipient_group: str | None = None
     subject: str
     priority: str
     status: str
@@ -47,6 +49,15 @@ class SupportTicketResponse(BaseModel):
     last_message_sender_name: str = ""
     last_message: str = ""
     unread_count: int = 0
+
+
+class SupportMachineNoticeResponse(BaseModel):
+    recipient_group: str
+    subject: str
+    message: str
+    sender_name: str
+    sent_at: datetime
+    priority: str
 
 
 class SupportStatusUpdate(BaseModel):
