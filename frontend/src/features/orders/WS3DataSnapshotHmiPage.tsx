@@ -8,9 +8,9 @@ import { WS3SupervisorNav } from './WS3SupervisorNav';
 
 type SourceKey = 'order' | 'machine' | 'worker';
 const sources: Record<SourceKey, { vi: string; en: string; sourceVi: string; sourceEn: string }> = {
-  order: { vi: 'Đơn sản xuất WS3', en: 'WS3 production orders', sourceVi: 'WS3-ORDER.XLS.xls', sourceEn: 'WS3-ORDER.XLS.xls' },
-  machine: { vi: 'Roll từ máy dệt', en: 'Weaving machine rolls', sourceVi: 'MACHINE-ORDER.XLS.xls', sourceEn: 'MACHINE-ORDER.XLS.xls' },
-  worker: { vi: 'Ca và người vận hành', en: 'Shifts and workers', sourceVi: 'MACHINE-DETAILS.XLS.xls', sourceEn: 'MACHINE-DETAILS.XLS.xls' },
+  order: { vi: 'Đơn sản xuất WS3', en: 'WS3 production orders', sourceVi: 'Nhận diện theo header đơn hàng', sourceEn: 'Detected from order headers' },
+  machine: { vi: 'Roll từ máy dệt', en: 'Weaving machine rolls', sourceVi: 'Nhận diện theo header cuộn/máy', sourceEn: 'Detected from roll/machine headers' },
+  worker: { vi: 'Ca và người vận hành', en: 'Shifts and workers', sourceVi: 'Nhận diện theo header ca/công nhân', sourceEn: 'Detected from shift/worker headers' },
 };
 
 export function WS3DataSnapshotHmiPage() {
@@ -43,7 +43,7 @@ export function WS3DataSnapshotHmiPage() {
         <div className="min-h-0 flex-1 overflow-auto p-2">
           <section className="border border-line bg-white">
             <header className="flex min-h-8 items-center justify-between border-b border-industrialDark bg-industrialDark px-3 py-1 text-white"><h1 className="text-[11px] font-bold uppercase tracking-[0.14em]">{tx('Cập nhật dữ liệu sản xuất', 'Production data update')}</h1><span className="text-[9px] uppercase tracking-wider text-slate-300">3 {tx('nguồn', 'sources')}</span></header>
-            <div className="border-b border-line bg-white px-3 py-3 text-[10px] text-slate-600">{tx('Chọn một hoặc nhiều báo cáo Excel để cập nhật. Chỉ nguồn đã chọn được thay bằng snapshot mới; các nguồn còn lại được giữ nguyên.', 'Select one or more Excel reports to update. Only selected sources are replaced; all other current snapshots are kept unchanged.')}</div>
+            <div className="border-b border-line bg-white px-3 py-3 text-[10px] text-slate-600">{tx('Tên file không quan trọng. Hệ thống nhận diện nguồn theo cấu trúc cột. Chọn một hoặc nhiều file để cập nhật snapshot tương ứng; các nguồn còn lại được giữ nguyên.', 'File names do not matter. The system identifies each source from its column structure. Select one or more files to update the matching snapshots; other sources stay unchanged.')}</div>
             <div className="grid gap-2 p-2 md:grid-cols-2 xl:grid-cols-3">
               {(Object.keys(sources) as SourceKey[]).map((key) => { const label = sources[key]; return <label key={key} className={`flex min-h-32 cursor-pointer flex-col border-2 bg-white p-3 transition-colors ${files[key] ? 'border-success bg-hmiNormal' : 'border-line hover:border-industrial'}`}>
                 <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-industrialDark">{language === 'vi' ? label.vi : label.en}</span><span className="mt-1 text-[9px] uppercase tracking-wide text-slate-400">{language === 'vi' ? label.sourceVi : label.sourceEn}</span>
