@@ -18,8 +18,8 @@ export function printProductionOrder(order: WS3ProductionOrderReport, language: 
   popup.opener = null;
   popup.document.write(`<!doctype html><html lang="${language}"><head><meta charset="utf-8"><title>${escapeHtml(order.pk_no)}</title><style>
     @page{size:A4 landscape;margin:8mm}*{box-sizing:border-box}body{font:8px Arial;margin:0}.sheet{width:281mm;height:194mm;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:3mm;page-break-after:always;break-after:page}.sheet:last-child{page-break-after:auto;break-after:auto}
-    article{min-width:0;min-height:0;border:1px solid #333;overflow:hidden;break-inside:avoid;page-break-inside:avoid}header{display:flex;justify-content:space-between;gap:1mm;padding:1.4mm 1.6mm;font-size:8px}
-    table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:7px;line-height:1.1}th,td{border-top:1px solid #333;padding:1.15mm 1.4mm;text-align:left;overflow-wrap:anywhere}th{width:34%;border-right:1px solid #333;font-weight:normal}td{font-weight:bold}footer{text-align:center;padding:2.3mm 1mm;font-size:8px;font-weight:bold;border-top:1px solid #333}
+    article{width:68mm;height:91mm;min-width:0;min-height:0;border:1px solid #333;overflow:hidden;break-inside:avoid;page-break-inside:avoid}header{display:flex;justify-content:space-between;gap:1mm;padding:1.4mm 1.6mm;font-size:8px}
+    table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:7.5px;line-height:1.15}th,td{border-top:1px solid #333;padding:1.6mm 1.4mm;text-align:left;overflow-wrap:anywhere}th{width:34%;border-right:1px solid #333;font-weight:normal}td{font-weight:bold}footer{text-align:center;padding:3.2mm 1mm;font-size:8px;font-weight:bold;border-top:1px solid #333}
   </style></head><body>${sheets}</body></html>`);
   popup.document.close();
   popup.focus();
