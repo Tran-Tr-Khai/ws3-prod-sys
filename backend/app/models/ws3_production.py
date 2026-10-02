@@ -16,6 +16,7 @@ class WS3ProductionPlan(TimestampMixin, Base):
     item_name: Mapped[str | None] = mapped_column(String(500))
     po_no: Mapped[str | None] = mapped_column(String(160))
     source_order_no: Mapped[str | None] = mapped_column(String(160), index=True)
+    dyeing_request_sop: Mapped[str | None] = mapped_column(String(160), index=True)
     raw_data_json: Mapped[str] = mapped_column(Text, default="{}")
 
 class WS3ProductionOrder(TimestampMixin, Base):
@@ -31,6 +32,7 @@ class WS3ProductionOrder(TimestampMixin, Base):
     item_code: Mapped[str | None] = mapped_column(String(160))
     item_name: Mapped[str | None] = mapped_column(String(500))
     lot_no: Mapped[str | None] = mapped_column(String(120))
+    invoice_no: Mapped[str | None] = mapped_column(String(160), index=True)
     quantity: Mapped[str | None] = mapped_column(String(80))
     raw_data_json: Mapped[str] = mapped_column(Text, default="{}")
 
@@ -39,6 +41,7 @@ class WS3MachineWS2Record(TimestampMixin, Base):
     __tablename__ = "ws3_machine_ws2_records"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    out_dyeing_sop: Mapped[str | None] = mapped_column(String(160), index=True)
     weaving_date: Mapped[str | None] = mapped_column(String(40), index=True)
     roll_id: Mapped[str | None] = mapped_column(String(160), index=True)
     machine_no: Mapped[str | None] = mapped_column(String(120), index=True)
