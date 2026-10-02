@@ -416,6 +416,8 @@ def admin_data_warehouse_records(
     date: str = "",
     offset: int = 0,
     limit: int = 50,
+    sort_by: int | None = None,
+    sort_dir: str = "asc",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict[str, object]:
@@ -424,6 +426,10 @@ def admin_data_warehouse_records(
         raise HTTPException(status_code=404, detail="Unknown data source")
     if offset < 0 or limit < 1 or limit > 200:
         raise HTTPException(status_code=422, detail="Invalid pagination values")
+    if sort_by is not None and sort_by < 0:
+        raise HTTPException(status_code=422, detail="Invalid sort column")
+    if sort_dir not in {"asc", "desc"}:
+        raise HTTPException(status_code=422, detail="Invalid sort direction")
     model, date_column, searchable_columns = _WAREHOUSE_SOURCES[source]
     query = db.query(model)
     if date:
@@ -432,7 +438,34 @@ def admin_data_warehouse_records(
         term = f"%{q.strip()}%"
         query = query.filter(or_(*(column.ilike(term) for column in searchable_columns), model.raw_data_json.ilike(term)))
     total = query.count()
-    rows = query.order_by(model.id).offset(offset).limit(limit).all()
+    if sort_by is None:
+        rows = query.order_by(model.id).offset(offset).limit(limit).all()
+    else:
+        # Raw rows are JSON stored as text. Sort the complete filtered result
+        # before pagination so page boundaries follow the selected column.
+        sortable_rows = query.order_by(model.id).all()
+
+        def sort_key(row: object) -> tuple[int, object]:
+            try:
+                raw = json.loads(row.raw_data_json or "{}")
+                values = raw.get("row", []) if isinstance(raw, dict) else []
+                value = _text(values[sort_by]) if sort_by < len(values) else ""
+            except (TypeError, json.JSONDecodeError):
+                value = ""
+            if not value:
+                return (1, "")
+            normalized_date = _date(value)
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", normalized_date):
+                return (0, (0, normalized_date))
+            numeric = _decimal(value)
+            if numeric is not None:
+                return (0, (1, numeric))
+            return (0, (2, value.casefold()))
+
+        non_empty = [row for row in sortable_rows if sort_key(row)[0] == 0]
+        empty = [row for row in sortable_rows if sort_key(row)[0] == 1]
+        non_empty.sort(key=sort_key, reverse=sort_dir == "desc")
+        rows = (non_empty + empty)[offset:offset + limit]
     records = []
     for row in rows:
         try:

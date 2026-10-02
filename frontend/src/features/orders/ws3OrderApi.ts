@@ -132,10 +132,12 @@ export async function getWS3WarehouseSummary(): Promise<WS3WarehouseSummary> {
   return (await response.json()) as WS3WarehouseSummary;
 }
 
-export async function getWS3WarehouseRecords(params: { source: WS3WarehouseSource; q?: string; date?: string; offset?: number; limit?: number }): Promise<WS3WarehousePage> {
+export async function getWS3WarehouseRecords(params: { source: WS3WarehouseSource; q?: string; date?: string; offset?: number; limit?: number; sortBy?: number | null; sortDirection?: 'asc' | 'desc' }): Promise<WS3WarehousePage> {
   const query = new URLSearchParams({ offset: String(params.offset ?? 0), limit: String(params.limit ?? 50) });
   if (params.q) query.set('q', params.q);
   if (params.date) query.set('date', params.date);
+  if (params.sortBy !== undefined && params.sortBy !== null) query.set('sort_by', String(params.sortBy));
+  if (params.sortDirection) query.set('sort_dir', params.sortDirection);
   const response = await fetch(`${apiBaseUrl}/api/ws3/admin/data-warehouse/${params.source}?${query}`, { credentials: 'include' });
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || `Warehouse API returned HTTP ${response.status}`);
   return (await response.json()) as WS3WarehousePage;
