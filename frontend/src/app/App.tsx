@@ -12,7 +12,9 @@ import { TenterPage } from '../features/machines/TenterPage';
 import { ProductionOverviewPage } from '../features/production/ProductionOverviewPage';
 import { WS3OverviewPage } from '../features/production/WS3OverviewPage';
 import { LoginPage } from '../features/auth/LoginPage';
-import { CreateWS3OrderPage } from '../features/orders/CreateWS3OrderPage';
+import { WS3DataSnapshotHmiPage } from '../features/orders/WS3DataSnapshotHmiPage';
+import { WS3ProductionOrdersPage } from '../features/orders/WS3ProductionOrdersPage';
+import { WS3DataWarehousePage } from '../features/orders/WS3DataWarehousePage';
 import { useAuth } from '../auth/AuthContext';
 
 export default function App() {
@@ -30,8 +32,9 @@ export default function App() {
       <Route path="/machines" element={<MachineListPage />} />
       <Route path="/dashboard" element={<ProductionOverviewPage />} />
       <Route path="/ws3" element={<WS3OverviewPage />} />
-      <Route path="/ws3/supervisor/data" element={<CreateWS3OrderPage initialWorkflow="import" />} />
-      <Route path="/ws3/supervisor/orders/new" element={<CreateWS3OrderPage initialWorkflow="order" />} />
+      <Route path="/ws3/supervisor/data" element={<WS3DataSnapshotHmiPage />} />
+      <Route path="/ws3/supervisor/orders/new" element={<WS3ProductionOrdersPage />} />
+      <Route path="/ws3/admin/data-warehouse" element={user.role === 'ADMIN' ? <WS3DataWarehousePage /> : <Navigate to="/ws3" replace />} />
       <Route path="/supervisor/data" element={<Navigate to="/ws3/supervisor/data" replace />} />
       <Route path="/supervisor/orders/new" element={<Navigate to="/ws3/supervisor/orders/new" replace />} />
       <Route path="/machine/scouring/alarm" element={<ScouringAlarmPage />} />
