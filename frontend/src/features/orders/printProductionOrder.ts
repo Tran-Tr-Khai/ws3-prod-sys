@@ -12,12 +12,12 @@ export function printProductionOrder(order: WS3ProductionOrderReport, language: 
       roll.shift, roll.worker, roll.remarks];
     return `<article><header><b>GRS</b><span>${escapeHtml(order.pk_no)}</span></header><table>${values.map((value, index) => `<tr><th>${labels[index]}</th><td>${escapeHtml(value)}</td></tr>`).join('')}</table><footer>${escapeHtml(roll.roll_id)}</footer></article>`;
   });
-  const sheets = Array.from({ length: Math.ceil(cards.length / 12) }, (_, index) => `<section class="sheet">${cards.slice(index * 12, (index + 1) * 12).join('')}</section>`).join('');
+  const sheets = Array.from({ length: Math.ceil(cards.length / 6) }, (_, index) => `<section class="sheet">${cards.slice(index * 6, (index + 1) * 6).join('')}</section>`).join('');
   const popup = window.open('', '_blank');
   if (!popup) return;
   popup.opener = null;
   popup.document.write(`<!doctype html><html lang="${language}"><head><meta charset="utf-8"><title>${escapeHtml(order.pk_no)}</title><style>
-    @page{size:A4 portrait;margin:8mm}*{box-sizing:border-box}body{font:8px Arial;margin:0}.sheet{width:194mm;height:281mm;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));gap:3mm;page-break-after:always;break-after:page}.sheet:last-child{page-break-after:auto;break-after:auto}
+    @page{size:A4 landscape;margin:8mm}*{box-sizing:border-box}body{font:8px Arial;margin:0}.sheet{width:281mm;height:194mm;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:3mm;page-break-after:always;break-after:page}.sheet:last-child{page-break-after:auto;break-after:auto}
     article{min-width:0;min-height:0;border:1px solid #333;overflow:hidden;break-inside:avoid;page-break-inside:avoid}header{display:flex;justify-content:space-between;gap:1mm;padding:1.4mm 1.6mm;font-size:8px}
     table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:7px;line-height:1.1}th,td{border-top:1px solid #333;padding:1.15mm 1.4mm;text-align:left;overflow-wrap:anywhere}th{width:34%;border-right:1px solid #333;font-weight:normal}td{font-weight:bold}footer{text-align:center;padding:2.3mm 1mm;font-size:8px;font-weight:bold;border-top:1px solid #333}
   </style></head><body>${sheets}</body></html>`);
