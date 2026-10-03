@@ -19,6 +19,9 @@ class BuffingCheck(TimestampMixin, Base):
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # Legacy rows may be missing an operator; new rows are required by the API schema.
     operator_name: Mapped[str | None] = mapped_column(String(160))
+    operator_identifier: Mapped[str | None] = mapped_column(String(80))
+    shift: Mapped[str | None] = mapped_column(String(80))
+    order_number: Mapped[str | None] = mapped_column(String(160), index=True)
     check_1: Mapped[bool] = mapped_column(nullable=False, default=False)
     check_2: Mapped[bool] = mapped_column(nullable=False, default=False)
     check_3: Mapped[bool] = mapped_column(nullable=False, default=False)

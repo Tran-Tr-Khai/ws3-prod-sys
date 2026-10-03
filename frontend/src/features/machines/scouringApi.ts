@@ -95,6 +95,9 @@ export type BuffingCheck = {
   checkDate: string;
   checkedAt: string;
   operatorName: string | null;
+  operatorIdentifier: string | null;
+  shift: string | null;
+  orderNumber: string | null;
   checks: boolean[];
   remark: string | null;
   createdAt: string;
@@ -116,6 +119,9 @@ export type BuffingCheckCreatePayload = {
   checkDate: string;
   checkedAt?: string;
   operatorName: string;
+  operatorIdentifier: string;
+  shift: string;
+  orderNumber: string;
   checks: boolean[];
   remark?: string | null;
 };
@@ -256,14 +262,14 @@ function toInspectionApiRequest(payload: ScouringPhInspectionCreatePayload) {
   return { scouring_record_id: payload.scouringRecordId, ...(payload.inspectedAt === undefined ? {} : { inspected_at: payload.inspectedAt }), ...(payload.operatorName === undefined ? {} : { operator_name: payload.operatorName }), ...Object.fromEntries(payload.tankPh.map((value, index) => [`tank_${index}_ph`, value])), ...(payload.note === undefined ? {} : { note: payload.note }) };
 }
 
-type BuffingApiResponse = { id: number; machine_id: string; check_date: string; checked_at: string; operator_name: string | null; check_1: boolean; check_2: boolean; check_3: boolean; check_4: boolean; check_5: boolean; remark: string | null; created_at: string; images?: Array<{ id: number; original_name: string; mime_type: string; file_size: number; sort_order: number; is_primary: boolean; url: string }> };
+type BuffingApiResponse = { id: number; machine_id: string; check_date: string; checked_at: string; operator_name: string | null; operator_identifier: string | null; shift: string | null; order_number: string | null; check_1: boolean; check_2: boolean; check_3: boolean; check_4: boolean; check_5: boolean; remark: string | null; created_at: string; images?: Array<{ id: number; original_name: string; mime_type: string; file_size: number; sort_order: number; is_primary: boolean; url: string }> };
 
 function fromBuffingApiResponse(check: BuffingApiResponse): BuffingCheck {
-  return { id: check.id, machineId: check.machine_id, checkDate: check.check_date, checkedAt: check.checked_at, operatorName: check.operator_name, checks: [check.check_1, check.check_2, check.check_3, check.check_4, check.check_5], remark: check.remark, createdAt: check.created_at, images: (check.images ?? []).map((image) => ({ id: image.id, originalName: image.original_name, mimeType: image.mime_type, fileSize: image.file_size, sortOrder: image.sort_order, isPrimary: image.is_primary, url: toApiUrl(image.url) })) };
+  return { id: check.id, machineId: check.machine_id, checkDate: check.check_date, checkedAt: check.checked_at, operatorName: check.operator_name, operatorIdentifier: check.operator_identifier, shift: check.shift, orderNumber: check.order_number, checks: [check.check_1, check.check_2, check.check_3, check.check_4, check.check_5], remark: check.remark, createdAt: check.created_at, images: (check.images ?? []).map((image) => ({ id: image.id, originalName: image.original_name, mimeType: image.mime_type, fileSize: image.file_size, sortOrder: image.sort_order, isPrimary: image.is_primary, url: toApiUrl(image.url) })) };
 }
 
 function toBuffingApiRequest(payload: BuffingCheckCreatePayload) {
-  return { machine_id: payload.machineId ?? 'BU-01', check_date: payload.checkDate, checked_at: payload.checkedAt, operator_name: payload.operatorName, check_1: payload.checks[0] ?? false, check_2: payload.checks[1] ?? false, check_3: payload.checks[2] ?? false, check_4: payload.checks[3] ?? false, check_5: payload.checks[4] ?? false, remark: payload.remark ?? null };
+  return { machine_id: payload.machineId ?? 'BU-01', check_date: payload.checkDate, checked_at: payload.checkedAt, operator_name: payload.operatorName, operator_identifier: payload.operatorIdentifier, shift: payload.shift, order_number: payload.orderNumber, check_1: payload.checks[0] ?? false, check_2: payload.checks[1] ?? false, check_3: payload.checks[2] ?? false, check_4: payload.checks[3] ?? false, check_5: payload.checks[4] ?? false, remark: payload.remark ?? null };
 }
 
 async function readErrorBody(response: Response): Promise<ApiErrorBody> {
@@ -343,6 +349,23 @@ export async function getBuffingChecks(checkDate?: string, options: RequestOptio
   const query = checkDate ? `?check_date=${encodeURIComponent(checkDate)}` : '';
   const response = await request<BuffingApiResponse[]>(`${buffingChecksPath}${query}`, { signal: options.signal });
   return response.map(fromBuffingApiResponse);
+}
+
+export async function downloadBuffingReport(checkDate: string, language: 'vi' | 'en', options: RequestOptions = {}): Promise<Blob> {
+  const url = `${buffingChecksPath}/export?check_date=${encodeURIComponent(checkDate)}&language=${language}`;
+  let response: Response;
+  try {
+    response = await fetch(url, { signal: options.signal, credentials: 'include' });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    throw new ScouringApiError('Unable to reach the Buffing backend.', { code: 'network_error' });
+  }
+  if (!response.ok) {
+    const body = await readErrorBody(response);
+    const message = typeof body.detail === 'string' ? body.detail : `Buffing API returned HTTP ${response.status}`;
+    throw new ScouringApiError(body.message || message, { status: response.status, code: body.error || 'buffing_api_error', details: body.details });
+  }
+  return response.blob();
 }
 
 export async function createBuffingCheck(payload: BuffingCheckCreatePayload, options: RequestOptions = {}): Promise<BuffingCheck> {

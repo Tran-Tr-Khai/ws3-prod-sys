@@ -10,6 +10,9 @@ class BuffingCheckCreate(BaseModel):
     check_date: date
     checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     operator_name: str = Field(min_length=1, max_length=160)
+    operator_identifier: str = Field(min_length=1, max_length=80)
+    shift: str = Field(min_length=1, max_length=80)
+    order_number: str = Field(min_length=1, max_length=160)
     check_1: bool = False
     check_2: bool = False
     check_3: bool = False
@@ -38,4 +41,7 @@ class BuffingCheckResponse(BuffingCheckCreate):
     # Legacy checks may predate the required-operator rule.
     # New records remain protected by BuffingCheckCreate above.
     operator_name: str | None = None
+    operator_identifier: str | None = None
+    shift: str | None = None
+    order_number: str | None = None
     images: list[BuffingImageResponse] = Field(default_factory=list)
