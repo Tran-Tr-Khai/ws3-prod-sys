@@ -8,8 +8,10 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from openpyxl import Workbook
+from openpyxl.drawing.image import Image as WorkbookImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from PIL import Image as PillowImage
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
@@ -152,11 +154,11 @@ def export_buffing_checks(
         checked_at = check.checked_at
         if checked_at.tzinfo is not None:
             checked_at = checked_at.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
-        image_names = ", ".join(image.original_name for image in check.images) or "—"
+        preview_image = next((image for image in check.images if image.is_primary), check.images[0] if check.images else None)
         values = [
             checked_at.strftime("%H:%M"), check.order_number or "—", check.operator_name or "—",
             check.operator_identifier or "—", check.shift or "—", check.check_1, check.check_2,
-            check.check_3, check.check_4, check.check_5, check.remark or "—", image_names,
+            check.check_3, check.check_4, check.check_5, check.remark or "—", "" if preview_image else "—",
         ]
         for column, value in enumerate(values, start=1):
             cell = sheet.cell(row_index, column, value)
@@ -170,9 +172,33 @@ def export_buffing_checks(
                 cell.alignment = Alignment(horizontal="center", vertical="center")
                 cell.font = Font(name="Aptos", size=9, bold=True, color="247044" if value else "B42318")
                 cell.fill = PatternFill("solid", fgColor="E7F4EC" if value else "FDECEC")
-        sheet.row_dimensions[row_index].height = 24
+        if preview_image:
+            image_root = media_root()
+            image_path = (image_root / preview_image.file_path).resolve()
+            if image_root in image_path.parents and image_path.is_file():
+                try:
+                    with PillowImage.open(image_path) as source_image:
+                        source_image.thumbnail((480, 320))
+                        image_stream = BytesIO()
+                        source_image.convert("RGB").save(image_stream, format="JPEG", quality=76, optimize=True)
+                    image_stream.seek(0)
+                    workbook_image = WorkbookImage(image_stream)
+                    scale = min(144 / workbook_image.width, 84 / workbook_image.height)
+                    workbook_image.width *= scale
+                    workbook_image.height *= scale
+                    sheet.add_image(workbook_image, f"L{row_index}")
+                    sheet.cell(row_index, 12).alignment = Alignment(horizontal="center", vertical="center")
+                    sheet.row_dimensions[row_index].height = 68
+                except (OSError, ValueError):
+                    sheet.cell(row_index, 12, "Ảnh không đọc được" if language == "vi" else "Image unavailable")
+                    sheet.row_dimensions[row_index].height = 24
+            else:
+                sheet.cell(row_index, 12, "Không tìm thấy ảnh" if language == "vi" else "Image not found")
+                sheet.row_dimensions[row_index].height = 24
+        else:
+            sheet.row_dimensions[row_index].height = 24
 
-    widths = [12, 22, 24, 16, 13, 11, 11, 11, 11, 11, 38, 40]
+    widths = [12, 22, 24, 16, 13, 11, 11, 11, 11, 11, 38, 23]
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
     sheet.freeze_panes = "A5"
