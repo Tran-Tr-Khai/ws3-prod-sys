@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+.hmi-condensed {
+  font-family: "Roboto Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+}
+
 /* Buffing checklist interval belongs to the lower-left status area. */
 section.border-t-2.border-industrialDark > div.text-right {
   text-align: left;

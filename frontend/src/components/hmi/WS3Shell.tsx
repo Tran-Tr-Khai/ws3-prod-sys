@@ -70,7 +70,7 @@ export function WS3Shell({
           machineId={machineId}
           machineLabel={machineLabel}
           trailing={showGlobalNavigation
-            ? <GlobalNavigation embedded showCreateOrder={machineLabel?.toLowerCase() !== 'scouring'} />
+            ? <GlobalNavigation embedded showCreateOrder={!['scouring', 'unrolling'].includes(machineLabel.toLowerCase())} />
             : undefined}
         />
       )}

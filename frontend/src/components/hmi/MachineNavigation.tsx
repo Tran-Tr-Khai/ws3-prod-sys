@@ -22,7 +22,7 @@ export function MachineNavigation({ machineId, machineLabel, trailing }: Machine
     ? tabs.filter((tab) => tab.key !== 'overview')
     : machineKey === 'buffing'
       ? tabs.filter((tab) => tab.key === 'recordEntry')
-      : machineKey === 'tenter'
+    : machineKey === 'tenter' || machineKey === 'unrolling'
         ? tabs.filter((tab) => tab.key === 'recordEntry')
       : tabs;
 

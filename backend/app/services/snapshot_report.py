@@ -31,7 +31,7 @@ def build_report(
     orders: Sequence[WS3ProductionOrder],
     machines: Sequence[WS3MachineWS2Record],
     workers: Sequence[WS3WorkerRecord],
-    production_date: str,
+    production_date: str | None,
 ) -> dict[str, object]:
     machine_index = defaultdict(list)
     worker_index = defaultdict(list)
@@ -93,7 +93,7 @@ def build_report(
             warnings.append(f'Chiều dài / Length: {actual_mts}/{expected_mts} MTS.')
         sample = lines[0]
         result.append({
-            'pk_no': pk_no, 'production_date': production_date,
+            'pk_no': pk_no, 'production_date': production_date or sample.production_date,
             'item_code': sample.item_code, 'item_name': sample.item_name, 'lot_no': sample.lot_no,
             'sop_no': ', '.join(sorted({line.invoice_no for line in lines if line.invoice_no})),
             'machine_no': ', '.join(sorted({m.machine_no for m in candidates.values() if m.machine_no})),

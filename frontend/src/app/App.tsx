@@ -9,6 +9,7 @@ import { ScouringHistoryPage } from '../features/machines/ScouringHistoryPage';
 import { ScouringAlarmPage } from '../features/machines/ScouringAlarmPage';
 import { BuffingPage } from '../features/machines/BuffingPage';
 import { TenterPage } from '../features/machines/TenterPage';
+import { UnrollingCollectionPage } from '../features/machines/UnrollingCollectionPage';
 import { ProductionOverviewPage } from '../features/production/ProductionOverviewPage';
 import { WS3OverviewPage } from '../features/production/WS3OverviewPage';
 import { LoginPage } from '../features/auth/LoginPage';
@@ -22,8 +23,10 @@ export default function App() {
   const location = useLocation();
   if (loading) return <main className="flex min-h-screen items-center justify-center bg-navy text-xs font-bold uppercase text-white">Loading...</main>;
   if (!user) return <Routes><Route path="/login" element={<LoginPage />} /><Route path="*" element={<Navigate to="/login" replace />} /></Routes>;
-  const restrictedMachine = location.pathname.startsWith('/machine/scouring') ? 'SC-01' : location.pathname.startsWith('/machine/buffing') ? 'BU-01' : location.pathname.startsWith('/machine/tenter') ? 'TE-01' : null;
-  if (user.role === 'OPERATOR' && restrictedMachine && !user.machineIds.includes(restrictedMachine)) return <Navigate to="/ws3" replace />;
+  const restrictedMachine = location.pathname.startsWith('/machine/scouring') ? 'SC-01' : location.pathname.startsWith('/machine/buffing') ? 'BU-01' : location.pathname.startsWith('/machine/tenter') ? 'TE-01' : location.pathname.startsWith('/machine/unrolling') ? 'UN-01' : null;
+  if (user.role === 'OPERATOR' && restrictedMachine && !(restrictedMachine === 'UN-01'
+    ? user.machineIds.some((machineId) => machineId.trim().toUpperCase().startsWith('UN-'))
+    : user.machineIds.includes(restrictedMachine))) return <Navigate to="/ws3" replace />;
   return (
     <Routes>
       <Route path="/login" element={<Navigate to="/ws3" replace />} />
@@ -49,6 +52,8 @@ export default function App() {
       <Route path="/machine/buffing" element={<BuffingPage />} />
       <Route path="/machine/tenter/record" element={<TenterPage />} />
       <Route path="/machine/tenter" element={<Navigate to="/machine/tenter/record" replace />} />
+      <Route path="/machine/unrolling/record" element={<UnrollingCollectionPage />} />
+      <Route path="/machine/unrolling" element={<Navigate to="/machine/unrolling/record" replace />} />
       <Route path="/machine/:machineId" element={<MachineHMIPage />} />
       <Route path="*" element={<Navigate to="/ws3" replace />} />
     </Routes>

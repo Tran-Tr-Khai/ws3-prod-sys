@@ -18,8 +18,8 @@ const processes = [
   { name: 'Calendaring', code: 'CA-01', available: false },
 ] as const;
 
-function formatDateTime(timestamp: string): string {
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(timestamp));
+function formatDateTime(timestamp: string, language: 'vi' | 'en' = 'vi'): string {
+  return new Intl.DateTimeFormat(language === 'vi' ? 'vi-VN' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(timestamp));
 }
 
 function recordWarnings(record: ScouringRecord): string[] {
@@ -35,20 +35,20 @@ function hasCompleteProcessData(record: ScouringRecord): boolean {
 }
 
 export function WS3OverviewPage() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { user } = useAuth();
   const [latestRecord, setLatestRecord] = useState<ScouringRecord | null>(null);
   const [latestBuffingCheck, setLatestBuffingCheck] = useState<BuffingCheck | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notices, setNotices] = useState<MachineNotice[]>([]);
-  const [showProduction, setShowProduction] = useState(false);
+  const [showNotices, setShowNotices] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     getScouringRecords({ signal: controller.signal })
-      .then((records) => setLatestRecord(records[0] ?? null))
+      .then((records) => { setLatestRecord(records[0] ?? null); setError(null); })
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Unable to reach the Scouring backend.');
       })
@@ -86,7 +86,8 @@ export function WS3OverviewPage() {
   return (
     <WS3Shell title={t('systemTitle')} subtitle={t('productionOverview')} status="info" time={new Date().toLocaleTimeString('vi-VN')} showGlobalNavigation={false}>
       <div className="h-full overflow-auto bg-hmiConsole p-2 text-slate-800">
-        {canManageOrders && <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div role="group" aria-label={t('productionViewMode')} className="inline-flex border-2 border-line bg-white p-0.5"><button type="button" aria-pressed={showProduction} onClick={() => setShowProduction(true)} className={`min-h-8 px-3 text-[10px] font-bold uppercase tracking-wide ${showProduction ? 'bg-industrial text-white' : 'text-industrialDark hover:bg-hmiHover'}`}>{t('productionDashboard')}</button><button type="button" aria-pressed={!showProduction} onClick={() => setShowProduction(false)} className={`min-h-8 px-3 text-[10px] font-bold uppercase tracking-wide ${!showProduction ? 'bg-industrial text-white' : 'text-industrialDark hover:bg-hmiHover'}`}>{t('operationAndNotices')}</button></div><Link to="/ws3/supervisor/orders/new"><HMIButton size="compact" variant="primary">{t('createWs3Order')}</HMIButton></Link></div>}
+        {canManageOrders && <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div role="group" aria-label={t('productionViewMode')} className="inline-flex max-w-full border-2 border-line bg-white p-0.5"><button type="button" aria-pressed={!showNotices} onClick={() => setShowNotices(false)} className={`min-h-8 whitespace-nowrap px-2 text-[9px] font-bold uppercase tracking-wide sm:px-3 sm:text-[10px] ${!showNotices ? 'bg-industrial text-white' : 'text-industrialDark hover:bg-hmiHover'}`}>{t('productionDashboard')}</button><button type="button" aria-pressed={showNotices} onClick={() => setShowNotices(true)} className={`min-h-8 whitespace-nowrap px-2 text-[9px] font-bold uppercase tracking-wide sm:px-3 sm:text-[10px] ${showNotices ? 'bg-industrial text-white' : 'text-industrialDark hover:bg-hmiHover'}`}>{t('notifications')}</button></div><Link to="/ws3/supervisor/orders/new"><HMIButton size="compact" variant="primary">{t('createWs3Order')}</HMIButton></Link></div>}
+        {error && <div role="status" className="mb-2 border border-warning bg-hmiWarning px-3 py-2 text-[10px] text-warning">{error}</div>}
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {visibleProcesses.map((process) => (
             <article key={process.name} className={`flex min-w-0 flex-col bg-white ${process.available ? 'border-2 border-industrial' : 'border border-line'}`}>
@@ -94,10 +95,22 @@ export function WS3OverviewPage() {
                 <h2 className="font-mono text-sm font-bold uppercase tracking-[0.1em]">{process.name}</h2>
                 <span className="font-mono text-[9px] text-slate-300">{canManageOrders ? process.code : user?.machineIds.filter((id) => prefix(id) === prefix(process.code)).join(' · ')}</span>
               </header>
-              {showProduction && canManageOrders ? <section className="min-h-[150px] flex-1 px-3 py-3">
-                <h3 className="mb-2 border-b border-line pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('production')}</h3>
-                {process.name === 'Scouring' && latestRecord ? <div className="grid gap-2 text-[10px] sm:grid-cols-2"><div><span className="block font-bold uppercase text-slate-500">{t('productionQuantity')}</span><span className="font-mono text-lg font-bold text-industrial">{latestRecord.productionQuantityMeters ?? '—'} m</span></div><div><span className="block font-bold uppercase text-slate-500">{t('fabricInOut')}</span><span className="font-mono font-bold">{latestRecord.inputFabricMeters ?? '—'} / {latestRecord.outputFabricMeters ?? '—'} m</span></div><div><span className="block font-bold uppercase text-slate-500">{t('orderNumber')}</span><span className="font-mono font-bold">{latestRecord.orderNumber || '—'}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('item')}</span><span className="font-semibold">{latestRecord.item || '—'}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('lastRecorded')}</span><span className="font-mono font-bold">{formatDateTime(latestRecord.recordedAt)}</span></div></div> : process.name === 'Buffing' && latestBuffingCheck ? <div className="grid gap-2 text-[10px] sm:grid-cols-2"><div><span className="block font-bold uppercase text-slate-500">{t('checkPoints')}</span><span className="font-mono text-lg font-bold text-industrial">{latestBuffingCheck.checks.filter(Boolean).length}/{latestBuffingCheck.checks.length}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('lastRecorded')}</span><span className="font-mono font-bold">{formatDateTime(latestBuffingCheck.checkedAt)}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('operator')}</span><span className="font-semibold">{latestBuffingCheck.operatorName || '—'}</span></div></div> : <p className="text-xs text-slate-500">{process.name === 'Scouring' && loading ? t('loadingRecorded') : t('noData')}</p>}
+              {canManageOrders ? showNotices ? <section className="min-h-[150px] flex-1 px-3 py-3">
+                <div className="mb-2 flex items-center justify-between gap-2 border-b border-line pb-2"><h3 className="font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('notifications')}</h3>{noticeByGroup.get(machineGroup(process.code)) && <time className="shrink-0 text-[9px] text-slate-500">{formatDateTime(noticeByGroup.get(machineGroup(process.code))!.sentAt, language)}</time>}</div>
+                {noticeByGroup.get(machineGroup(process.code)) ? <>{noticeByGroup.get(machineGroup(process.code))!.subject.trim().toLocaleLowerCase() !== process.name.toLocaleLowerCase() && <p className="text-xs font-bold text-industrialDark">{noticeByGroup.get(machineGroup(process.code))!.subject}</p>}<p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-700">{noticeByGroup.get(machineGroup(process.code))!.message}</p><p className="mt-2 text-[9px] text-slate-500">{noticeByGroup.get(machineGroup(process.code))!.senderName}</p></> : <p className="text-xs text-slate-500">{t('noNewNotices')}</p>}
               </section> : <div className="grid flex-1 divide-y divide-line md:grid-cols-2 md:divide-x md:divide-y-0">
+                <section className="min-w-0 px-3 py-3">
+                  <h3 className="mb-2 border-b border-line pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('operation')}</h3>
+                  <dl className="grid gap-2 text-[10px]">
+                    <div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('machine')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{process.code}</dd></div>
+                    {process.name === 'Scouring' && latestRecord ? <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestRecord.operatorName || latestRecord.operatorIdentifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestRecord.recordedAt)}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('status')}</dt><dd className={`mt-0.5 font-bold ${recordStatus === 'COMPLETE' ? 'text-success' : recordStatus === 'WARNING' ? 'text-warning' : 'text-slate-500'}`}>{recordStatus === 'COMPLETE' ? t('complete') : recordStatus === 'WARNING' ? t('warning') : t('incomplete')}</dd></div></> : process.name === 'Buffing' && latestBuffingCheck ? <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestBuffingCheck.operatorName || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestBuffingCheck.checkedAt)}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('status')}</dt><dd className={`mt-0.5 font-bold ${buffingStatus === 'COMPLETE' ? 'text-success' : 'text-warning'}`}>{buffingStatus === 'COMPLETE' ? t('complete') : t('warning')}</dd></div></> : <dd className="text-slate-500">{process.name === 'Scouring' ? (loading ? t('loadingRecorded') : t('noScouringRecords')) : process.name === 'Buffing' ? t('noBuffingRecords') : t('notImplemented')}</dd>}
+                  </dl>
+                </section>
+                <section className="min-w-0 px-3 py-3">
+                  <h3 className="mb-2 border-b border-line pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('production')}</h3>
+                  {process.name === 'Scouring' && latestRecord ? <div className="grid gap-2 text-[10px] sm:grid-cols-2"><div><span className="block font-bold uppercase text-slate-500">{t('productionQuantity')}</span><span className="font-mono text-lg font-bold text-industrial">{latestRecord.productionQuantityMeters ?? '—'} m</span></div><div><span className="block font-bold uppercase text-slate-500">{t('fabricInOut')}</span><span className="font-mono font-bold">{latestRecord.inputFabricMeters ?? '—'} / {latestRecord.outputFabricMeters ?? '—'} m</span></div><div><span className="block font-bold uppercase text-slate-500">{t('orderNumber')}</span><span className="font-mono font-bold">{latestRecord.orderNumber || '—'}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('item')}</span><span className="font-semibold">{latestRecord.item || '—'}</span></div></div> : process.name === 'Buffing' && latestBuffingCheck ? <div className="grid gap-2 text-[10px] sm:grid-cols-2"><div><span className="block font-bold uppercase text-slate-500">{t('checkPoints')}</span><span className="font-mono text-lg font-bold text-industrial">{latestBuffingCheck.checks.filter(Boolean).length}/{latestBuffingCheck.checks.length}</span></div></div> : <p className="text-xs text-slate-500">{process.name === 'Scouring' && loading ? t('loadingRecorded') : t('noData')}</p>}
+                </section>
+              </div> : <div className="grid flex-1 divide-y divide-line md:grid-cols-2 md:divide-x md:divide-y-0">
                 <section className="min-w-0 px-3 py-3">
                   <h3 className="mb-2 border-b border-line pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('operation')}</h3>
                   <dl className="grid gap-2 text-[10px]">
@@ -108,13 +121,13 @@ export function WS3OverviewPage() {
                     {process.name === 'Buffing' && !latestBuffingCheck && <dd className="text-slate-500">{t('noBuffingRecords')}</dd>}
                     {!process.available && <dd className="text-slate-500">{t('notImplemented')}</dd>}
                   </dl>
-                  {(process.name === 'Buffing' || process.name === 'Scouring' || process.name === 'Tentering') && <Link to={process.name === 'Buffing' ? '/machine/buffing/record' : process.name === 'Scouring' ? '/machine/scouring/record' : '/machine/tenter/record'} className="mt-3 inline-flex w-full"><HMIButton size="compact" variant="secondary" className="w-full">{process.name === 'Buffing' ? t('openBuffing') : process.name === 'Scouring' ? t('openScouring') : t('openTenter')}</HMIButton></Link>}
                 </section>
                 <section className="min-w-0 px-3 py-3">
-                  <div className="mb-2 flex items-center justify-between gap-2 border-b border-line pb-2"><h3 className="font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">Thông báo</h3>{noticeByGroup.get(machineGroup(process.code)) && <time className="shrink-0 text-[9px] text-slate-500">{formatDateTime(noticeByGroup.get(machineGroup(process.code))!.sentAt)}</time>}</div>
-                  {noticeByGroup.get(machineGroup(process.code)) ? <>{noticeByGroup.get(machineGroup(process.code))!.subject.trim().toLocaleLowerCase() !== process.name.toLocaleLowerCase() && <p className="text-xs font-bold text-industrialDark">{noticeByGroup.get(machineGroup(process.code))!.subject}</p>}<p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-700">{noticeByGroup.get(machineGroup(process.code))!.message}</p><p className="mt-2 text-[9px] text-slate-500">{noticeByGroup.get(machineGroup(process.code))!.senderName}</p></> : <p className="text-xs text-slate-500">Chưa có thông báo mới.</p>}
+                  <div className="mb-2 flex items-center justify-between gap-2 border-b border-line pb-2"><h3 className="font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('notifications')}</h3>{noticeByGroup.get(machineGroup(process.code)) && <time className="shrink-0 text-[9px] text-slate-500">{formatDateTime(noticeByGroup.get(machineGroup(process.code))!.sentAt, language)}</time>}</div>
+                  {noticeByGroup.get(machineGroup(process.code)) ? <>{noticeByGroup.get(machineGroup(process.code))!.subject.trim().toLocaleLowerCase() !== process.name.toLocaleLowerCase() && <p className="text-xs font-bold text-industrialDark">{noticeByGroup.get(machineGroup(process.code))!.subject}</p>}<p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-700">{noticeByGroup.get(machineGroup(process.code))!.message}</p><p className="mt-2 text-[9px] text-slate-500">{noticeByGroup.get(machineGroup(process.code))!.senderName}</p></> : <p className="text-xs text-slate-500">{t('noNewNotices')}</p>}
                 </section>
               </div>}
+              {(process.name === 'Unrolling' || process.name === 'Buffing' || process.name === 'Scouring' || process.name === 'Tentering') && <div className="mt-auto border-t border-line px-3 py-3"><Link to={process.name === 'Unrolling' ? '/machine/unrolling/record' : process.name === 'Buffing' ? '/machine/buffing/record' : process.name === 'Scouring' ? '/machine/scouring/record' : '/machine/tenter/record'} className="inline-flex w-full"><HMIButton size="compact" variant="secondary" className="w-full">{process.name === 'Unrolling' ? (language === 'vi' ? 'MỞ UNROLLING' : 'OPEN UNROLLING') : process.name === 'Buffing' ? t('openBuffing') : process.name === 'Scouring' ? t('openScouring') : t('openTenter')}</HMIButton></Link></div>}
             </article>
           ))}
         </div>

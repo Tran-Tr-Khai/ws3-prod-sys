@@ -63,9 +63,9 @@ export function TenterPage() {
 
   return (
     <WS3Shell showGlobalNavigation={false} showMachineNavigation={false} title="WS3 / Tenter" subtitle="Production entry" machineId="TE-01" machineLabel="Tenter" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
-      <div className="flex h-full min-h-0 flex-col overflow-auto bg-hmiConsole p-2 text-slate-800">
-        <div className="mx-auto flex w-full max-w-[1440px] flex-col border-2 border-industrialDark bg-white">
-          <MachineNavigation machineId="TE-01" machineLabel="Tenter" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>Home</HMIButton>} />
+      <div className="flex h-full min-h-0 flex-col overflow-auto bg-hmiConsole text-slate-800">
+        <MachineNavigation machineId="TE-01" machineLabel="Tenter" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>Home</HMIButton>} />
+        <div className="mx-2 mt-2 flex min-h-0 flex-1 flex-col border-2 border-industrialDark bg-white">
           <header className="flex shrink-0 items-center justify-between bg-industrialDark px-3 py-2 text-white"><h1 className="text-sm font-bold uppercase tracking-[0.14em]">TENTER PRODUCTION CARD</h1><span className="font-mono text-[10px] text-slate-300">TE-01</span></header>
 
           <div className="grid gap-2 border-b-2 border-line p-3 text-[10px] md:grid-cols-4">
