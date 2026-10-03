@@ -281,7 +281,7 @@ export function BuffingPage() {
 
             <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border-2 border-industrialDark bg-white">
             <video ref={videoRef} className="sr-only" muted playsInline />
-            <div className="buffing-no-print flex shrink-0 items-end justify-end gap-3 bg-white px-3 py-2">
+            <div className="buffing-no-print flex shrink-0 items-end justify-start gap-3 bg-white px-3 py-2">
               <label className="grid shrink-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{language === 'vi' ? 'Thời gian ghi' : 'Record date'}<input aria-label={t('recordedTime')} type="date" className="h-8 w-[160px] border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark" value={date} onChange={(event) => setDate(event.target.value)} /></label>
             </div>
 
@@ -303,7 +303,7 @@ export function BuffingPage() {
 
             <section className="buffing-history flex min-h-0 flex-1 flex-col bg-white">
               <div className="flex shrink-0 items-center justify-between border-b border-line bg-industrial px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-white"><span>{t('history')}</span><HMIButton size="compact" className="buffing-no-print !min-h-6 !px-2 !py-1 !text-[9px]" onClick={() => void exportExcel()} disabled={loading || exporting || rows.length === 0}>{exporting ? (language === 'vi' ? 'ĐANG XUẤT…' : 'EXPORTING…') : `${t('overview')} EXCEL`}</HMIButton></div>
-              <div className="buffing-history-scroll min-h-0 flex-1 overflow-auto">
+              <div className="buffing-history-scroll min-h-0 flex-1 overflow-auto bg-white p-2">
                 <table className="w-full min-w-[1320px] border-collapse text-left text-[10px]">
                   <thead className="sticky top-0 z-10 border-b border-line bg-white text-[9px] uppercase tracking-wider text-industrialDark">
                     <tr><th className="px-3 py-2">{t('time')}</th><th className="px-3 py-2">{t('orderNumber')}</th><th className="px-3 py-2">{t('operator')}</th><th className="px-3 py-2">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</th><th className="px-3 py-2">{language === 'vi' ? 'Ca làm' : 'Shift'}</th>{[1, 2, 3, 4, 5].map((point) => <th key={point} className="px-3 py-2 text-center">{point}</th>)}<th className="px-3 py-2">{t('remark')}</th><th className="px-3 py-2">{t('buffingImages')}</th><th className="w-12 px-2 py-2 text-center" aria-label={t('deleteCheck')}></th></tr>
