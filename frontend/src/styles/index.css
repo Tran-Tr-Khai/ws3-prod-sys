@@ -145,6 +145,16 @@ body {
   margin-right: 0;
 }
 
+@media (max-width: 1200px) {
+  .scouring-record-workspace-with-notices {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 3.15fr);
+  }
+
+  .scouring-record-workspace-with-notices > .operational-notice-dock {
+    grid-column: 1 / -1;
+  }
+}
+
 .scouring-screen-frame {
   width: calc(100% - 1rem);
   max-width: 1440px;
@@ -230,6 +240,18 @@ body {
   .scouring-record-workspace {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.5rem;
+  }
+
+  .scouring-record-workspace.scouring-record-workspace-with-notices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scouring-record-workspace-with-notices > .operational-notice-dock {
+    position: relative;
+    top: auto;
+    grid-column: 1;
+    height: 420px !important;
+    min-height: 340px;
   }
 
   .scouring-record-context,
