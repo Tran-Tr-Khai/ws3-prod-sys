@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.scouring import ScouringRecord
 from app.models.scouring_inspection import ScouringPhInspection
+from app.api.routes.machine_orders import set_order_progress
 from app.schemas.scouring import ScouringPhInspectionCreate, ScouringPhInspectionResponse, ScouringRecordCreate, ScouringRecordResponse
 
 router = APIRouter(prefix="/scouring/records", tags=["scouring"])
@@ -27,6 +28,8 @@ def create_scouring_record(
     db: Session = Depends(get_db),
 ) -> ScouringRecord:
     record = ScouringRecord(**payload.model_dump())
+    if payload.order_number and payload.order_progress:
+        set_order_progress(db, payload.machine_id, payload.order_number, payload.order_progress)
     db.add(record)
     db.commit()
     db.refresh(record)
@@ -36,6 +39,7 @@ def create_scouring_record(
 @router.get("", response_model=list[ScouringRecordResponse])
 def list_scouring_records(
     limit: int = Query(default=100, ge=1, le=500),
+    order_number: str | None = Query(default=None, max_length=80),
     db: Session = Depends(get_db),
 ) -> list[ScouringRecord]:
     statement = (
@@ -43,6 +47,8 @@ def list_scouring_records(
         .order_by(desc(ScouringRecord.recorded_at), desc(ScouringRecord.id))
         .limit(limit)
     )
+    if order_number and order_number.strip():
+        statement = statement.where(func.upper(func.trim(ScouringRecord.order_number)) == order_number.strip().upper())
     return list(db.scalars(statement).all())
 
 

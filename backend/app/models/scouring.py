@@ -25,6 +25,8 @@ class ScouringRecord(TimestampMixin, Base):
     lot_number: Mapped[str | None] = mapped_column(String(80))
     operator_name: Mapped[str | None] = mapped_column(String(160))
     operator_identifier: Mapped[str | None] = mapped_column(String(80))
+    shift: Mapped[str | None] = mapped_column(String(80))
+    order_progress: Mapped[str | None] = mapped_column(String(20))
 
     naoh: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
     soap: Mapped[float] = mapped_column(Numeric(14, 3), nullable=False)
@@ -38,3 +40,4 @@ class ScouringRecord(TimestampMixin, Base):
     input_fabric_meters: Mapped[float | None] = mapped_column(Numeric(14, 3))
     output_fabric_meters: Mapped[float | None] = mapped_column(Numeric(14, 3))
     production_quantity_meters: Mapped[float | None] = mapped_column(Numeric(14, 3))
+    loss_meters: Mapped[float | None] = mapped_column(Numeric(14, 3))

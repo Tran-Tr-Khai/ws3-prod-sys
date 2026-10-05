@@ -8,6 +8,7 @@ import autoTable from 'jspdf-autotable';
 import { ensureVietnamesePdfFonts } from '../../utils/pdfFonts';
 
 type RecordStatus = 'COMPLETE' | 'WARNING' | 'INCOMPLETE';
+type OrderProgress = 'IN_PROGRESS' | 'COMPLETED' | 'UNKNOWN';
 type ValueDefinition = { label: string; value: number | null; unit: string };
 
 const chemicalDefinitions = (record: ScouringRecord): ValueDefinition[] => [
@@ -27,11 +28,27 @@ const processDefinitions = (record: ScouringRecord): ValueDefinition[] => [
 const productionDefinitions = (record: ScouringRecord): ValueDefinition[] => [
   { label: 'Input meters', value: record.inputFabricMeters, unit: 'm' },
   { label: 'Output meters', value: record.outputFabricMeters, unit: 'm' },
-  { label: 'Production quantity', value: record.productionQuantityMeters, unit: 'm' },
+  { label: 'Loss', value: record.lossMeters, unit: 'm' },
 ];
 
 function formatDateTime(timestamp: string): string {
   return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(timestamp));
+}
+
+function localDateKey(timestamp: string): string {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function orderProgressLabel(progress: OrderProgress, language: string): string {
+  if (progress === 'IN_PROGRESS') return language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS';
+  if (progress === 'COMPLETED') return language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED';
+  return language === 'vi' ? 'CHƯA CẬP NHẬT' : 'NOT SET';
+}
+
+function OrderProgressBadge({ progress, language }: { progress: OrderProgress; language: string }) {
+  const style = progress === 'COMPLETED' ? 'border-success bg-hmiNormal text-success' : progress === 'IN_PROGRESS' ? 'border-info bg-hmiInfo text-industrial' : 'border-line bg-hmiSection text-slate-500';
+  return <span className={`inline-flex border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${style}`}>{orderProgressLabel(progress, language)}</span>;
 }
 
 function warningsFor(record: ScouringRecord): string[] {
@@ -62,12 +79,13 @@ function PhInspectionGroup({ inspections }: { inspections: ScouringPhInspection[
 }
 
 export function ScouringHistoryPage() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [records, setRecords] = useState<ScouringRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [date, setDate] = useState('');
   const [status, setStatus] = useState<RecordStatus | ''>('');
+  const [orderProgress, setOrderProgress] = useState<OrderProgress | ''>('');
   const [operatorSearch, setOperatorSearch] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detailMode, setDetailMode] = useState<'record' | 'ph'>('record');
@@ -96,16 +114,18 @@ export function ScouringHistoryPage() {
 
   const filteredRecords = useMemo(() => records.filter((record) => {
     const search = operatorSearch.trim().toLowerCase();
-    return (!date || record.recordedAt.slice(0, 10) === date)
+    return (!date || localDateKey(record.recordedAt) === date)
       && (!status || statusFor(record) === status)
-      && (!search || `${record.operatorName ?? ''} ${record.operatorIdentifier ?? ''}`.toLowerCase().includes(search));
-  }), [date, operatorSearch, records, status]);
+      && (!orderProgress || (orderProgress === 'UNKNOWN' ? !record.orderProgress : record.orderProgress === orderProgress))
+      && (!search || `${record.orderNumber ?? ''} ${record.item ?? ''} ${record.lotNumber ?? ''} ${record.operatorName ?? ''} ${record.operatorIdentifier ?? ''} ${record.shift ?? ''}`.toLowerCase().includes(search));
+  }), [date, operatorSearch, orderProgress, records, status]);
 
   const selectedRecord = filteredRecords.find((record) => record.id === selectedId) ?? filteredRecords[0] ?? null;
+  const selectedRecordId = selectedRecord?.id;
   useEffect(() => {
-    if (selectedRecord) void getScouringPhInspections(selectedRecord.id).then(setPhInspections).catch(() => setPhInspections([]));
-  }, [selectedRecord?.id]);
-  const clearFilters = () => { setDate(''); setStatus(''); setOperatorSearch(''); };
+    if (selectedRecordId) void getScouringPhInspections(selectedRecordId).then(setPhInspections).catch(() => setPhInspections([]));
+  }, [selectedRecordId]);
+  const clearFilters = () => { setDate(''); setStatus(''); setOrderProgress(''); setOperatorSearch(''); };
 
   const exportPdf = async () => {
     if (!selectedRecord) return;
@@ -116,6 +136,9 @@ export function ScouringHistoryPage() {
       [t('recordedTime'), formatDateTime(selectedRecord.recordedAt)],
       [t('machine'), selectedRecord.machineId],
       [t('operator'), selectedRecord.operatorName || selectedRecord.operatorIdentifier || '—'],
+      [language === 'vi' ? 'ID nhân viên' : 'Employee ID', selectedRecord.operatorIdentifier || '—'],
+      [language === 'vi' ? 'Ca làm' : 'Shift', selectedRecord.shift || '—'],
+      [language === 'vi' ? 'Tiến độ đơn' : 'Order progress', orderProgressLabel(selectedRecord.orderProgress ?? 'UNKNOWN', language)],
       [t('orderNumber'), selectedRecord.orderNumber || '—'],
       [t('item'), selectedRecord.item || '—'],
       [t('lotYarn'), selectedRecord.lotYarn || '—'],
@@ -133,7 +156,7 @@ export function ScouringHistoryPage() {
       [t('production'), ''],
       [t('inputMeters'), `${selectedRecord.inputFabricMeters ?? '—'} ${selectedRecord.inputFabricMeters === null ? '' : 'm'}`],
       [t('outputMeters'), `${selectedRecord.outputFabricMeters ?? '—'} ${selectedRecord.outputFabricMeters === null ? '' : 'm'}`],
-      [t('productionQuantity'), `${selectedRecord.productionQuantityMeters ?? '—'} ${selectedRecord.productionQuantityMeters === null ? '' : 'm'}`],
+      [language === 'vi' ? 'Hao hụt' : 'Loss', `${selectedRecord.lossMeters ?? '—'} ${selectedRecord.lossMeters === null ? '' : 'm'}`],
       [t('status'), statusFor(selectedRecord)],
       ...warningsFor(selectedRecord).map((warning) => [t('warning'), warning] as [string, string]),
     ];
@@ -161,7 +184,16 @@ export function ScouringHistoryPage() {
   return <WS3Shell title="WS3 / Scouring History" subtitle="Stored Scouring records · PostgreSQL" machineId="SC-01" machineLabel="Scouring" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
       <div className="scouring-screen-frame scouring-full-width-frame mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
-      <section className="border-b-2 border-industrialDark"><header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">{t('recordFilters')}</h2><span className="font-mono text-[10px] uppercase tracking-wider">{filteredRecords.length} / {records.length}</span></header><div className="bg-hmiSection p-1.5"><div className="grid grid-cols-2 items-end gap-1.5 sm:flex"><label className="grid min-w-0 flex-1 gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">{t('recordedTime')}<input type="date" className="min-h-10 rounded-none border-2 border-line bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-industrial" value={date} onChange={(event) => setDate(event.target.value)} /></label><label className="grid min-w-0 flex-1 gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">{t('status')}<select className="min-h-10 rounded-none border-2 border-line bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-industrial" value={status} onChange={(event) => setStatus(event.target.value as RecordStatus | '')}><option value="">{t('allStatuses')}</option><option value="COMPLETE">{t('complete')}</option><option value="WARNING">{t('warning')}</option><option value="INCOMPLETE">{t('incomplete')}</option></select></label><label className="col-span-2 grid min-w-0 flex-[1.5] gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 sm:col-auto">{t('operator')}<input className="min-h-10 rounded-none border-2 border-line bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-industrial" value={operatorSearch} onChange={(event) => setOperatorSearch(event.target.value)} placeholder={t('searchWhenAvailable')} /></label><HMIButton size="compact" className="col-span-2 shrink-0 sm:col-auto" onClick={clearFilters}>{t('clearFilters')}</HMIButton></div></div></section>
+      <section className="shrink-0 border-b-2 border-industrialDark">
+        <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">{t('recordFilters')}</h2><span className="font-mono text-[10px] uppercase tracking-wider">{filteredRecords.length} / {records.length}</span></header>
+        <div className="bg-hmiSection p-2"><div className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(150px,0.8fr)_minmax(150px,0.8fr)_minmax(180px,0.8fr)_minmax(260px,2fr)_36px]">
+          <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">{t('recordedTime')}<input type="date" className="min-h-9 border-2 border-line bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-industrial" value={date} onChange={(event) => setDate(event.target.value)} /></label>
+          <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}<select className="min-h-9 border-2 border-line bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-industrial" value={orderProgress} onChange={(event) => setOrderProgress(event.target.value as OrderProgress | '')}><option value="">{language === 'vi' ? 'Tất cả tiến độ' : 'All progress'}</option><option value="IN_PROGRESS">{orderProgressLabel('IN_PROGRESS', language)}</option><option value="COMPLETED">{orderProgressLabel('COMPLETED', language)}</option><option value="UNKNOWN">{orderProgressLabel('UNKNOWN', language)}</option></select></label>
+          <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">{language === 'vi' ? 'Kết quả thông số' : 'Parameter result'}<select className="min-h-9 border-2 border-line bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-industrial" value={status} onChange={(event) => setStatus(event.target.value as RecordStatus | '')}><option value="">{t('allStatuses')}</option><option value="COMPLETE">{t('complete')}</option><option value="WARNING">{t('warning')}</option><option value="INCOMPLETE">{t('incomplete')}</option></select></label>
+          <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 sm:col-span-2 xl:col-span-1">{language === 'vi' ? 'Đơn hàng / Người vận hành' : 'Order / Operator'}<input className="min-h-9 border-2 border-line bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-industrial" value={operatorSearch} onChange={(event) => setOperatorSearch(event.target.value)} placeholder={language === 'vi' ? 'Mã đơn, tên hoặc ID nhân viên…' : 'Order, name or employee ID…'} /></label>
+          <button type="button" className="inline-flex min-h-9 w-9 items-center justify-center border-2 border-line bg-white text-lg font-bold leading-none text-industrialDark hover:border-industrialDark hover:bg-hmiHover" onClick={clearFilters} aria-label={t('clearFilters')} title={t('clearFilters')}>×</button>
+        </div></div>
+      </section>
       <div className="scouring-history-layout grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
         <section className="scouring-history-list flex min-h-0 min-w-0 flex-col border-b-2 border-industrialDark bg-panel lg:border-b-0 lg:border-r-2">
           <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white">
@@ -171,9 +203,31 @@ export function ScouringHistoryPage() {
           {loading ? <div className="p-6 text-center text-xs font-bold uppercase tracking-wide text-slate-500">{t('loadingRecords')}</div>
             : error ? <div className="p-6 text-center text-xs font-semibold uppercase tracking-wide text-alarm"><p>{t('unableToLoadRecords')}</p><p className="mt-1 font-normal normal-case">{error}</p><HMIButton size="compact" className="mt-3" onClick={() => window.location.reload()}>{t('retry')}</HMIButton></div>
               : filteredRecords.length === 0 ? <div className="p-6 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">{records.length === 0 ? t('noRecords') : t('noMatchingRecords')}</div>
-                : <div className="min-h-0 flex-1 overflow-auto"><table className="w-full min-w-[700px] border-collapse text-left text-[10px]"><thead className="sticky top-0 bg-industrial text-[9px] uppercase tracking-wider text-white"><tr><th className="px-2 py-1.5">{t('recordedTime')}</th><th className="px-2 py-1.5">{t('machine')}</th><th className="px-2 py-1.5">{t('operator')}</th><th className="px-2 py-1.5">{t('speed')}</th><th className="px-2 py-1.5">{t('temperature')}</th><th className="px-2 py-1.5">{t('cylinderTemperature')}</th><th className="px-2 py-1.5">{t('inputMeters')}</th><th className="px-2 py-1.5">{t('outputMeters')}</th><th className="px-2 py-1.5">{t('phInspection')}</th><th className="px-2 py-1.5">{t('status')}</th></tr></thead><tbody>{filteredRecords.map((record) => <tr key={record.id} className={`cursor-pointer border-b border-line hover:bg-hmiHover ${selectedRecord?.id === record.id ? 'bg-hmiSelected' : ''}`} onClick={() => { setSelectedId(record.id); setDetailMode('record'); setMobileDetailOpen(true); }}><td className="whitespace-nowrap px-2 py-1.5 font-mono font-semibold">{formatDateTime(record.recordedAt)}</td><td className="px-2 py-1.5 font-mono font-bold text-industrial">{record.machineId}</td><td className="px-2 py-1.5">{record.operatorName || record.operatorIdentifier || '—'}</td><td className="px-2 py-1.5 font-mono font-bold">{record.speed} m/min</td><td className="px-2 py-1.5 font-mono font-bold">{record.temperature} °C</td><td className="px-2 py-1.5 font-mono font-bold">{record.cylinderTemperature} °C</td><td className="px-2 py-1.5 font-mono">{record.inputFabricMeters ?? '—'} m</td><td className="px-2 py-1.5 font-mono">{record.outputFabricMeters ?? '—'} m</td><td className="px-2 py-1.5">{phInspectionCounts[record.id] ? <button type="button" className="font-bold text-industrial underline" onClick={(event) => { event.stopPropagation(); setSelectedId(record.id); setDetailMode('ph'); setMobileDetailOpen(true); }}>{t('view')} ({phInspectionCounts[record.id]})</button> : <span>—</span>}</td><td className="px-2 py-1.5"><StatusText record={record} label={(value) => value === 'COMPLETE' ? t('complete') : value === 'WARNING' ? t('warning') : t('incomplete')} /></td></tr>)}</tbody></table></div>}
+                : <div className="min-h-0 flex-1 overflow-auto"><table className="w-full min-w-[820px] border-collapse text-left text-[10px]"><thead className="sticky top-0 bg-industrial text-[9px] uppercase tracking-wider text-white"><tr><th className="px-2 py-1.5">{t('recordedTime')}</th><th className="px-2 py-1.5">{t('orderNumber')}</th><th className="px-2 py-1.5">{t('operator')}</th><th className="px-2 py-1.5">{language === 'vi' ? 'Ca / Tiến độ' : 'Shift / Progress'}</th><th className="px-2 py-1.5">{t('speed')}</th><th className="px-2 py-1.5">{t('temperature')}</th><th className="px-2 py-1.5">{language === 'vi' ? 'Sản lượng' : 'Output'}</th><th className="px-2 py-1.5">{t('phInspection')}</th><th className="px-2 py-1.5">{language === 'vi' ? 'Kết quả' : 'Result'}</th></tr></thead><tbody>{filteredRecords.map((record) => <tr key={record.id} className={`cursor-pointer border-b border-line hover:bg-hmiHover ${selectedRecord?.id === record.id ? 'bg-hmiSelected' : ''}`} onClick={() => { setSelectedId(record.id); setDetailMode('record'); setMobileDetailOpen(true); }}><td className="whitespace-nowrap px-2 py-1.5 font-mono font-semibold">{formatDateTime(record.recordedAt)}</td><td className="max-w-[220px] px-2 py-1.5"><span className="block truncate font-mono font-bold text-industrial">{record.orderNumber || '—'}</span><span className="block truncate text-[9px] text-slate-500">{record.item || '—'} · {record.lotNumber || '—'}</span></td><td className="px-2 py-1.5"><span className="block font-semibold">{record.operatorName || '—'}</span><span className="block font-mono text-[9px] text-slate-500">{record.operatorIdentifier || '—'}</span></td><td className="px-2 py-1.5"><span className="block font-mono">{record.shift || '—'}</span><OrderProgressBadge progress={record.orderProgress ?? 'UNKNOWN'} language={language} /></td><td className="whitespace-nowrap px-2 py-1.5 font-mono font-bold">{record.speed} m/min</td><td className="whitespace-nowrap px-2 py-1.5 font-mono font-bold">{record.temperature} °C<span className="block text-[9px] font-normal text-slate-500">{language === 'vi' ? 'Lô gia' : 'Cylinder'}: {record.cylinderTemperature} °C</span></td><td className="whitespace-nowrap px-2 py-1.5 font-mono">{record.productionQuantityMeters ?? record.outputFabricMeters ?? '—'} m</td><td className="px-2 py-1.5">{phInspectionCounts[record.id] ? <button type="button" className="font-bold text-industrial underline" onClick={(event) => { event.stopPropagation(); setSelectedId(record.id); setDetailMode('ph'); setMobileDetailOpen(true); }}>{t('view')} ({phInspectionCounts[record.id]})</button> : <span>—</span>}</td><td className="px-2 py-1.5"><StatusText record={record} label={(value) => value === 'COMPLETE' ? t('complete') : value === 'WARNING' ? t('warning') : t('incomplete')} /></td></tr>)}</tbody></table></div>}
         </section>
-        <section className={`scouring-history-detail flex min-h-0 min-w-0 flex-col bg-panel${mobileDetailOpen ? ' mobile-detail-open' : ''}`}><header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">{detailMode === 'ph' ? t('phInspection') : t('recordDetail')}</h2><div className="flex items-center gap-2"><HMIButton size="compact" className="!min-h-6 !px-2 !py-1 !text-[9px]" onClick={exportPdf} disabled={!selectedRecord || detailMode === 'ph'}>{t('overview')} PDF</HMIButton><span className="text-[10px] font-bold uppercase text-slate-300">{selectedRecord ? `ID ${selectedRecord.id}` : t('noSelection')}</span><button type="button" aria-label={t('cancel')} className="mobile-detail-close hidden text-lg leading-none text-white" onClick={() => setMobileDetailOpen(false)}>×</button></div></header>{selectedRecord ? <div className="scouring-history-detail-scroll min-h-0 flex-1 overflow-auto">{detailMode === 'ph' ? <PhInspectionGroup inspections={phInspections} /> : <><div className="grid grid-cols-2 gap-x-3 gap-y-1 border-b-2 border-line bg-white px-2 py-2 text-[11px]"><span className="font-bold uppercase text-slate-500">{t('recordedTime')}</span><span className="font-mono font-bold text-industrial">{formatDateTime(selectedRecord.recordedAt)}</span><span className="font-bold uppercase text-slate-500">{t('machine')}</span><span className="font-mono font-semibold">{selectedRecord.machineId}</span><span className="font-bold uppercase text-slate-500">{t('operator')}</span><span className="font-semibold">{selectedRecord.operatorName || selectedRecord.operatorIdentifier || '—'}</span></div><DetailGroup title={t('recordContext')} rows={[[t('orderNumber'), selectedRecord.orderNumber || '—'], [t('item'), selectedRecord.item || '—'], [t('lotYarn'), selectedRecord.lotYarn || '—'], [t('lotNumber'), selectedRecord.lotNumber || '—']]} /><DetailGroup title={t('chemicalInput')} rows={chemicalDefinitions(selectedRecord).map((item) => [item.label, `${item.value ?? '—'} ${item.value === null ? '' : item.unit}`])} /><DetailGroup title={t('processConditions')} rows={processDefinitions(selectedRecord).map((item) => [item.label, `${item.value ?? '—'} ${item.value === null ? '' : item.unit}`])} /><DetailGroup title={t('production')} rows={productionDefinitions(selectedRecord).map((item) => [item.label, `${item.value ?? '—'} ${item.value === null ? '' : item.unit}`])} /><div className="border-t border-line bg-white px-2 py-2 text-[10px] font-bold uppercase tracking-wide">{t('status')}: <StatusText record={selectedRecord} label={(value) => value === 'COMPLETE' ? t('complete') : value === 'WARNING' ? t('warning') : t('incomplete')} />{warningsFor(selectedRecord).map((warning) => <div key={warning} className="mt-1 text-warning">{warning.includes('Temperature') ? t('temperatureWarning') : t('speedWarning')}</div>)}</div></>}</div> : <div className="p-6 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">{t('noSelection')}</div>}</section>
+        <section className={`scouring-history-detail flex min-h-0 min-w-0 flex-col bg-panel${mobileDetailOpen ? ' mobile-detail-open' : ''}`}>
+          <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white">
+            <h2 className="text-xs font-bold uppercase tracking-wider">{detailMode === 'ph' ? t('phInspection') : t('recordDetail')}</h2>
+            <div className="flex items-center gap-2"><HMIButton size="compact" className="!min-h-6 !px-2 !py-1 !text-[9px]" onClick={exportPdf} disabled={!selectedRecord || detailMode === 'ph'}>{t('overview')} PDF</HMIButton><span className="text-[10px] font-bold uppercase text-slate-300">{selectedRecord ? `ID ${selectedRecord.id}` : t('noSelection')}</span><button type="button" aria-label={t('cancel')} className="mobile-detail-close hidden text-lg leading-none text-white" onClick={() => setMobileDetailOpen(false)}>×</button></div>
+          </header>
+          {selectedRecord ? <div className="scouring-history-detail-scroll min-h-0 flex-1 overflow-auto">
+            {detailMode === 'ph' ? <PhInspectionGroup inspections={phInspections} /> : <>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 border-b-2 border-line bg-white px-2 py-2 text-[11px]">
+                <span className="font-bold uppercase text-slate-500">{t('recordedTime')}</span><span className="font-mono font-bold text-industrial">{formatDateTime(selectedRecord.recordedAt)}</span>
+                <span className="font-bold uppercase text-slate-500">{t('machine')}</span><span className="font-mono font-semibold">{selectedRecord.machineId}</span>
+                <span className="font-bold uppercase text-slate-500">{t('operator')}</span><span className="font-semibold">{selectedRecord.operatorName || '—'}</span>
+                <span className="font-bold uppercase text-slate-500">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</span><span className="font-mono font-semibold">{selectedRecord.operatorIdentifier || '—'}</span>
+                <span className="font-bold uppercase text-slate-500">{language === 'vi' ? 'Ca làm' : 'Shift'}</span><span className="font-mono font-semibold">{selectedRecord.shift || '—'}</span>
+                <span className="font-bold uppercase text-slate-500">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}</span><span><OrderProgressBadge progress={selectedRecord.orderProgress ?? 'UNKNOWN'} language={language} /></span>
+              </div>
+              <DetailGroup title={t('recordContext')} rows={[[t('orderNumber'), selectedRecord.orderNumber || '—'], [t('item'), selectedRecord.item || '—'], [t('lotYarn'), selectedRecord.lotYarn || '—'], [t('lotNumber'), selectedRecord.lotNumber || '—']]} />
+              <DetailGroup title={t('chemicalInput')} rows={chemicalDefinitions(selectedRecord).map((item) => [item.label, `${item.value ?? '—'} ${item.value === null ? '' : item.unit}`])} />
+              <DetailGroup title={t('processConditions')} rows={processDefinitions(selectedRecord).map((item) => [item.label, `${item.value ?? '—'} ${item.value === null ? '' : item.unit}`])} />
+              <DetailGroup title={t('production')} rows={productionDefinitions(selectedRecord).map((item) => [item.label, `${item.value ?? '—'} ${item.value === null ? '' : item.unit}`])} />
+              <div className="border-t border-line bg-white px-2 py-2 text-[10px] font-bold uppercase tracking-wide">{language === 'vi' ? 'Kết quả thông số' : 'Parameter result'}: <StatusText record={selectedRecord} label={(value) => value === 'COMPLETE' ? t('complete') : value === 'WARNING' ? t('warning') : t('incomplete')} />{warningsFor(selectedRecord).map((warning) => <div key={warning} className="mt-1 text-warning">{warning.includes('Temperature') ? t('temperatureWarning') : t('speedWarning')}</div>)}</div>
+            </>}
+          </div> : <div className="p-6 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">{t('noSelection')}</div>}
+        </section>
       </div>
       </div>
     </div>

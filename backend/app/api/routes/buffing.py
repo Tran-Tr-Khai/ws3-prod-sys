@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.config.settings import get_settings
 from app.db.session import get_db
 from app.models.buffing import BuffingCheck, BuffingCheckImage
+from app.api.routes.machine_orders import set_order_progress
 from app.models.ws3_production import WS3ProductionOrder
 from app.schemas.buffing import BuffingCheckCreate, BuffingCheckResponse, BuffingImageResponse
 from app.security.auth import get_current_user
@@ -56,6 +57,7 @@ def check_response(check: BuffingCheck) -> BuffingCheckResponse:
         operator_identifier=check.operator_identifier,
         shift=check.shift,
         order_number=check.order_number,
+        order_progress=check.order_progress,
         check_1=check.check_1,
         check_2=check.check_2,
         check_3=check.check_3,
@@ -76,9 +78,10 @@ def create_buffing_check(payload: BuffingCheckCreate, db: Session = Depends(get_
         .limit(1)
     )
     if order_exists is None:
-        raise HTTPException(status_code=422, detail="Không tìm thấy mã đơn trong dữ liệu MES / Production order was not found in MES. Check the PKP number and try again.")
+        raise HTTPException(status_code=422, detail="Không tìm thấy mã đơn trong dữ liệu MES.")
     payload.order_number = normalized_order
     check = BuffingCheck(**payload.model_dump())
+    set_order_progress(db, payload.machine_id, normalized_order, payload.order_progress)
     db.add(check)
     db.commit()
     db.refresh(check)
@@ -89,28 +92,33 @@ def create_buffing_check(payload: BuffingCheckCreate, db: Session = Depends(get_
 def list_buffing_checks(
     check_date: date | None = Query(default=None),
     machine_id: str = Query(default="BU-01", min_length=1, max_length=50),
+    order_number: str | None = Query(default=None, max_length=160),
     db: Session = Depends(get_db),
 ) -> list[BuffingCheckResponse]:
     statement = select(BuffingCheck).where(BuffingCheck.machine_id == machine_id)
     if check_date is not None:
         statement = statement.where(BuffingCheck.check_date == check_date)
+    if order_number and order_number.strip():
+        statement = statement.where(func.upper(func.trim(BuffingCheck.order_number)) == order_number.strip().upper())
     statement = statement.order_by(desc(BuffingCheck.checked_at), desc(BuffingCheck.id))
     return [check_response(check) for check in db.scalars(statement).all()]
 
 
 @router.get("/export")
 def export_buffing_checks(
-    check_date: date = Query(...),
+    check_date: date | None = Query(default=None),
     machine_id: str = Query(default="BU-01", min_length=1, max_length=50),
     language: str = Query(default="vi", pattern="^(vi|en)$"),
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
+    order_number: str | None = Query(default=None, max_length=100),
 ) -> StreamingResponse:
-    checks = db.scalars(
-        select(BuffingCheck)
-        .where(BuffingCheck.machine_id == machine_id, BuffingCheck.check_date == check_date)
-        .order_by(desc(BuffingCheck.checked_at), desc(BuffingCheck.id))
-    ).all()
+    statement = select(BuffingCheck).where(BuffingCheck.machine_id == machine_id)
+    if check_date is not None:
+        statement = statement.where(BuffingCheck.check_date == check_date)
+    if order_number and order_number.strip():
+        statement = statement.where(func.upper(func.trim(BuffingCheck.order_number)) == order_number.strip().upper())
+    checks = db.scalars(statement.order_by(desc(BuffingCheck.checked_at), desc(BuffingCheck.id))).all()
 
     workbook = Workbook()
     sheet = workbook.active
@@ -125,10 +133,12 @@ def export_buffing_checks(
     sheet.row_dimensions[1].height = 32
     sheet.merge_cells("A2:L2")
     metadata = sheet["A2"]
+    report_date = check_date.strftime("%d/%m/%Y") if check_date else ("Tất cả ngày" if language == "vi" else "All dates")
+    report_order = f"    |    Đơn: {order_number.strip()}" if language == "vi" and order_number and order_number.strip() else f"    |    Order: {order_number.strip()}" if order_number and order_number.strip() else ""
     metadata.value = (
-        f"Máy: {machine_id}    |    Ngày ghi: {check_date:%d/%m/%Y}    |    Tổng lượt kiểm tra: {len(checks)}"
+        f"Máy: {machine_id}    |    Ngày ghi: {report_date}{report_order}    |    Tổng lượt kiểm tra: {len(checks)}"
         if language == "vi"
-        else f"Machine: {machine_id}    |    Record date: {check_date:%d/%m/%Y}    |    Total checks: {len(checks)}"
+        else f"Machine: {machine_id}    |    Record date: {report_date}{report_order}    |    Total checks: {len(checks)}"
     )
     metadata.font = Font(name="Aptos", size=10, color="385466")
     metadata.fill = PatternFill("solid", fgColor="EAF0F3")
@@ -212,7 +222,7 @@ def export_buffing_checks(
     output = BytesIO()
     workbook.save(output)
     output.seek(0)
-    filename = f"buffing-report-{check_date.isoformat()}.xlsx"
+    filename = f"buffing-report-{check_date.isoformat() if check_date else 'all'}.xlsx"
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

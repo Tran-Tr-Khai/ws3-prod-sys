@@ -22,6 +22,7 @@ class BuffingCheck(TimestampMixin, Base):
     operator_identifier: Mapped[str | None] = mapped_column(String(80))
     shift: Mapped[str | None] = mapped_column(String(80))
     order_number: Mapped[str | None] = mapped_column(String(160), index=True)
+    order_progress: Mapped[str | None] = mapped_column(String(20))
     check_1: Mapped[bool] = mapped_column(nullable=False, default=False)
     check_2: Mapped[bool] = mapped_column(nullable=False, default=False)
     check_3: Mapped[bool] = mapped_column(nullable=False, default=False)

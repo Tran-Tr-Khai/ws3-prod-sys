@@ -10,6 +10,8 @@ export type ScouringRecord = {
   lotNumber: string | null;
   operatorName: string | null;
   operatorIdentifier: string | null;
+  shift: string | null;
+  orderProgress: 'IN_PROGRESS' | 'COMPLETED' | null;
   naoh: number;
   soap: number;
   desizer: number;
@@ -21,6 +23,7 @@ export type ScouringRecord = {
   inputFabricMeters: number | null;
   outputFabricMeters: number | null;
   productionQuantityMeters: number | null;
+  lossMeters: number | null;
 };
 
 export type ScouringRecordCreatePayload = {
@@ -33,6 +36,8 @@ export type ScouringRecordCreatePayload = {
   lotNumber?: string | null;
   operatorName?: string | null;
   operatorIdentifier?: string | null;
+  shift?: string | null;
+  orderProgress?: 'IN_PROGRESS' | 'COMPLETED' | null;
   naoh: number;
   soap: number;
   desizer: number;
@@ -44,6 +49,7 @@ export type ScouringRecordCreatePayload = {
   inputFabricMeters?: number | null;
   outputFabricMeters?: number | null;
   productionQuantityMeters?: number | null;
+  lossMeters?: number | null;
 };
 
 export type ScouringRecordApiResponse = {
@@ -58,6 +64,8 @@ export type ScouringRecordApiResponse = {
   lot_number: string | null;
   operator_name: string | null;
   operator_identifier: string | null;
+  shift: string | null;
+  order_progress: 'IN_PROGRESS' | 'COMPLETED' | null;
   naoh: number;
   soap: number;
   desizer: number;
@@ -69,6 +77,7 @@ export type ScouringRecordApiResponse = {
   input_fabric_meters: number | null;
   output_fabric_meters: number | null;
   production_quantity_meters: number | null;
+  loss_meters: number | null;
 };
 
 export type ScouringPhInspection = {
@@ -98,6 +107,7 @@ export type BuffingCheck = {
   operatorIdentifier: string | null;
   shift: string | null;
   orderNumber: string | null;
+  orderProgress: 'IN_PROGRESS' | 'COMPLETED' | null;
   checks: boolean[];
   remark: string | null;
   createdAt: string;
@@ -114,6 +124,14 @@ export type BuffingImage = {
   url: string;
 };
 
+export type MachineOrderProgress = {
+  id: number;
+  machineId: string;
+  orderNumber: string;
+  orderProgress: 'IN_PROGRESS' | 'COMPLETED';
+  updatedAt: string;
+};
+
 export type BuffingCheckCreatePayload = {
   machineId?: string;
   checkDate: string;
@@ -122,6 +140,7 @@ export type BuffingCheckCreatePayload = {
   operatorIdentifier: string;
   shift: string;
   orderNumber: string;
+  orderProgress?: 'IN_PROGRESS' | 'COMPLETED';
   checks: boolean[];
   remark?: string | null;
 };
@@ -153,6 +172,8 @@ type ScouringRecordApiRequest = {
   lot_number?: string | null;
   operator_name?: string | null;
   operator_identifier?: string | null;
+  shift?: string | null;
+  order_progress?: 'IN_PROGRESS' | 'COMPLETED' | null;
   naoh: number;
   soap: number;
   desizer: number;
@@ -164,6 +185,7 @@ type ScouringRecordApiRequest = {
   input_fabric_meters?: number | null;
   output_fabric_meters?: number | null;
   production_quantity_meters?: number | null;
+  loss_meters?: number | null;
 };
 
 export type ScouringApiErrorDetails = unknown;
@@ -213,6 +235,8 @@ function toApiRequest(payload: ScouringRecordCreatePayload): ScouringRecordApiRe
     ...(payload.lotNumber === undefined ? {} : { lot_number: payload.lotNumber }),
     ...(payload.operatorName === undefined ? {} : { operator_name: payload.operatorName }),
     ...(payload.operatorIdentifier === undefined ? {} : { operator_identifier: payload.operatorIdentifier }),
+    ...(payload.shift === undefined ? {} : { shift: payload.shift }),
+    ...(payload.orderProgress === undefined ? {} : { order_progress: payload.orderProgress }),
     naoh: payload.naoh,
     soap: payload.soap,
     desizer: payload.desizer,
@@ -224,6 +248,7 @@ function toApiRequest(payload: ScouringRecordCreatePayload): ScouringRecordApiRe
     ...(payload.inputFabricMeters === undefined ? {} : { input_fabric_meters: payload.inputFabricMeters }),
     ...(payload.outputFabricMeters === undefined ? {} : { output_fabric_meters: payload.outputFabricMeters }),
     ...(payload.productionQuantityMeters === undefined ? {} : { production_quantity_meters: payload.productionQuantityMeters }),
+    ...(payload.lossMeters === undefined ? {} : { loss_meters: payload.lossMeters }),
   };
 }
 
@@ -240,6 +265,8 @@ function fromApiResponse(record: ScouringRecordApiResponse): ScouringRecord {
     lotNumber: record.lot_number,
     operatorName: record.operator_name,
     operatorIdentifier: record.operator_identifier,
+    shift: record.shift,
+    orderProgress: record.order_progress,
     naoh: record.naoh,
     soap: record.soap,
     desizer: record.desizer,
@@ -251,6 +278,7 @@ function fromApiResponse(record: ScouringRecordApiResponse): ScouringRecord {
     inputFabricMeters: record.input_fabric_meters,
     outputFabricMeters: record.output_fabric_meters,
     productionQuantityMeters: record.production_quantity_meters,
+    lossMeters: record.loss_meters,
   };
 }
 
@@ -262,14 +290,14 @@ function toInspectionApiRequest(payload: ScouringPhInspectionCreatePayload) {
   return { scouring_record_id: payload.scouringRecordId, ...(payload.inspectedAt === undefined ? {} : { inspected_at: payload.inspectedAt }), ...(payload.operatorName === undefined ? {} : { operator_name: payload.operatorName }), ...Object.fromEntries(payload.tankPh.map((value, index) => [`tank_${index}_ph`, value])), ...(payload.note === undefined ? {} : { note: payload.note }) };
 }
 
-type BuffingApiResponse = { id: number; machine_id: string; check_date: string; checked_at: string; operator_name: string | null; operator_identifier: string | null; shift: string | null; order_number: string | null; check_1: boolean; check_2: boolean; check_3: boolean; check_4: boolean; check_5: boolean; remark: string | null; created_at: string; images?: Array<{ id: number; original_name: string; mime_type: string; file_size: number; sort_order: number; is_primary: boolean; url: string }> };
+type BuffingApiResponse = { id: number; machine_id: string; check_date: string; checked_at: string; operator_name: string | null; operator_identifier: string | null; shift: string | null; order_number: string | null; order_progress: 'IN_PROGRESS' | 'COMPLETED' | null; check_1: boolean; check_2: boolean; check_3: boolean; check_4: boolean; check_5: boolean; remark: string | null; created_at: string; images?: Array<{ id: number; original_name: string; mime_type: string; file_size: number; sort_order: number; is_primary: boolean; url: string }> };
 
 function fromBuffingApiResponse(check: BuffingApiResponse): BuffingCheck {
-  return { id: check.id, machineId: check.machine_id, checkDate: check.check_date, checkedAt: check.checked_at, operatorName: check.operator_name, operatorIdentifier: check.operator_identifier, shift: check.shift, orderNumber: check.order_number, checks: [check.check_1, check.check_2, check.check_3, check.check_4, check.check_5], remark: check.remark, createdAt: check.created_at, images: (check.images ?? []).map((image) => ({ id: image.id, originalName: image.original_name, mimeType: image.mime_type, fileSize: image.file_size, sortOrder: image.sort_order, isPrimary: image.is_primary, url: toApiUrl(image.url) })) };
+  return { id: check.id, machineId: check.machine_id, checkDate: check.check_date, checkedAt: check.checked_at, operatorName: check.operator_name, operatorIdentifier: check.operator_identifier, shift: check.shift, orderNumber: check.order_number, orderProgress: check.order_progress, checks: [check.check_1, check.check_2, check.check_3, check.check_4, check.check_5], remark: check.remark, createdAt: check.created_at, images: (check.images ?? []).map((image) => ({ id: image.id, originalName: image.original_name, mimeType: image.mime_type, fileSize: image.file_size, sortOrder: image.sort_order, isPrimary: image.is_primary, url: toApiUrl(image.url) })) };
 }
 
 function toBuffingApiRequest(payload: BuffingCheckCreatePayload) {
-  return { machine_id: payload.machineId ?? 'BU-01', check_date: payload.checkDate, checked_at: payload.checkedAt, operator_name: payload.operatorName, operator_identifier: payload.operatorIdentifier, shift: payload.shift, order_number: payload.orderNumber, check_1: payload.checks[0] ?? false, check_2: payload.checks[1] ?? false, check_3: payload.checks[2] ?? false, check_4: payload.checks[3] ?? false, check_5: payload.checks[4] ?? false, remark: payload.remark ?? null };
+  return { machine_id: payload.machineId ?? 'BU-01', check_date: payload.checkDate, checked_at: payload.checkedAt, operator_name: payload.operatorName, operator_identifier: payload.operatorIdentifier, shift: payload.shift, order_number: payload.orderNumber, order_progress: payload.orderProgress ?? 'IN_PROGRESS', check_1: payload.checks[0] ?? false, check_2: payload.checks[1] ?? false, check_3: payload.checks[2] ?? false, check_4: payload.checks[3] ?? false, check_5: payload.checks[4] ?? false, remark: payload.remark ?? null };
 }
 
 async function readErrorBody(response: Response): Promise<ApiErrorBody> {
@@ -307,7 +335,12 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function getScouringRecords(options: RequestOptions = {}): Promise<ScouringRecord[]> {
-  const response = await request<ScouringRecordApiResponse[]>(scouringRecordsPath, { signal: options.signal });
+  return getScouringRecordsForOrder(undefined, options);
+}
+
+export async function getScouringRecordsForOrder(orderNumber?: string, options: RequestOptions = {}): Promise<ScouringRecord[]> {
+  const query = orderNumber?.trim() ? `?order_number=${encodeURIComponent(orderNumber.trim())}` : '';
+  const response = await request<ScouringRecordApiResponse[]>(`${scouringRecordsPath}${query}`, { signal: options.signal });
   return response.map(fromApiResponse);
 }
 
@@ -351,8 +384,46 @@ export async function getBuffingChecks(checkDate?: string, options: RequestOptio
   return response.map(fromBuffingApiResponse);
 }
 
-export async function downloadBuffingReport(checkDate: string, language: 'vi' | 'en', options: RequestOptions = {}): Promise<Blob> {
-  const url = `${buffingChecksPath}/export?check_date=${encodeURIComponent(checkDate)}&language=${language}`;
+export async function getBuffingChecksForOrder(orderNumber: string, options: RequestOptions = {}): Promise<BuffingCheck[]> {
+  const query = `?order_number=${encodeURIComponent(orderNumber.trim())}`;
+  const response = await request<BuffingApiResponse[]>(`${buffingChecksPath}${query}`, { signal: options.signal });
+  return response.map(fromBuffingApiResponse);
+}
+
+type MachineOrderProgressApiResponse = {
+  id: number;
+  machine_id: string;
+  order_number: string;
+  order_progress: 'IN_PROGRESS' | 'COMPLETED';
+  updated_at: string;
+};
+
+function fromMachineOrderProgress(response: MachineOrderProgressApiResponse): MachineOrderProgress {
+  return { id: response.id, machineId: response.machine_id, orderNumber: response.order_number, orderProgress: response.order_progress, updatedAt: response.updated_at };
+}
+
+const machineOrderProgressPath = `${apiBaseUrl}/api/machine-orders/progress`;
+
+export async function getMachineOrderProgress(machineId: 'BU-01' | 'SC-01', orderNumber: string, options: RequestOptions = {}): Promise<MachineOrderProgress | null> {
+  const query = `?machine_id=${encodeURIComponent(machineId)}&order_number=${encodeURIComponent(orderNumber.trim())}`;
+  const response = await request<MachineOrderProgressApiResponse | null>(`${machineOrderProgressPath}${query}`, { signal: options.signal });
+  return response ? fromMachineOrderProgress(response) : null;
+}
+
+export async function saveMachineOrderProgress(machineId: 'BU-01' | 'SC-01', orderNumber: string, orderProgress: 'IN_PROGRESS' | 'COMPLETED', options: RequestOptions = {}): Promise<MachineOrderProgress> {
+  const response = await request<MachineOrderProgressApiResponse>(machineOrderProgressPath, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ machine_id: machineId, order_number: orderNumber.trim(), order_progress: orderProgress }),
+    signal: options.signal,
+  });
+  return fromMachineOrderProgress(response);
+}
+
+export async function downloadBuffingReport(checkDate: string | undefined, language: 'vi' | 'en', orderNumber?: string, options: RequestOptions = {}): Promise<Blob> {
+  const params = new URLSearchParams({ language });
+  if (checkDate) params.set('check_date', checkDate);
+  if (orderNumber) params.set('order_number', orderNumber);
+  const url = `${buffingChecksPath}/export?${params.toString()}`;
   let response: Response;
   try {
     response = await fetch(url, { signal: options.signal, credentials: 'include' });

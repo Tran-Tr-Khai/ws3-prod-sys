@@ -1,5 +1,7 @@
 from datetime import date, datetime, timezone
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -13,6 +15,7 @@ class BuffingCheckCreate(BaseModel):
     operator_identifier: str = Field(min_length=1, max_length=80)
     shift: str = Field(min_length=1, max_length=80)
     order_number: str = Field(min_length=1, max_length=160)
+    order_progress: Literal["IN_PROGRESS", "COMPLETED"] = "IN_PROGRESS"
     check_1: bool = False
     check_2: bool = False
     check_3: bool = False
@@ -44,4 +47,5 @@ class BuffingCheckResponse(BuffingCheckCreate):
     operator_identifier: str | None = None
     shift: str | None = None
     order_number: str | None = None
+    order_progress: Literal["IN_PROGRESS", "COMPLETED"] | None = None
     images: list[BuffingImageResponse] = Field(default_factory=list)

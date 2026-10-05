@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -21,6 +22,8 @@ class ScouringRecordCreate(BaseModel):
     lot_number: str | None = Field(default=None, max_length=80)
     operator_name: str | None = Field(default=None, max_length=160)
     operator_identifier: str | None = Field(default=None, max_length=80)
+    shift: str | None = Field(default=None, max_length=80)
+    order_progress: Literal["IN_PROGRESS", "COMPLETED"] | None = None
 
     naoh: float
     soap: float
@@ -33,6 +36,7 @@ class ScouringRecordCreate(BaseModel):
     input_fabric_meters: float | None = Field(default=None, ge=0)
     output_fabric_meters: float | None = Field(default=None, ge=0)
     production_quantity_meters: float | None = Field(default=None, ge=0)
+    loss_meters: float | None = Field(default=None, ge=0)
 
     _validate_naoh = field_validator("naoh")(_finite_number)
     _validate_soap = field_validator("soap")(_finite_number)
@@ -44,6 +48,7 @@ class ScouringRecordCreate(BaseModel):
     _validate_cylinder_temperature = field_validator("cylinder_temperature")(_finite_number)
     _validate_input_fabric_meters = field_validator("input_fabric_meters")(_finite_number)
     _validate_output_fabric_meters = field_validator("output_fabric_meters")(_finite_number)
+    _validate_loss_meters = field_validator("loss_meters")(_finite_number)
 
 
 class ScouringRecordResponse(ScouringRecordCreate):

@@ -6,6 +6,7 @@ from app.models.production import Batch, ParameterValue, Process, ProductionReco
 from app.models.scouring import ScouringRecord
 from app.models.scouring_inspection import ScouringPhInspection
 from app.models.buffing import BuffingCheck, BuffingCheckImage
+from app.models.machine_order_state import MachineOrderState
 from app.models.user import Role, User, UserSession
 from app.models.support import SupportMessage, SupportTicket, SupportTicketRead
 from app.models.ws3_order import WS3ImportBatch, WS3ImportRow, WS3Order, WS3OrderRoll
@@ -27,6 +28,7 @@ __all__ = [
     "ScouringPhInspection",
     "BuffingCheck",
     "BuffingCheckImage",
+    "MachineOrderState",
     "Role",
     "User",
     "UserSession",

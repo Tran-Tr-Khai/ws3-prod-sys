@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -115,6 +115,29 @@ def production_order_report(production_date: str, db: Session = Depends(get_db),
     machines = db.scalars(select(WS3MachineWS2Record)).all()
     workers = db.scalars(select(WS3WorkerRecord)).all()
     return build_report(orders, machines, workers, production_date)
+
+
+@router.get("/production-order-context")
+def production_order_context(
+    order_number: str,
+    machine_id: str = Query(default="BU-01", min_length=1, max_length=50),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[str, object] | None:
+    """Resolve a production order against the uploaded MES snapshot for a machine record."""
+    if machine_id not in {"BU-01", "SC-01"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported machine")
+    if not role_codes(user).intersection({"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}) and machine_id not in (user.machine_ids or []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"{machine_id} access is required")
+    normalized = order_number.strip().upper()
+    if not normalized:
+        return None
+    orders = db.scalars(select(WS3ProductionOrder).where(func.upper(func.trim(WS3ProductionOrder.pk_no)) == normalized)).all()
+    if not orders:
+        return None
+    machines = db.scalars(select(WS3MachineWS2Record)).all()
+    workers = db.scalars(select(WS3WorkerRecord)).all()
+    return build_report(orders, machines, workers, None)["orders"][0]
 
 
 @router.get("/data-snapshot/status")

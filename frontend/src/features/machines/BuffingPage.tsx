@@ -2,12 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { MachineNavigation } from '../../components/hmi/MachineNavigation';
+import { normalizeShift, ShiftSelect } from '../../components/hmi/ShiftSelect';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
-import { createBuffingCheck, deleteBuffingCheck, downloadBuffingReport, getBuffingChecks, uploadBuffingImages, type BuffingCheck, type BuffingImage } from './scouringApi';
+import { useAuth } from '../../auth/AuthContext';
+import { createBuffingCheck, deleteBuffingCheck, getBuffingChecks, getBuffingChecksForOrder, getMachineOrderProgress, saveMachineOrderProgress, uploadBuffingImages, type BuffingCheck, type BuffingImage } from './scouringApi';
+import { getWS3ProductionOrderContext, type WS3ProductionOrderReport } from '../orders/ws3OrderApi';
 import { useLanguage } from '../../i18n/LanguageContext';
 
-const currentTime = () => new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-const toCheckRow = (row: BuffingCheck) => ({ id: row.id, time: new Date(row.checkedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }), operator: row.operatorName ?? '', operatorIdentifier: row.operatorIdentifier ?? '', shift: row.shift ?? '', orderNumber: row.orderNumber ?? '', checks: row.checks, remark: row.remark ?? '', images: row.images });
+const currentFactoryDateTime = () => new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short' }).format(new Date());
+const factoryToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const toCheckRow = (row: BuffingCheck) => ({ id: row.id, time: new Date(row.checkedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }), operator: row.operatorName ?? '', operatorIdentifier: row.operatorIdentifier ?? '', shift: row.shift ?? '', orderNumber: row.orderNumber ?? '', orderProgress: row.orderProgress, checks: row.checks, remark: row.remark ?? '', images: row.images });
 type CheckRow = ReturnType<typeof toCheckRow>;
 const BUFFING_CAMERA_STORAGE_KEY = 'ws3.buffing.camera-id';
 const BUFFING_CAMERA_SKIP_STORAGE_KEY = 'ws3.buffing.camera-skipped';
@@ -15,16 +19,24 @@ const BUFFING_CAMERA_SKIP_STORAGE_KEY = 'ws3.buffing.camera-skipped';
 export function BuffingPage() {
   const navigate = useNavigate();
   const { t, language } = useLanguage();
+  const { user } = useAuth();
+  const canViewHistory = user?.role !== 'OPERATOR';
   const [operator, setOperator] = useState('');
   const [operatorIdentifier, setOperatorIdentifier] = useState('');
   const [shift, setShift] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
-  const [date, setDate] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()));
+  const [orderProgress, setOrderProgress] = useState<'IN_PROGRESS' | 'COMPLETED'>('IN_PROGRESS');
+  const [orderProduction, setOrderProduction] = useState<WS3ProductionOrderReport | null>(null);
+  const [orderLookupLoading, setOrderLookupLoading] = useState(false);
+  const [orderLookupError, setOrderLookupError] = useState(false);
+  const [savedOrderChecks, setSavedOrderChecks] = useState<BuffingCheck[]>([]);
+  const [progressSaving, setProgressSaving] = useState(false);
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const date = factoryToday();
   const [rows, setRows] = useState<CheckRow[]>([]);
   const [remark, setRemark] = useState('');
   const [checks, setChecks] = useState([false, false, false, false, false]);
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +113,63 @@ export function BuffingPage() {
     finally { setLoading(false); }
   }, [historyLoadFailed]);
 
-  useEffect(() => { void loadRows(date); }, [date, loadRows]);
+  useEffect(() => {
+    if (!canViewHistory) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+    void loadRows(date);
+  }, [canViewHistory, date, loadRows]);
+
+  useEffect(() => {
+    const normalizedOrder = orderNumber.trim();
+    if (!normalizedOrder) {
+      setOrderProduction(null); setSavedOrderChecks([]); setOrderLookupLoading(false); setOrderLookupError(false);
+      return;
+    }
+    let active = true;
+    setOrderLookupLoading(true);
+    setOrderLookupError(false);
+    const timer = window.setTimeout(async () => {
+      const [productionResult, checksResult, progressResult] = await Promise.allSettled([
+        getWS3ProductionOrderContext(normalizedOrder, 'BU-01'),
+        getBuffingChecksForOrder(normalizedOrder),
+        getMachineOrderProgress('BU-01', normalizedOrder),
+      ]);
+      if (!active) return;
+      const production = productionResult.status === 'fulfilled' ? productionResult.value : null;
+      const savedChecks = checksResult.status === 'fulfilled' ? checksResult.value : [];
+      const canonicalProgress = progressResult.status === 'fulfilled' ? progressResult.value?.orderProgress : null;
+      const latest = savedChecks[0];
+      setOrderProduction(production);
+      setSavedOrderChecks(savedChecks);
+      setOrderLookupError(productionResult.status === 'rejected');
+      setOperator((current) => current || latest?.operatorName || '');
+      setOperatorIdentifier((current) => current || latest?.operatorIdentifier || '');
+      setShift((current) => current || normalizeShift(latest?.shift));
+      setOrderProgress(canonicalProgress ?? latest?.orderProgress ?? 'IN_PROGRESS');
+      setOrderLookupLoading(false);
+    }, 300);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [orderNumber]);
+
+  const changeOrderProgress = async (nextProgress: 'IN_PROGRESS' | 'COMPLETED') => {
+    const selectedOrder = orderNumber.trim();
+    if (!selectedOrder || !orderProduction || progressSaving || orderLookupLoading) return;
+    const previousProgress = orderProgress;
+    setOrderProgress(nextProgress);
+    setProgressSaving(true);
+    setProgressError(null);
+    try {
+      await saveMachineOrderProgress('BU-01', selectedOrder, nextProgress);
+      setSavedOrderChecks((checksForOrder) => checksForOrder.map((check) => ({ ...check, orderProgress: nextProgress })));
+      setRows((current) => current.map((row) => row.orderNumber.trim().toUpperCase() === selectedOrder.toUpperCase() ? { ...row, orderProgress: nextProgress } : row));
+    } catch (reason) {
+      setOrderProgress(previousProgress);
+      setProgressError(reason instanceof Error ? reason.message : (language === 'vi' ? 'Không lưu được tiến độ đơn.' : 'Unable to save order progress.'));
+    } finally { setProgressSaving(false); }
+  };
 
   const toggleCheck = (index: number) => setChecks((current) => current.map((value, itemIndex) => itemIndex === index ? !value : value));
 
@@ -193,7 +261,7 @@ export function BuffingPage() {
       let photo: File | null = null;
       try { photo = await captureCameraPhoto(); }
       catch { setError(t('cameraCaptureFailed')); }
-      const saved = await createBuffingCheck({ checkDate: date, orderNumber, operatorName: operator.trim(), operatorIdentifier: operatorIdentifier.trim(), shift: shift.trim(), checks, remark: remark.trim() || null });
+      const saved = await createBuffingCheck({ checkDate: factoryToday(), orderNumber, orderProgress, operatorName: operator.trim(), operatorIdentifier: operatorIdentifier.trim(), shift: shift.trim(), checks, remark: remark.trim() || null });
       let images: BuffingImage[] = [];
       if (photo) {
         try { images = await uploadBuffingImages(saved.id, [photo]); }
@@ -202,10 +270,14 @@ export function BuffingPage() {
         setError(t('cameraUnavailable'));
       }
       setRows((current) => [toCheckRow({ ...saved, images }), ...current]);
+      setSavedOrderChecks((current) => [{ ...saved, images }, ...current]);
       setChecks([false, false, false, false, false]);
       setRemark('');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : cameraText.saveFailed);
+      const message = reason instanceof Error ? reason.message : '';
+      setError(message.includes('Không tìm thấy mã đơn trong dữ liệu MES')
+        ? (language === 'vi' ? 'Không tìm thấy mã đơn trong dữ liệu MES. Vui lòng kiểm tra mã PKP và thử lại.' : 'Production order was not found in MES. Check the PKP number and try again.')
+        : message || cameraText.saveFailed);
     } finally { setSaving(false); }
   };
 
@@ -237,54 +309,30 @@ export function BuffingPage() {
     }
   };
 
-  const exportExcel = async () => {
-    if (loading || exporting || rows.length === 0) return;
-    setExporting(true);
-    setError(null);
-    try {
-      const blob = await downloadBuffingReport(date, language === 'vi' ? 'vi' : 'en');
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `buffing-report-${date}.xlsx`;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : (language === 'vi' ? 'Không thể tải báo cáo Excel.' : 'Unable to download Excel report.'));
-    } finally {
-      setExporting(false);
-    }
-  };
-
   return (
     <WS3Shell showGlobalNavigation={false} showMachineNavigation={false} title={`WS3 / ${t('buffingDailyCheck')}`} subtitle={`${t('periodicChecklist')} · Buffing`} machineId="BU-01" machineLabel="Buffing" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
       <div className="buffing-page-shell flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
         <MachineNavigation machineId="BU-01" machineLabel="Buffing" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{t('home')}</HMIButton>} />
         <div className="buffing-page-content min-h-0 flex-1 p-2">
           <div className="buffing-card mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden border-2 border-industrialDark bg-white">
-            <header className="flex shrink-0 items-center justify-between gap-3 bg-industrialDark px-3 py-2 text-white"><h1 className="text-sm font-bold uppercase tracking-wider">CHECKLIST</h1><HMIButton size="compact" className="max-w-[360px] truncate" variant={cameraConnected ? 'primary' : undefined} onClick={() => void openCameraPicker()} disabled={saving}>{cameraConnected ? `${connectedCameraLabel} · ${t('cameraConnected')}` : t('connectCamera')}</HMIButton></header>
+            <header className="flex shrink-0 items-center justify-between gap-3 bg-industrialDark px-3 py-2 text-white"><h1 className="text-sm font-bold uppercase tracking-wider">{t('periodicChecklist')}</h1><HMIButton size="compact" className="max-w-[360px] truncate" variant={cameraConnected ? 'primary' : undefined} onClick={() => void openCameraPicker()} disabled={saving}>{cameraConnected ? `${connectedCameraLabel} · ${t('cameraConnected')}` : t('connectCamera')}</HMIButton></header>
 
-            <div className="buffing-layout grid min-h-0 flex-1 gap-2 bg-hmiConsole p-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
+            <div className="buffing-layout grid min-h-0 flex-1 gap-2 bg-hmiConsole p-2 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)]">
             <aside className="buffing-no-print flex min-w-0 flex-col border-2 border-industrialDark bg-white">
               <header className="border-b-2 border-industrialDark bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-industrialDark">{language === 'vi' ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION DETAILS'}</header>
               <div className="buffing-meta grid content-start gap-3 p-3">
                 <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{language === 'vi' ? 'Đơn sản xuất' : 'Production order'}
-                  <input className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold uppercase text-industrialDark" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder={language === 'vi' ? 'Nhập mã PKP…' : 'Enter PKP number…'} maxLength={160} />
+                  <input className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold uppercase text-industrialDark" value={orderNumber} onChange={(event) => { setOrderNumber(event.target.value); setOrderProduction(null); setSavedOrderChecks([]); setOperator(''); setOperatorIdentifier(''); setShift(''); setOrderProgress('IN_PROGRESS'); setProgressError(null); }} placeholder={language === 'vi' ? 'Nhập mã PKP…' : 'Enter PKP number…'} maxLength={160} />
                 </label>
                 <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{t('operator')}<input className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold" value={operator} onChange={(event) => setOperator(event.target.value)} placeholder={t('enterOperator')} /></label>
                 <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}<input className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold" value={operatorIdentifier} onChange={(event) => setOperatorIdentifier(event.target.value)} placeholder={language === 'vi' ? 'Nhập ID nhân viên' : 'Enter employee ID'} /></label>
-                <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{language === 'vi' ? 'Ca làm' : 'Shift'}<input className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold" value={shift} onChange={(event) => setShift(event.target.value)} placeholder="CA A" /></label>
+                <ShiftSelect value={shift} onChange={setShift} />
+                <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}<select className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark disabled:bg-hmiSection disabled:text-slate-400" value={orderProgress} disabled={!orderProduction || orderLookupLoading || progressSaving} onChange={(event) => void changeOrderProgress(event.target.value as 'IN_PROGRESS' | 'COMPLETED')}><option value="IN_PROGRESS">{language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS'}</option><option value="COMPLETED">{language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED'}</option></select>{orderLookupLoading && <span className="text-[9px] normal-case text-info">{language === 'vi' ? 'Đang tra đơn…' : 'Looking up order…'}</span>}{progressSaving && <span className="text-[9px] normal-case text-info">{language === 'vi' ? 'Đang lưu…' : 'Saving…'}</span>}{progressError && <span role="alert" className="text-[9px] normal-case text-alarm">{progressError}</span>}</label>
               </div>
             </aside>
 
             <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border-2 border-industrialDark bg-white">
             <video ref={videoRef} className="sr-only" muted playsInline />
-            <div className="buffing-no-print flex shrink-0 items-end justify-start gap-3 bg-white px-3 py-2">
-              <label className="grid shrink-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{language === 'vi' ? 'Thời gian ghi' : 'Record date'}<input aria-label={t('recordedTime')} type="date" className="h-8 w-[160px] border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark" value={date} onChange={(event) => setDate(event.target.value)} /></label>
-            </div>
-
             {!canPerformChecklist && <section className="flex min-h-0 flex-1 items-center justify-center bg-white p-6"><div className="w-full max-w-md border-2 border-industrialDark border-t-4 border-t-industrialDark bg-white p-6 text-center shadow-[6px_6px_0_rgba(36,59,74,0.14)]"><h2 className="text-sm font-bold uppercase tracking-wider text-industrialDark">{t('camera')}</h2><p className="mt-2 text-xs leading-relaxed text-slate-600">{cameraText.beforeChecklist}</p>{error && <p className="mt-3 text-xs font-semibold text-alarm">{error}</p>}<div className="mx-auto mt-5 grid w-full max-w-xs gap-2"><HMIButton size="large" className="w-full justify-center" variant="primary" onClick={() => void openCameraPicker()}>{t('connectCamera')}</HMIButton><HMIButton size="large" className="w-full justify-center" onClick={() => { window.localStorage.setItem(BUFFING_CAMERA_SKIP_STORAGE_KEY, 'true'); setCameraSkipped(true); setError(null); }}>{cameraText.continueWithout}</HMIButton></div></div></section>}
             {canPerformChecklist && <>
             {error && <div className="buffing-no-print shrink-0 border-b border-alarm bg-white px-3 py-2 text-[10px] font-semibold text-alarm">{error}</div>}
@@ -292,7 +340,7 @@ export function BuffingPage() {
 
             <section className="buffing-no-print shrink-0 border-b-2 border-white bg-white p-3">
               <div className="grid items-stretch gap-3 lg:grid-cols-[1.15fr_1fr]">
-                <div className="box-border flex h-20 min-h-20 flex-col"><div className="mb-1 shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-600">{t('currentCheck')} · {currentTime()}</div><div className="grid min-h-0 flex-1 grid-cols-5 gap-1">{checks.map((checked, index) => <button key={index} type="button" className={`min-h-0 border-2 text-sm font-bold ${checked ? 'border-success bg-success text-white' : 'border-line bg-white text-industrialDark'}`} onClick={() => toggleCheck(index)}>{index + 1}<span className="block text-[8px]">{checked ? t('ok') : t('check')}</span></button>)}</div></div>
+                <div className="box-border flex h-20 min-h-20 flex-col"><div className="mb-1 flex shrink-0 items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-600"><span>{t('currentCheck')}</span><time className="font-mono normal-case tracking-normal text-industrial">{currentFactoryDateTime()}</time></div><div className="grid min-h-0 flex-1 grid-cols-5 gap-1">{checks.map((checked, index) => <button key={index} type="button" className={`min-h-0 border-2 text-sm font-bold ${checked ? 'border-success bg-success text-white' : 'border-line bg-white text-industrialDark'}`} onClick={() => toggleCheck(index)}>{index + 1}<span className="block text-[8px]">{checked ? t('ok') : t('check')}</span></button>)}</div></div>
                 <label className="box-border flex h-20 min-h-20 flex-col gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600"><span className="block h-4 shrink-0 leading-4">{t('remark')}</span><textarea className="box-border min-h-0 flex-1 resize-none border-2 border-line bg-white px-2 py-1 text-xs font-semibold" value={remark} onChange={(event) => setRemark(event.target.value)} placeholder={t('note')} /></label>
               </div>
               <div className="mt-2 flex items-center justify-between gap-3 bg-white">
@@ -301,8 +349,8 @@ export function BuffingPage() {
               </div>
             </section>
 
-            <section className="buffing-history flex min-h-0 flex-1 flex-col bg-white">
-              <div className="flex shrink-0 items-center justify-between border-b border-line bg-industrial px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-white"><span>{t('history')}</span><HMIButton size="compact" className="buffing-no-print !min-h-6 !px-2 !py-1 !text-[9px]" onClick={() => void exportExcel()} disabled={loading || exporting || rows.length === 0}>{exporting ? (language === 'vi' ? 'ĐANG XUẤT…' : 'EXPORTING…') : `${t('overview')} EXCEL`}</HMIButton></div>
+            {canViewHistory && <section className="buffing-history flex min-h-0 flex-1 flex-col bg-white">
+              <div className="flex shrink-0 items-center border-b border-line bg-industrial px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-white"><span>{language === 'vi' ? 'HÔM NAY' : 'TODAY'}</span></div>
               <div className="buffing-history-scroll min-h-0 flex-1 overflow-auto bg-white p-2">
                 <table className="w-full min-w-[1320px] border-collapse text-left text-[10px]">
                   <thead className="sticky top-0 z-10 border-b border-line bg-white text-[9px] uppercase tracking-wider text-industrialDark">
@@ -313,7 +361,7 @@ export function BuffingPage() {
                   </tbody>
                 </table>
               </div>
-            </section>
+            </section>}
             </>}
             </section>
             </div>

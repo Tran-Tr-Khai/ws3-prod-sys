@@ -91,6 +91,13 @@ export type WS3ProductionRollReport = { remarks: string | null; item_code: strin
 export type WS3ProductionOrderReport = { pk_no: string; production_date: string; item_code: string | null; item_name: string | null; lot_no: string | null; sop_no: string | null; machine_no: string | null; expected_rolls: number; matched_rolls: number; status: 'READY' | 'CHECK'; warnings: string[]; rolls: WS3ProductionRollReport[] };
 export type WS3ProductionReport = { production_date: string; summary: { orders: number; ready: number; check: number }; orders: WS3ProductionOrderReport[] };
 
+export async function getWS3ProductionOrderContext(orderNumber: string, machineId: 'BU-01' | 'SC-01' = 'BU-01'): Promise<WS3ProductionOrderReport | null> {
+  const query = new URLSearchParams({ order_number: orderNumber, machine_id: machineId });
+  const response = await fetch(`${apiBaseUrl}/api/ws3/production-order-context?${query}`, { credentials: 'include' });
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || `Production order API returned HTTP ${response.status}`);
+  return (await response.json()) as WS3ProductionOrderReport | null;
+}
+
 export async function replaceWS3Snapshot(files: Partial<Record<'order' | 'machine' | 'worker', File>>): Promise<WS3SnapshotResult> {
   const formData = new FormData();
   if (files.order) formData.append('order_file', files.order);
