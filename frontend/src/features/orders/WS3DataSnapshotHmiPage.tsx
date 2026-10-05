@@ -7,10 +7,10 @@ import { replaceWS3Snapshot } from './ws3OrderApi';
 import { WS3SupervisorNav } from './WS3SupervisorNav';
 
 type SourceKey = 'order' | 'machine' | 'worker';
-const sources: Record<SourceKey, { vi: string; en: string; sourceVi: string; sourceEn: string }> = {
-  order: { vi: 'Đơn sản xuất WS3', en: 'WS3 production orders', sourceVi: 'Nhận diện theo header đơn hàng', sourceEn: 'Detected from order headers' },
-  machine: { vi: 'Roll từ máy dệt', en: 'Weaving machine rolls', sourceVi: 'Nhận diện theo header cuộn/máy', sourceEn: 'Detected from roll/machine headers' },
-  worker: { vi: 'Ca và người vận hành', en: 'Shifts and workers', sourceVi: 'Nhận diện theo header ca/công nhân', sourceEn: 'Detected from shift/worker headers' },
+const sources: Record<SourceKey, { vi: string; en: string }> = {
+  order: { vi: '7449 · Greige Fabric Out Management', en: '7449 · Greige Fabric Out Management' },
+  machine: { vi: '7463 · Weaving Ship List', en: '7463 · Weaving Ship List' },
+  worker: { vi: '7642 · Weaving Prod List', en: '7642 · Weaving Prod List' },
 };
 
 export function WS3DataSnapshotHmiPage() {
@@ -46,7 +46,7 @@ export function WS3DataSnapshotHmiPage() {
             <div className="border-b border-line bg-white px-3 py-3 text-[10px] text-slate-600">{tx('Chọn các file báo cáo Excel cần cập nhật dữ liệu xem đơn.', 'Select the Excel reports to update the order information.')}</div>
             <div className="grid gap-2 p-2 md:grid-cols-2 xl:grid-cols-3">
               {(Object.keys(sources) as SourceKey[]).map((key) => { const label = sources[key]; return <label key={key} className={`flex min-h-32 cursor-pointer flex-col border-2 bg-white p-3 transition-colors ${files[key] ? 'border-success bg-hmiNormal' : 'border-line hover:border-industrial'}`}>
-                <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-industrialDark">{language === 'vi' ? label.vi : label.en}</span><span className="mt-1 text-[9px] uppercase tracking-wide text-slate-400">{language === 'vi' ? label.sourceVi : label.sourceEn}</span>
+                <span className="text-[11px] font-bold tracking-wide text-industrialDark">{language === 'vi' ? label.vi : label.en}</span>
                 <input key={`${key}-${selectionVersion}`} disabled={loading} type="file" accept=".xls,.xlsx" className="mt-auto text-[10px]" onChange={(event) => { const file = event.target.files?.[0]; setFiles((current) => ({ ...current, [key]: file })); }} />
                 <span className="mt-2 truncate border-t border-line pt-2 text-[10px] font-semibold text-slate-600">{files[key]?.name ?? tx('Chưa chọn file', 'No file selected')}</span>
               </label>; })}
