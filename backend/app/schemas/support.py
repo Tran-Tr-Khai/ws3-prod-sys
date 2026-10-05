@@ -60,6 +60,19 @@ class SupportMachineNoticeResponse(BaseModel):
     priority: str
 
 
+class SupportOperationalNoticeResponse(BaseModel):
+    id: int
+    ticket_id: int
+    recipient_group: str
+    sender: str
+    sender_role: str
+    subject: str
+    message: str
+    sender_name: str
+    sent_at: datetime
+    priority: str
+
+
 class SupportStatusUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

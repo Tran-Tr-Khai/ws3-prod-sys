@@ -1,13 +1,13 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import delete, desc, select
+from sqlalchemy import delete, desc, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.support import SupportMessage, SupportTicket, SupportTicketRead
 from app.models.user import User
-from app.schemas.support import SupportMachineNoticeResponse, SupportMessageCreate, SupportMessageResponse, SupportStatusUpdate, SupportTicketCreate, SupportTicketResponse
+from app.schemas.support import SupportMachineNoticeResponse, SupportMessageCreate, SupportMessageResponse, SupportOperationalNoticeResponse, SupportStatusUpdate, SupportTicketCreate, SupportTicketResponse
 from app.security.auth import get_current_user, role_codes
 from app.support_groups import MACHINE_GROUP_CODES, machine_group_for_id, user_machine_groups
 
@@ -35,6 +35,7 @@ def can_view_ticket(ticket: SupportTicket, user: User) -> bool:
     return ticket.created_by == user.username or (
         ticket.recipient_role == "ALL"
         or (ticket.recipient_role == MACHINE_RECIPIENT and ticket_group in user_machine_groups(user.machine_ids))
+        or ticket.machine_id in (user.machine_ids or [])
     )
 
 
@@ -136,6 +137,44 @@ def list_machine_notices(db: Session = Depends(get_db), user: User = Depends(get
     return sorted(result, key=lambda item: (item.recipient_group, item.sent_at), reverse=False)
 
 
+@router.get("/operational-notices", response_model=list[SupportOperationalNoticeResponse])
+def list_operational_notices(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[SupportOperationalNoticeResponse]:
+    groups = MACHINE_GROUP_CODES if frontend_role(user) == "ADMIN" else user_machine_groups(user.machine_ids)
+    if not groups:
+        return []
+    statement = (
+        select(SupportMessage, SupportTicket)
+        .join(SupportTicket, SupportMessage.ticket_id == SupportTicket.id)
+        .where(SupportMessage.sender_role.in_({"ADMIN", "SUPERVISOR", "OPERATOR"}))
+    )
+    if frontend_role(user) != "ADMIN":
+        # Include both machine-wide announcement tickets and Admin replies in
+        # the existing support conversation for an assigned physical machine.
+        machine_scope = [SupportTicket.recipient_group.in_(groups)]
+        if user.machine_ids:
+            machine_scope.append(SupportTicket.machine_id.in_(user.machine_ids))
+        statement = statement.where(or_(*machine_scope))
+    rows = db.execute(statement.order_by(SupportMessage.sent_at, SupportMessage.id)).all()
+    rows = [
+        (message, ticket)
+        for message, ticket in rows
+        if (ticket.recipient_group or machine_group_for_id(ticket.machine_id)) in groups
+        and can_view_ticket(ticket, user)
+    ]
+    return [SupportOperationalNoticeResponse(
+        id=message.id,
+        ticket_id=ticket.id,
+        recipient_group=ticket.recipient_group or machine_group_for_id(ticket.machine_id) or "",
+        sender=message.sender,
+        sender_role=message.sender_role,
+        subject=ticket.subject,
+        message=message.message,
+        sender_name=display_name(message.sender, db),
+        sent_at=message.sent_at,
+        priority=ticket.priority,
+    ) for message, ticket in rows]
+
+
 @router.post("/tickets", response_model=SupportTicketResponse, status_code=201)
 def create_ticket(payload: SupportTicketCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> SupportTicketResponse:
     if frontend_role(user) == "OPERATOR" and payload.machine_id not in (user.machine_ids or []):
@@ -188,6 +227,20 @@ def list_messages(ticket_id: int, db: Session = Depends(get_db), user: User = De
     get_ticket_or_404(ticket_id, user, db)
     messages = list(db.scalars(select(SupportMessage).where(SupportMessage.ticket_id == ticket_id).order_by(SupportMessage.sent_at, SupportMessage.id)).all())
     return [SupportMessageResponse.model_validate(item).model_copy(update={"sender_name": display_name(item.sender, db)}) for item in messages]
+
+
+@router.delete("/tickets/{ticket_id}/messages/{message_id}", status_code=204)
+def delete_own_message(ticket_id: int, message_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> Response:
+    ticket = get_ticket_or_404(ticket_id, user, db)
+    message = db.get(SupportMessage, message_id)
+    if message is None or message.ticket_id != ticket.id:
+        raise HTTPException(status_code=404, detail="Support message not found")
+    if message.sender.casefold() != user.username.casefold():
+        raise HTTPException(status_code=403, detail="You can only remove your own messages")
+    db.delete(message)
+    ticket.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/tickets/{ticket_id}/read", status_code=204)

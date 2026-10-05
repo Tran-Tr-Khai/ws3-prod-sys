@@ -18,6 +18,7 @@ type WS3ShellProps = {
   showGlobalNavigation?: boolean;
   showMachineNavigation?: boolean;
   navigation?: ReactNode;
+  showSupportWidget?: boolean;
 };
 
 export function WS3Shell({
@@ -31,6 +32,7 @@ export function WS3Shell({
   showGlobalNavigation = true,
   showMachineNavigation = Boolean(machineId && machineLabel),
   navigation,
+  showSupportWidget = true,
 }: WS3ShellProps) {
   const [currentTime, setCurrentTime] = useState(() => time ?? new Date().toLocaleTimeString('vi-VN'));
   const headerStorageKey = 'hmi-header-collapsed';
@@ -63,14 +65,14 @@ export function WS3Shell({
         status={status}
         time={currentTime}
         onCollapse={toggleHeader}
-        children={<><div className="hidden items-center gap-1 sm:flex"><span className="text-[9px] font-bold uppercase text-slate-200">{user?.username}</span><button type="button" aria-label={t('logout')} className="inline-flex min-h-7 items-center border border-white/40 px-2 text-[9px] font-bold uppercase text-white hover:bg-white/10" onClick={logout}>{t('logout')}</button></div><div className="sm:hidden"><button type="button" aria-label={t('logout')} className="min-h-6 border border-white/40 px-1.5 text-[8px] font-bold uppercase text-white hover:bg-white/10" onClick={logout}>{t('logout')}</button></div><LanguageSwitcher /> </>}
+        children={<div className="flex items-center gap-1"><div className="hidden items-center gap-1 sm:flex"><span className="text-[9px] font-bold uppercase text-slate-200">{user?.username}</span><button type="button" aria-label={t('logout')} className="inline-flex min-h-7 items-center border border-white/40 px-2 text-[9px] font-bold uppercase text-white hover:bg-white/10" onClick={logout}>{t('logout')}</button></div><div className="sm:hidden"><button type="button" aria-label={t('logout')} className="min-h-6 border border-white/40 px-1.5 text-[8px] font-bold uppercase text-white hover:bg-white/10" onClick={logout}>{t('logout')}</button></div><LanguageSwitcher /></div>}
       />}
       {showMachineNavigation && machineId && machineLabel && (
         <MachineNavigation
           machineId={machineId}
           machineLabel={machineLabel}
           trailing={showGlobalNavigation
-            ? <GlobalNavigation embedded showCreateOrder={!['scouring', 'unrolling'].includes(machineLabel.toLowerCase())} />
+            ? <GlobalNavigation embedded />
             : undefined}
         />
       )}
@@ -79,7 +81,7 @@ export function WS3Shell({
       <div className="min-h-0 flex-1 overflow-hidden bg-hmiConsole">
         {children}
       </div>
-      <SupportChatWidget />
+      {showSupportWidget && <SupportChatWidget />}
     </main>
   );
 }
