@@ -6,6 +6,11 @@ ROLL # rather than the source DATE column. Keep old rows recoverable.
 import sqlalchemy as sa
 from alembic import op
 
+from migration_support import (
+    add_column_if_missing,
+    create_index_if_missing,
+)
+
 revision = '20261002_0026'
 down_revision = '20261002_0025'
 branch_labels = None
@@ -13,8 +18,8 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('ws3_machine_ws2_records', sa.Column('out_dyeing_sop', sa.String(160), nullable=True))
-    op.create_index('ix_ws3_machine_ws2_records_out_dyeing_sop', 'ws3_machine_ws2_records', ['out_dyeing_sop'])
+    add_column_if_missing('ws3_machine_ws2_records', sa.Column('out_dyeing_sop', sa.String(160), nullable=True))
+    create_index_if_missing('ix_ws3_machine_ws2_records_out_dyeing_sop', 'ws3_machine_ws2_records', ['out_dyeing_sop'])
 
 
 def downgrade():

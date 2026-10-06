@@ -4,6 +4,11 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from migration_support import (
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 revision: str = "20261003_0027"
 down_revision: str | None = "20261002_0026"
 branch_labels: Sequence[str] | None = None
@@ -11,7 +16,7 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_table(
+    create_table_if_missing(
         "ws3_unrolling_roll_events",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("pk_no", sa.String(length=160), nullable=False),
@@ -26,7 +31,7 @@ def upgrade() -> None:
             name="ck_ws3_unrolling_event_type",
         ),
     )
-    op.create_index("ix_ws3_unrolling_roll_events_pk_no", "ws3_unrolling_roll_events", ["pk_no"])
+    create_index_if_missing("ix_ws3_unrolling_roll_events_pk_no", "ws3_unrolling_roll_events", ["pk_no"])
 
 
 def downgrade() -> None:

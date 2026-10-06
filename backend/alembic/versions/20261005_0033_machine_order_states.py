@@ -3,6 +3,11 @@
 import sqlalchemy as sa
 from alembic import op
 
+from migration_support import (
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 
 revision = "20261005_0033"
 down_revision = "20261005_0032"
@@ -11,7 +16,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
+    create_table_if_missing(
         "machine_order_states",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("machine_id", sa.String(length=50), nullable=False),
@@ -22,7 +27,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("machine_id", "order_number", name="uq_machine_order_states_machine_order"),
     )
-    op.create_index("ix_machine_order_states_machine_id", "machine_order_states", ["machine_id"])
+    create_index_if_missing("ix_machine_order_states_machine_id", "machine_order_states", ["machine_id"])
 
 
 def downgrade() -> None:

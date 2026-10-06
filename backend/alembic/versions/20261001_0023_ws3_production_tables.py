@@ -4,8 +4,14 @@ Revision ID: 20261001_0023
 Revises: 20261001_0022
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
+
+from migration_support import (
+    create_index_if_missing,
+    create_table_if_missing,
+    has_snapshot_schema,
+)
 
 
 revision = "20261001_0023"
@@ -15,7 +21,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
+    # Old 0001 may already have created the final snapshot tables.
+    if has_snapshot_schema():
+        return
+    create_table_if_missing(
         "ws3_import_sessions",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("plan_filename", sa.String(length=255), nullable=False),
@@ -30,8 +39,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
-    op.create_index("ix_ws3_import_sessions_status", "ws3_import_sessions", ["status"])
-    op.create_table(
+    create_index_if_missing("ix_ws3_import_sessions_status", "ws3_import_sessions", ["status"])
+    create_table_if_missing(
         "ws3_production_plans",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("session_id", sa.Integer(), sa.ForeignKey("ws3_import_sessions.id", ondelete="CASCADE"), nullable=False),
@@ -44,8 +53,8 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
     for column in ("session_id", "production_date", "sop_no", "lot_no", "machine_no", "item_code", "order_no"):
-        op.create_index(f"ix_ws3_production_plans_{column}", "ws3_production_plans", [column])
-    op.create_table(
+        create_index_if_missing(f"ix_ws3_production_plans_{column}", "ws3_production_plans", [column])
+    create_table_if_missing(
         "ws3_production_orders",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("session_id", sa.Integer(), sa.ForeignKey("ws3_import_sessions.id", ondelete="CASCADE"), nullable=False),
@@ -61,8 +70,8 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
     for column in ("session_id", "plan_id", "order_no", "status"):
-        op.create_index(f"ix_ws3_production_orders_{column}", "ws3_production_orders", [column])
-    op.create_table(
+        create_index_if_missing(f"ix_ws3_production_orders_{column}", "ws3_production_orders", [column])
+    create_table_if_missing(
         "ws3_production_rolls",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("order_id", sa.Integer(), sa.ForeignKey("ws3_production_orders.id", ondelete="CASCADE"), nullable=False),
@@ -74,8 +83,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
-    op.create_index("ix_ws3_production_rolls_order_id", "ws3_production_rolls", ["order_id"])
-    op.create_index("ix_ws3_production_rolls_roll_id", "ws3_production_rolls", ["roll_id"])
+    create_index_if_missing("ix_ws3_production_rolls_order_id", "ws3_production_rolls", ["order_id"])
+    create_index_if_missing("ix_ws3_production_rolls_roll_id", "ws3_production_rolls", ["roll_id"])
 
 
 def downgrade() -> None:

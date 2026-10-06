@@ -17,13 +17,14 @@ def upgrade() -> None:
         indexes = {index["name"] for index in inspector.get_indexes("ws3_order_rolls")}
         if "ix_ws3_order_rolls_source_key" in indexes:
             op.drop_index("ix_ws3_order_rolls_source_key", table_name="ws3_order_rolls")
-        op.create_index(
-            "uq_ws3_order_rolls_source_key",
-            "ws3_order_rolls",
-            ["source_key"],
-            unique=True,
-            postgresql_where=sa.text("source_key IS NOT NULL"),
-        )
+        if "uq_ws3_order_rolls_source_key" not in indexes:
+            op.create_index(
+                "uq_ws3_order_rolls_source_key",
+                "ws3_order_rolls",
+                ["source_key"],
+                unique=True,
+                postgresql_where=sa.text("source_key IS NOT NULL"),
+            )
 
 
 def downgrade() -> None:

@@ -30,7 +30,6 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
             sa.PrimaryKeyConstraint("id"),
-            sa.UniqueConstraint("order_no"),
         )
         op.create_index("ix_ws3_orders_order_no", "ws3_orders", ["order_no"], unique=True)
         op.create_index("ix_ws3_orders_status", "ws3_orders", ["status"])

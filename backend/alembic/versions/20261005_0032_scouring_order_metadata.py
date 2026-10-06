@@ -3,6 +3,10 @@
 import sqlalchemy as sa
 from alembic import op
 
+from migration_support import (
+    add_column_if_missing,
+)
+
 
 revision = "20261005_0032"
 down_revision = "20261005_0031"
@@ -11,8 +15,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("scouring_records", sa.Column("shift", sa.String(length=80), nullable=True))
-    op.add_column("scouring_records", sa.Column("order_progress", sa.String(length=20), nullable=True))
+    add_column_if_missing("scouring_records", sa.Column("shift", sa.String(length=80), nullable=True))
+    add_column_if_missing("scouring_records", sa.Column("order_progress", sa.String(length=20), nullable=True))
 
 
 def downgrade() -> None:

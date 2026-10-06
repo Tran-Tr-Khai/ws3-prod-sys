@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -11,6 +11,7 @@ class WS3UnrollingRollEvent(Base):
 
     __tablename__ = "ws3_unrolling_roll_events"
     __table_args__ = (
+        Index("ix_ws3_unrolling_event_roll_id", "roll_id"),
         CheckConstraint(
             "event_type IN ('COLLECTED', 'COLLECTION_UNDONE', 'TRANSFERRED_TO_PRODUCTION', 'TRANSFER_UNDONE')",
             name="ck_ws3_unrolling_event_type",

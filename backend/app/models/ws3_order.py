@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -73,11 +73,17 @@ class WS3ImportRow(TimestampMixin, Base):
 
 class WS3OrderRoll(TimestampMixin, Base):
     __tablename__ = "ws3_order_rolls"
+    __table_args__ = (
+        Index(
+            "uq_ws3_order_rolls_source_key", "source_key", unique=True,
+            postgresql_where=text("source_key IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("ws3_orders.id", ondelete="CASCADE"), index=True)
     source_row_index: Mapped[int] = mapped_column(Integer)
-    source_key: Mapped[str | None] = mapped_column(String(500), index=True)
+    source_key: Mapped[str | None] = mapped_column(String(500))
     raw_data_json: Mapped[str] = mapped_column(Text, default="{}")
     roll_id: Mapped[str | None] = mapped_column(String(160), index=True)
     item_code: Mapped[str | None] = mapped_column(String(160))
