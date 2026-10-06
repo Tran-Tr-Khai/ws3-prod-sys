@@ -352,7 +352,7 @@ export function ScouringRecordPage() {
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
         <div className="scouring-screen-frame scouring-full-width-frame mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
         <div className="min-h-0 flex-1 overflow-auto p-2">
-          <div className={`scouring-record-workspace grid w-full min-h-full gap-2 ${isScouringOperator ? 'scouring-record-workspace-with-notices grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)_minmax(260px,0.9fr)]' : 'grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)]'}`}>
+          <div className="scouring-record-workspace grid w-full min-h-full grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)] gap-2">
             <aside className="scouring-record-context flex h-full min-h-0 self-stretch flex-col border-2 border-industrialDark bg-white">
               <header className="flex h-12 min-h-12 items-center border-b-2 border-industrialDark bg-white px-3 text-[11px] font-bold uppercase tracking-wider text-industrialDark">
                 <h2 className="whitespace-nowrap">{language === 'vi' ? 'Thông tin vận hành' : 'Operation details'}</h2>
@@ -378,9 +378,8 @@ export function ScouringRecordPage() {
               {saveError && <div className="border border-alarm bg-hmiAlarm px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-alarm">SAVE ERROR · {saveError}</div>}
               {saveSuccess && <div className="border border-success bg-hmiNormal px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-success">RECORD SAVED · You can now record pH inspection.</div>}
               </>}</section>
-            {isScouringOperator && <SupportChatWidget embedded />}
-
           </div>
+          {isScouringOperator && <div className="mt-2"><SupportChatWidget embedded /></div>}
         </div>
         <div className="scouring-record-actions grid shrink-0 grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)] gap-2 border-t border-line bg-hmiConsole p-2">
           <div className="scouring-record-back-action flex items-center">
