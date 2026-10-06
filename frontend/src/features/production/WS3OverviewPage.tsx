@@ -22,6 +22,22 @@ const processes = [
   { name: 'Sueding', code: 'SU-01', available: false },
 ];
 
+const overviewMachineFilterKey = 'ws3.overview.selected-machines';
+const defaultOverviewMachineCodes = ['UN-01', 'BU-01', 'SC-01', 'TE-01'];
+
+function getInitialOverviewMachineSelection(): string[] {
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(overviewMachineFilterKey) ?? 'null');
+    if (Array.isArray(stored) && stored.every((code) => typeof code === 'string')) {
+      const validCodes = new Set(processes.map((process) => process.code));
+      return stored.filter((code): code is string => validCodes.has(code));
+    }
+  } catch {
+    // Use the default machines when saved preferences are unavailable.
+  }
+  return defaultOverviewMachineCodes;
+}
+
 function formatDateTime(timestamp: string, language: 'vi' | 'en' = 'vi'): string {
   const locale = language === 'vi' ? 'vi-VN' : 'en-GB';
   const value = new Date(timestamp);
@@ -51,6 +67,7 @@ export function WS3OverviewPage() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const isMachineOperator = user?.role === 'OPERATOR' && user.machineIds.length > 0;
+  const [selectedMachineCodes, setSelectedMachineCodes] = useState<string[]>(getInitialOverviewMachineSelection);
   const [latestRecord, setLatestRecord] = useState<ScouringRecord | null>(null);
   const [scouringRecords, setScouringRecords] = useState<ScouringRecord[]>([]);
   const [scouringProduction, setScouringProduction] = useState<WS3ProductionOrderReport | null>(null);
@@ -203,6 +220,13 @@ export function WS3OverviewPage() {
       return definition ? [{ ...definition, code: machineId }] : [];
     }),
   ];
+  const displayedProcesses = canManageOrders
+    ? visibleProcesses.filter((process) => selectedMachineCodes.includes(process.code))
+    : visibleProcesses;
+  const setAllMachinesSelected = (selected: boolean) => setSelectedMachineCodes(selected ? processes.map((process) => process.code) : []);
+  useEffect(() => {
+    window.localStorage.setItem(overviewMachineFilterKey, JSON.stringify(selectedMachineCodes));
+  }, [selectedMachineCodes]);
   const processMachineId = (process: typeof processes[number]) => process.code;
   const processEntryPath = (process: typeof processes[number]) => process.name === 'Unrolling' ? '/machine/unrolling/record' : process.name === 'Buffing' ? '/machine/buffing/record' : process.name === 'Scouring' ? '/machine/scouring/record/operation' : `/machine/${processMachineId(process)}/record`;
 
@@ -210,8 +234,27 @@ export function WS3OverviewPage() {
     <WS3Shell title={t('systemTitle')} subtitle={t('productionOverview')} status="info" time={new Date().toLocaleTimeString('vi-VN')} showGlobalNavigation={false} showSupportWidget={!isMachineOperator}>
       <div className="h-full overflow-auto bg-hmiConsole p-2 text-slate-800">
         {error && <div role="status" className="mb-2 border border-warning bg-hmiWarning px-3 py-2 text-[10px] text-warning">{error}</div>}
+        {canManageOrders && <details className="group relative mb-2 w-fit max-w-full">
+          <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 border-2 border-industrial bg-white px-3 text-[10px] font-bold uppercase tracking-wide text-industrialDark marker:hidden">
+            <span>{language === 'vi' ? 'Lọc máy' : 'Filter machines'}</span>
+            <span className="bg-hmiSection px-1.5 py-0.5 font-mono">{selectedMachineCodes.length}/{processes.length}</span>
+            <span aria-hidden="true" className="text-[9px]">▾</span>
+          </summary>
+          <div className="absolute left-0 top-full z-40 mt-1 w-[min(20rem,calc(100vw-2rem))] border-2 border-industrial bg-white p-2 shadow-xl">
+            <div className="mb-2 flex justify-between gap-2 border-b border-line pb-2">
+              <button type="button" className="text-[9px] font-bold uppercase text-industrial underline" onClick={() => setAllMachinesSelected(true)}>{language === 'vi' ? 'Chọn tất cả' : 'Select all'}</button>
+              <button type="button" className="text-[9px] font-bold uppercase text-industrial underline" onClick={() => setAllMachinesSelected(false)}>{language === 'vi' ? 'Bỏ chọn tất cả' : 'Clear all'}</button>
+            </div>
+            <div className="grid max-h-64 grid-cols-2 gap-1 overflow-auto">
+              {processes.map((process) => <label key={process.code} className="flex min-h-9 min-w-0 cursor-pointer items-center gap-2 px-1 text-[10px] hover:bg-hmiConsole">
+                <input type="checkbox" checked={selectedMachineCodes.includes(process.code)} onChange={(event) => setSelectedMachineCodes((current) => event.target.checked ? [...current, process.code] : current.filter((code) => code !== process.code))} />
+                <span className="truncate">{process.name}</span>
+              </label>)}
+            </div>
+          </div>
+        </details>}
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {visibleProcesses.map((process) => (
+          {displayedProcesses.map((process) => (
             <article key={process.name} className={`flex min-w-0 flex-col bg-white ${process.available ? 'border-2 border-industrial' : 'border border-line'}`}>
               <header className={`flex min-h-9 items-center justify-between px-3 py-2 text-white ${process.available ? 'bg-industrial' : 'bg-industrialDark'}`}>
                 <h2 className="font-mono text-sm font-bold uppercase tracking-[0.1em]">{process.name}</h2>
