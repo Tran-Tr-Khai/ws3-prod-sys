@@ -48,7 +48,7 @@ export function WS3OverviewPage() {
   const [scouringProductionLoading, setScouringProductionLoading] = useState(false);
   const [scouringProductionError, setScouringProductionError] = useState(false);
   const [latestBuffingCheck, setLatestBuffingCheck] = useState<BuffingCheck | null>(null);
-  const [buffingDailyChecks, setBuffingDailyChecks] = useState<BuffingCheck[] | null>(null);
+  const [buffingChecks, setBuffingChecks] = useState<BuffingCheck[] | null>(null);
   const [buffingOrderStartedAt, setBuffingOrderStartedAt] = useState<string | null>(null);
   const [buffingProduction, setBuffingProduction] = useState<WS3ProductionOrderReport | null>(null);
   const [buffingProductionLoading, setBuffingProductionLoading] = useState(false);
@@ -104,6 +104,7 @@ export function WS3OverviewPage() {
   useEffect(() => {
     void getBuffingChecks()
       .then((checks) => {
+        setBuffingChecks(checks);
         const latest = checks[0] ?? null;
         setLatestBuffingCheck(latest);
         const orderNumber = latest?.orderNumber?.trim().toLocaleLowerCase();
@@ -113,10 +114,7 @@ export function WS3OverviewPage() {
           : null;
         setBuffingOrderStartedAt(firstCheck?.checkedAt ?? null);
       })
-      .catch(() => { setLatestBuffingCheck(null); setBuffingOrderStartedAt(null); });
-    void getBuffingChecks(factoryToday())
-      .then(setBuffingDailyChecks)
-      .catch(() => setBuffingDailyChecks(null));
+      .catch(() => { setLatestBuffingCheck(null); setBuffingOrderStartedAt(null); setBuffingChecks(null); });
   }, []);
 
   useEffect(() => {
@@ -141,8 +139,11 @@ export function WS3OverviewPage() {
   const warnings = latestRecord ? recordWarnings(latestRecord) : [];
   const recordComplete = latestRecord ? hasCompleteProcessData(latestRecord) : false;
   const recordStatus = !recordComplete ? 'INCOMPLETE' : warnings.length > 0 ? 'WARNING' : 'COMPLETE';
-  const buffingStatus = latestBuffingCheck ? (latestBuffingCheck.checks.every(Boolean) ? 'COMPLETE' : 'WARNING') : null;
-  const buffingChecksWithError = buffingDailyChecks?.filter((check) => check.checks.some((pointPassed) => !pointPassed)).length ?? null;
+  const buffingOrderChecks = latestBuffingCheck?.orderNumber && buffingChecks
+    ? buffingChecks.filter((check) => check.orderNumber?.trim().toLocaleLowerCase() === latestBuffingCheck.orderNumber?.trim().toLocaleLowerCase())
+    : [];
+  const buffingChecksWithError = buffingOrderChecks.filter((check) => check.checks.some((pointPassed) => !pointPassed)).length;
+  const buffingStatus = latestBuffingCheck ? (buffingChecksWithError === 0 ? 'COMPLETE' : 'WARNING') : null;
   const scouringMeters = scouringProduction?.rolls.reduce((total, roll) => total + (roll.length_meters ?? 0), 0) ?? 0;
   const scouringHasMeters = Boolean(scouringProduction?.rolls.length && scouringProduction.rolls.every((roll) => roll.length_meters !== null && Number.isFinite(roll.length_meters)));
   const scouringOrderRecords = latestRecord?.orderNumber ? scouringRecords.filter((record) => record.orderNumber?.trim().toLocaleLowerCase() === latestRecord.orderNumber?.trim().toLocaleLowerCase()) : [];
@@ -216,7 +217,7 @@ export function WS3OverviewPage() {
                 </section>
                 <section className="min-w-0 px-3 py-3">
                   <h3 className="mb-2 border-b border-line pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('production')}</h3>
-                  {process.name === 'Buffing' && latestBuffingCheck && (buffingProductionLoading ? <p className="mb-2 text-xs text-slate-500">{t('loadingRecorded')}</p> : buffingProductionError ? <p role="status" className="mb-2 text-xs text-warning">{language === 'vi' ? 'Không tải được dữ liệu đơn sản xuất.' : 'Unable to load production order data.'}</p> : buffingProduction ? <div className="mb-2 grid gap-2 text-[10px] sm:grid-cols-2"><div><span className="block font-bold uppercase text-slate-500">{t('orderNumber')}</span><span className="font-mono font-bold text-industrial">{buffingProduction.pk_no}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('item')}</span><span className="font-semibold">{buffingProduction.item_name || buffingProduction.item_code || '—'}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('lotNumber')}</span><span className="font-mono font-semibold">{buffingProduction.lot_no || '—'}</span></div><div><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Số cuộn' : 'Roll count'}</span><span className="font-mono font-bold">{buffingProduction.matched_rolls}</span></div><div><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Lỗi / tổng lượt kiểm tra' : 'Failed / total checks'}</span><span className="font-mono text-lg font-bold text-industrial">{buffingDailyChecks ? `${buffingChecksWithError}/${buffingDailyChecks.length}` : '—'}</span></div></div> : <p className="mb-2 text-xs text-slate-500">{language === 'vi' ? 'Không tìm thấy mã đơn này trong snapshot MES hiện tại.' : 'This order is not in the current MES snapshot.'}</p>)}
+                  {process.name === 'Buffing' && latestBuffingCheck && (buffingProductionLoading ? <p className="mb-2 text-xs text-slate-500">{t('loadingRecorded')}</p> : buffingProductionError ? <p role="status" className="mb-2 text-xs text-warning">{language === 'vi' ? 'Không tải được dữ liệu đơn sản xuất.' : 'Unable to load production order data.'}</p> : buffingProduction ? <div className="mb-2 grid gap-2 text-[10px] sm:grid-cols-2"><div><span className="block font-bold uppercase text-slate-500">{t('orderNumber')}</span><span className="font-mono font-bold text-industrial">{buffingProduction.pk_no}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('item')}</span><span className="font-semibold">{buffingProduction.item_name || buffingProduction.item_code || '—'}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('lotNumber')}</span><span className="font-mono font-semibold">{buffingProduction.lot_no || '—'}</span></div><div><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Số cuộn' : 'Roll count'}</span><span className="font-mono font-bold">{buffingProduction.matched_rolls}</span></div><div><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Lỗi / tổng lượt kiểm tra' : 'Failed / total checks'}</span><span className="font-mono text-lg font-bold text-industrial">{buffingChecks === null ? '—' : `${buffingChecksWithError}/${buffingOrderChecks.length}`}</span></div></div> : <p className="mb-2 text-xs text-slate-500">{language === 'vi' ? 'Không tìm thấy mã đơn này trong snapshot MES hiện tại.' : 'This order is not in the current MES snapshot.'}</p>)}
                   {process.name === 'Buffing' && latestBuffingCheck && <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line pt-2 text-[10px]"><div><span className="block text-[9px] font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Kết quả kiểm tra' : 'Inspection result'}</span><span className={`mt-0.5 block text-[10px] font-bold ${buffingStatus === 'COMPLETE' ? 'text-success' : 'text-warning'}`}>{buffingStatus === 'COMPLETE' ? (language === 'vi' ? 'ĐẠT' : 'PASS') : (language === 'vi' ? 'CẢNH BÁO' : 'WARNING')}</span></div><div><span className="block text-[9px] font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}</span><span className={`mt-0.5 block text-[10px] font-bold ${latestBuffingCheck.orderProgress === 'COMPLETED' ? 'text-success' : latestBuffingCheck.orderProgress === 'IN_PROGRESS' ? 'text-info' : 'text-slate-500'}`}>{latestBuffingCheck.orderProgress === 'COMPLETED' ? (language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED') : latestBuffingCheck.orderProgress === 'IN_PROGRESS' ? (language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS') : (language === 'vi' ? 'CHƯA CẬP NHẬT' : 'NOT SET')}</span></div></div>}
                   {process.name === 'Scouring' ? <>{scouringProductionSummary}{scouringQuickStatuses}</> : process.name === 'Unrolling' ? canViewMesOrders ? unrollingLoadFailed ? <p role="status" className="text-xs font-semibold text-warning">{language === 'vi' ? 'Không tải được dữ liệu MES.' : 'MES data could not be loaded.'}</p> : <div className="grid grid-cols-2 gap-2"><div><span className="block text-[9px] font-bold uppercase text-slate-500">{language === 'vi' ? 'ĐƠN HÔM NAY' : 'TODAY’S ORDERS'}</span><strong className="font-mono text-lg text-industrial">{unrollingReport?.summary.orders ?? '…'}</strong></div><div><span className="block text-[9px] font-bold uppercase text-slate-500">{language === 'vi' ? 'CẦN KIỂM TRA' : 'NEEDS REVIEW'}</span><strong className={`font-mono text-lg ${unrollingReport?.summary.check ? 'text-warning' : 'text-success'}`}>{unrollingReport?.summary.check ?? '…'}</strong></div></div> : <p className="text-xs text-slate-500">{language === 'vi' ? 'Supervisor xem dữ liệu đơn MES.' : 'MES order information for supervisors.'}</p> : process.name === 'Buffing' ? null : <p className="text-xs text-slate-500">{t('noData')}</p>}
                 </section>
