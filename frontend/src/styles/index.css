@@ -2,6 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+.overview-container {
+  container: overview / inline-size;
+}
+
+.operator-overview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 0.5rem;
+}
+
+/* Reserve enough actual content width for both panels, including HMI scaling. */
+@container overview (min-width: 900px) {
+  .operator-overview-layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+
+  .operator-overview-machines {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .operator-overview-notices {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
 .hmi-condensed {
   font-family: "Roboto Condensed", "Arial Narrow", "Segoe UI", sans-serif;
 }

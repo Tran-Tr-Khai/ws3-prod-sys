@@ -232,9 +232,10 @@ export function WS3OverviewPage() {
 
   return (
     <WS3Shell title={t('systemTitle')} subtitle={t('productionOverview')} status="info" time={new Date().toLocaleTimeString('vi-VN')} showGlobalNavigation={false} showSupportWidget={!isMachineOperator}>
-      <div className="h-full overflow-auto bg-hmiConsole p-2 text-slate-800">
-        {isMachineOperator && <div className="mb-2 min-w-0"><SupportChatWidget embedded /></div>}
+      <div className="overview-container h-full overflow-auto bg-hmiConsole p-2 text-slate-800">
         {error && <div role="status" className="mb-2 border border-warning bg-hmiWarning px-3 py-2 text-[10px] text-warning">{error}</div>}
+        <div className={isMachineOperator ? 'operator-overview-layout' : undefined}>
+        {isMachineOperator && <div className="operator-overview-notices min-w-0"><SupportChatWidget embedded /></div>}
         {canManageOrders && <details className="group relative mb-2 w-fit max-w-full">
           <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 border-2 border-industrial bg-white px-3 text-[10px] font-bold uppercase tracking-wide text-industrialDark marker:hidden">
             <span>{language === 'vi' ? 'Lọc máy' : 'Filter machines'}</span>
@@ -254,7 +255,7 @@ export function WS3OverviewPage() {
             </div>
           </div>
         </details>}
-        <div className={isMachineOperator ? 'grid min-w-0 grid-cols-1 gap-2' : 'grid gap-2 sm:grid-cols-2 lg:grid-cols-3'}>
+        <div className={isMachineOperator ? 'operator-overview-machines grid min-w-0 grid-cols-1 gap-2' : 'grid gap-2 sm:grid-cols-2 lg:grid-cols-3'}>
           {displayedProcesses.map((process) => (
             <article key={process.name} className={`flex min-w-0 flex-col bg-white ${process.available ? 'border-2 border-industrial' : 'border border-line'}`}>
               <header className={`flex min-h-9 items-center justify-between px-3 py-2 text-white ${process.available ? 'bg-industrial' : 'bg-industrialDark'}`}>
@@ -302,6 +303,7 @@ export function WS3OverviewPage() {
               <div className="mt-auto border-t border-line px-3 py-3"><Link to={processEntryPath(process)} className="inline-flex w-full"><HMIButton size="compact" variant="secondary" className="w-full">{process.name === 'Unrolling' ? (language === 'vi' ? 'XEM ĐƠN & IN PHIẾU' : 'VIEW ORDERS & PRINT SLIPS') : process.name === 'Buffing' ? t('openBuffing') : process.name === 'Scouring' ? t('openScouring') : language === 'vi' ? 'NHẬP THÔNG TIN VẬN HÀNH' : 'ENTER OPERATION INFO'}</HMIButton></Link></div>
             </article>
           ))}
+        </div>
         </div>
       </div>
     </WS3Shell>
