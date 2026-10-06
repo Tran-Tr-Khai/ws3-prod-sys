@@ -24,12 +24,13 @@ const processes = [
 
 const overviewMachineFilterKey = 'ws3.overview.selected-machines';
 const defaultOverviewMachineCodes = ['UN-01', 'BU-01', 'SC-01', 'TE-01'];
+const overviewFilterProcesses = processes.filter((process) => process.available || process.code === 'TE-01');
 
 function getInitialOverviewMachineSelection(): string[] {
   try {
     const stored: unknown = JSON.parse(window.localStorage.getItem(overviewMachineFilterKey) ?? 'null');
     if (Array.isArray(stored) && stored.every((code) => typeof code === 'string')) {
-      const validCodes = new Set(processes.map((process) => process.code));
+      const validCodes = new Set(overviewFilterProcesses.map((process) => process.code));
       return stored.filter((code): code is string => validCodes.has(code));
     }
   } catch {
@@ -223,7 +224,7 @@ export function WS3OverviewPage() {
   const displayedProcesses = canManageOrders
     ? visibleProcesses.filter((process) => selectedMachineCodes.includes(process.code))
     : visibleProcesses;
-  const setAllMachinesSelected = (selected: boolean) => setSelectedMachineCodes(selected ? processes.map((process) => process.code) : []);
+  const setAllMachinesSelected = (selected: boolean) => setSelectedMachineCodes(selected ? overviewFilterProcesses.map((process) => process.code) : []);
   useEffect(() => {
     window.localStorage.setItem(overviewMachineFilterKey, JSON.stringify(selectedMachineCodes));
   }, [selectedMachineCodes]);
@@ -236,19 +237,18 @@ export function WS3OverviewPage() {
         {error && <div role="status" className="mb-2 border border-warning bg-hmiWarning px-3 py-2 text-[10px] text-warning">{error}</div>}
         <div className={isMachineOperator ? 'operator-overview-layout' : undefined}>
         {isMachineOperator && <div className="operator-overview-notices min-w-0"><SupportChatWidget embedded /></div>}
-        {canManageOrders && <details className="group relative mb-2 w-fit max-w-full">
+        {canManageOrders && <details className="group relative mb-2 ml-auto w-fit max-w-full">
           <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 border-2 border-industrial bg-white px-3 text-[10px] font-bold uppercase tracking-wide text-industrialDark marker:hidden">
             <span>{language === 'vi' ? 'Lọc máy' : 'Filter machines'}</span>
-            <span className="bg-hmiSection px-1.5 py-0.5 font-mono">{selectedMachineCodes.length}/{processes.length}</span>
             <span aria-hidden="true" className="text-[9px]">▾</span>
           </summary>
-          <div className="absolute left-0 top-full z-40 mt-1 w-[min(20rem,calc(100vw-2rem))] border-2 border-industrial bg-white p-2 shadow-xl">
+          <div className="absolute right-0 top-full z-40 mt-1 w-[min(20rem,calc(100vw-2rem))] border-2 border-industrial bg-white p-2 shadow-xl">
             <div className="mb-2 flex justify-between gap-2 border-b border-line pb-2">
               <button type="button" className="text-[9px] font-bold uppercase text-industrial underline" onClick={() => setAllMachinesSelected(true)}>{language === 'vi' ? 'Chọn tất cả' : 'Select all'}</button>
               <button type="button" className="text-[9px] font-bold uppercase text-industrial underline" onClick={() => setAllMachinesSelected(false)}>{language === 'vi' ? 'Bỏ chọn tất cả' : 'Clear all'}</button>
             </div>
             <div className="grid max-h-64 grid-cols-2 gap-1 overflow-auto">
-              {processes.map((process) => <label key={process.code} className="flex min-h-9 min-w-0 cursor-pointer items-center gap-2 px-1 text-[10px] hover:bg-hmiConsole">
+              {overviewFilterProcesses.map((process) => <label key={process.code} className="flex min-h-9 min-w-0 cursor-pointer items-center gap-2 px-1 text-[10px] hover:bg-hmiConsole">
                 <input type="checkbox" checked={selectedMachineCodes.includes(process.code)} onChange={(event) => setSelectedMachineCodes((current) => event.target.checked ? [...current, process.code] : current.filter((code) => code !== process.code))} />
                 <span className="truncate">{process.name}</span>
               </label>)}
