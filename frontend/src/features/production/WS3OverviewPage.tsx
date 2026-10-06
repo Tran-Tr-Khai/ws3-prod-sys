@@ -6,6 +6,7 @@ import { getBuffingChecks, getScouringRecords, type BuffingCheck, type ScouringR
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useAuth } from '../../auth/AuthContext';
 import { getMachineNotices, type MachineNotice } from '../support/supportApi';
+import { SupportChatWidget } from '../support/SupportChatWidget';
 import { getWS3ProductionOrderContext, getWS3ProductionReport, type WS3ProductionOrderReport, type WS3ProductionReport } from '../orders/ws3OrderApi';
 
 const processes = [
@@ -49,6 +50,7 @@ function factoryToday(): string {
 export function WS3OverviewPage() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
+  const isMachineOperator = user?.role === 'OPERATOR' && user.machineIds.length > 0;
   const [latestRecord, setLatestRecord] = useState<ScouringRecord | null>(null);
   const [scouringRecords, setScouringRecords] = useState<ScouringRecord[]>([]);
   const [scouringProduction, setScouringProduction] = useState<WS3ProductionOrderReport | null>(null);
@@ -205,7 +207,7 @@ export function WS3OverviewPage() {
   const processEntryPath = (process: typeof processes[number]) => process.name === 'Unrolling' ? '/machine/unrolling/record' : process.name === 'Buffing' ? '/machine/buffing/record' : process.name === 'Scouring' ? '/machine/scouring/record/operation' : `/machine/${processMachineId(process)}/record`;
 
   return (
-    <WS3Shell title={t('systemTitle')} subtitle={t('productionOverview')} status="info" time={new Date().toLocaleTimeString('vi-VN')} showGlobalNavigation={false}>
+    <WS3Shell title={t('systemTitle')} subtitle={t('productionOverview')} status="info" time={new Date().toLocaleTimeString('vi-VN')} showGlobalNavigation={false} showSupportWidget={!isMachineOperator}>
       <div className="h-full overflow-auto bg-hmiConsole p-2 text-slate-800">
         {error && <div role="status" className="mb-2 border border-warning bg-hmiWarning px-3 py-2 text-[10px] text-warning">{error}</div>}
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -257,6 +259,7 @@ export function WS3OverviewPage() {
             </article>
           ))}
         </div>
+        {isMachineOperator && <div className="mt-2"><SupportChatWidget embedded /></div>}
       </div>
     </WS3Shell>
   );
