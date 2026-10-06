@@ -56,7 +56,7 @@ export function WS3Shell({
     : title;
   return (
     <main className="relative flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
-      {headerCollapsed && <div className="group absolute inset-x-0 top-0 z-50 h-2 focus-within:h-8 hover:h-8" aria-label="Header controls"><button type="button" aria-label="Hiện header" title="Hiện header" onClick={toggleHeader} className="absolute left-1/2 top-0 inline-flex h-7 w-7 -translate-x-1/2 -translate-y-1 items-center justify-center bg-hmiSection/90 text-base font-bold leading-none text-industrialDark/70 opacity-0 transition-opacity group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100 hover:bg-white hover:text-industrialDark">v</button></div>}
+      {headerCollapsed && <div className="group absolute inset-x-0 top-0 z-50 h-2 focus-within:h-8 hover:h-8" aria-label="Header controls"><button type="button" aria-label="Hiện header" title="Hiện header" onClick={toggleHeader} className="absolute left-[calc(50%+1rem)] top-0 inline-flex h-7 w-7 -translate-x-1/2 -translate-y-1 items-center justify-center bg-hmiSection/90 text-base font-bold leading-none text-industrialDark/70 opacity-0 transition-opacity group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100 hover:bg-white hover:text-industrialDark">v</button></div>}
       {!headerCollapsed && <HMIHeader
         variant="machine"
         title={localizedTitle}
