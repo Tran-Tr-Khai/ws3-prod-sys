@@ -28,6 +28,7 @@ class WS3UnrollingRollResponse(BaseModel):
 
 class WS3UnrollingOrderResponse(BaseModel):
     pk_no: str
+    sop_no: str | None
     production_date: str
     item_code: str | None
     item_name: str | None

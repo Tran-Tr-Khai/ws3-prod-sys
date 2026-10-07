@@ -12,6 +12,7 @@ from app.models.user import User
 from app.models.ws3_production import WS3MachineWS2Record, WS3ProductionOrder, WS3WorkerRecord
 from app.services.snapshot_sources import read_excel, parse_source
 from app.services.snapshot_report import build_report
+from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code
 from app.security.auth import get_current_user, role_codes
 
 
@@ -132,7 +133,10 @@ def production_order_context(
     normalized = order_number.strip().upper()
     if not normalized:
         return None
-    orders = db.scalars(select(WS3ProductionOrder).where(func.upper(func.trim(WS3ProductionOrder.pk_no)) == normalized)).all()
+    try:
+        orders, _aliases = resolve_ws3_order_code(db, normalized)
+    except AmbiguousWS3OrderCode as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if not orders:
         return None
     machines = db.scalars(select(WS3MachineWS2Record)).all()

@@ -6,7 +6,7 @@ import { normalizeShift } from '../../components/hmi/ShiftSelect';
 import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { SupportChatWidget } from '../support/SupportChatWidget';
-import { createScouringPhInspection, createScouringRecord, getScouringRecordsForOrder, getMachineOrderProgress, saveMachineOrderProgress, ScouringApiError, type ScouringRecord } from './scouringApi';
+import { createScouringPhInspection, createScouringRecord, updateScouringRecord, getScouringRecordsForOrder, getMachineOrderProgress, saveMachineOrderProgress, ScouringApiError, type ScouringRecord } from './scouringApi';
 import { getWS3ProductionOrderContext, type WS3ProductionOrderReport } from '../orders/ws3OrderApi';
 import { useLanguage } from '../../i18n/LanguageContext';
 
@@ -197,6 +197,7 @@ export function ScouringRecordPage() {
   const [productionLoading, setProductionLoading] = useState(false);
   const [productionError, setProductionError] = useState(false);
   const [savedOrderRecords, setSavedOrderRecords] = useState<ScouringRecord[]>([]);
+  const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
   const [progressSaving, setProgressSaving] = useState(false);
   const [progressError, setProgressError] = useState<string | null>(null);
   const [phValues, setPhValues] = useState<Record<number, string>>({});
@@ -279,6 +280,37 @@ export function ScouringRecordPage() {
     });
   };
 
+  const selectRecordForEditing = (record: ScouringRecord) => {
+    setEditingRecordId(record.id);
+    setSaveAttempted(false);
+    setSaveError(null);
+    setSaveSuccess(false);
+    setValues((current) => ({
+      ...current,
+      item: record.item ?? '',
+      lotYarn: record.lotYarn ?? '',
+      lotNumber: record.lotNumber ?? '',
+      operatorName: record.operatorName ?? '',
+      operatorIdentifier: record.operatorIdentifier ?? '',
+      shift: normalizeShift(record.shift) || record.shift || '',
+      orderProgress: record.orderProgress ?? 'IN_PROGRESS',
+      naoh: String(record.naoh), soap: String(record.soap), desizer: String(record.desizer),
+      h2o2: String(record.h2o2), chelate: String(record.chelate), speed: String(record.speed),
+      temperature: String(record.temperature), cylinderTemperature: String(record.cylinderTemperature),
+      inputFabricMeters: record.inputFabricMeters == null ? '' : String(record.inputFabricMeters),
+      outputFabricMeters: record.outputFabricMeters == null ? '' : String(record.outputFabricMeters),
+      lossMeters: record.lossMeters == null ? '' : String(record.lossMeters),
+    }));
+  };
+
+  const cancelEditing = () => {
+    setEditingRecordId(null);
+    setSaveAttempted(false);
+    setSaveError(null);
+    setSaveSuccess(false);
+    setValues((current) => ({ ...initialValues, orderNumber: current.orderNumber }));
+  };
+
   const hasBlockingErrors = [...chemicalFields, ...processFields, ...productionFields]
     .some((field) => fieldMessage(values[field.key], field) === 'missing');
 
@@ -303,7 +335,9 @@ export function ScouringRecordPage() {
       const payload = {
         machineId: 'SC-01',
         recordedAt: new Date().toISOString(),
-        orderNumber: values.orderNumber.trim() || null,
+        orderNumber: editingRecordId === null
+          ? values.orderNumber.trim() || null
+          : savedOrderRecords.find((record) => record.id === editingRecordId)?.orderNumber ?? (values.orderNumber.trim() || null),
         item: production.item_name || production.item_code || null,
         lotYarn: values.lotYarn.trim() || null,
         lotNumber: production.lot_no || null,
@@ -324,8 +358,12 @@ export function ScouringRecordPage() {
         productionQuantityMeters: values.outputFabricMeters.trim() ? Number(values.outputFabricMeters) : null,
         lossMeters: calculateLoss(values.inputFabricMeters, values.outputFabricMeters) ? Number(calculateLoss(values.inputFabricMeters, values.outputFabricMeters)) : null,
       };
-      const saved = await createScouringRecord(payload);
-      setSavedOrderRecords((records) => [saved, ...records]);
+      const saved = editingRecordId === null
+        ? await createScouringRecord(payload)
+        : await updateScouringRecord(editingRecordId, payload);
+      setSavedOrderRecords((records) => editingRecordId === null
+        ? [saved, ...records]
+        : records.map((record) => record.id === saved.id ? saved : record).sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt) || b.id - a.id));
       setSaveSuccess(true);
     } catch (error) {
       setSaveError(error instanceof ScouringApiError ? error.message : 'Unable to save the Scouring record. Please try again.');
@@ -352,12 +390,16 @@ export function ScouringRecordPage() {
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
         <div className="scouring-screen-frame scouring-full-width-frame mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
         <div className="min-h-0 flex-1 overflow-auto p-2">
-          <div className="scouring-record-workspace grid w-full min-h-full grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)] gap-2">
+          <div className={`scouring-record-workspace grid w-full min-h-full grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)] gap-2 ${isScouringOperator ? 'scouring-record-workspace-with-notices' : ''}`}>
             <aside className="scouring-record-context flex h-full min-h-0 self-stretch flex-col border-2 border-industrialDark bg-white">
               <header className="flex h-12 min-h-12 items-center border-b-2 border-industrialDark bg-white px-3 text-[11px] font-bold uppercase tracking-wider text-industrialDark">
                 <h2 className="whitespace-nowrap">{language === 'vi' ? 'Thông tin vận hành' : 'Operation details'}</h2>
               </header>
-              <OperationInfoFields orderNumber={values.orderNumber} onOrderNumberChange={(orderNumber) => { setProduction(null); setSavedOrderRecords([]); setProgressError(null); setValues((current) => ({ ...current, orderNumber, operatorName: '', operatorIdentifier: '', shift: '', orderProgress: 'IN_PROGRESS', inputFabricMeters: '', outputFabricMeters: '', lossMeters: '' })); }} operatorName={values.operatorName} onOperatorNameChange={(operatorName) => setValues((current) => ({ ...current, operatorName }))} employeeId={values.operatorIdentifier} onEmployeeIdChange={(operatorIdentifier) => setValues((current) => ({ ...current, operatorIdentifier }))} shift={values.shift} onShiftChange={(shift) => setValues((current) => ({ ...current, shift }))} orderStatus={<label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}<select className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark disabled:bg-hmiSection disabled:text-slate-400" value={values.orderProgress} disabled={!production || progressSaving} onChange={(event) => void changeOrderProgress(event.target.value as 'IN_PROGRESS' | 'COMPLETED')}><option value="IN_PROGRESS">{language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS'}</option><option value="COMPLETED">{language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED'}</option></select>{progressSaving && <span className="text-[9px] normal-case text-info">{language === 'vi' ? 'Đang lưu…' : 'Saving…'}</span>}{progressError && <span role="alert" className="text-[9px] normal-case text-alarm">{progressError}</span>}</label>} />
+              <OperationInfoFields orderNumber={values.orderNumber} orderNumberDisabled={editingRecordId !== null} onOrderNumberChange={(orderNumber) => { setProduction(null); setSavedOrderRecords([]); setEditingRecordId(null); setProgressError(null); setValues((current) => ({ ...current, orderNumber, operatorName: '', operatorIdentifier: '', shift: '', orderProgress: 'IN_PROGRESS', inputFabricMeters: '', outputFabricMeters: '', lossMeters: '' })); }} operatorName={values.operatorName} onOperatorNameChange={(operatorName) => setValues((current) => ({ ...current, operatorName }))} employeeId={values.operatorIdentifier} onEmployeeIdChange={(operatorIdentifier) => setValues((current) => ({ ...current, operatorIdentifier }))} shift={values.shift} onShiftChange={(shift) => setValues((current) => ({ ...current, shift }))} orderStatus={<label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}<select className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark disabled:bg-hmiSection disabled:text-slate-400" value={values.orderProgress} disabled={!production || progressSaving} onChange={(event) => void changeOrderProgress(event.target.value as 'IN_PROGRESS' | 'COMPLETED')}><option value="IN_PROGRESS">{language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS'}</option><option value="COMPLETED">{language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED'}</option></select>{progressSaving && <span className="text-[9px] normal-case text-info">{language === 'vi' ? 'Đang lưu…' : 'Saving…'}</span>}{progressError && <span role="alert" className="text-[9px] normal-case text-alarm">{progressError}</span>}</label>} />
+              {savedOrderRecords.length > 0 && <section className="mx-3 mb-3 border-t border-line pt-2">
+                <div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-[10px] font-bold uppercase tracking-wide text-industrial">{language === 'vi' ? 'Bản ghi của đơn · Chọn để sửa' : 'Order records · Select to edit'}</h3>{editingRecordId !== null && <button type="button" className="text-[9px] font-bold uppercase text-info underline" onClick={cancelEditing}>{language === 'vi' ? 'Bỏ sửa' : 'Cancel edit'}</button>}</div>
+                <div className="grid max-h-48 gap-1 overflow-y-auto">{savedOrderRecords.map((record) => <button key={record.id} type="button" aria-pressed={editingRecordId === record.id} onClick={() => selectRecordForEditing(record)} className={`grid grid-cols-[1fr_auto] gap-x-2 border px-2 py-1.5 text-left text-[9px] ${editingRecordId === record.id ? 'border-info bg-sky-50' : 'border-line bg-white hover:bg-slate-50'}`}><span className="font-mono font-bold text-industrial">{new Date(record.recordedAt).toLocaleString(language === 'vi' ? 'vi-VN' : 'en-US')} · {record.shift || '—'}</span><span className="row-span-2 self-center font-bold uppercase text-info">{editingRecordId === record.id ? (language === 'vi' ? 'Đang sửa' : 'Editing') : (language === 'vi' ? 'Sửa' : 'Edit')}</span><span className="text-slate-600">{record.operatorName || '—'} · ID {record.operatorIdentifier || '—'}</span></button>)}</div>
+              </section>}
             </aside>
 
             <section className="flex h-full min-w-0 flex-col gap-3 border-2 border-industrialDark bg-white">
@@ -365,7 +407,7 @@ export function ScouringRecordPage() {
                 {(productionLoading || productionError || (normalizedOrderNumber && !productionLoading && !productionError && !production)) && <div className="shrink-0 border-b border-line bg-white px-3 py-2 text-[10px]"><p role="status" className="font-bold text-warning">{productionLoading ? (language === 'vi' ? 'Đang đối chiếu dữ liệu MES…' : 'Looking up MES data…') : productionError ? (language === 'vi' ? 'Không tải được dữ liệu MES.' : 'MES data could not be loaded.') : (language === 'vi' ? 'Không tìm thấy mã đơn trong dữ liệu MES.' : 'Order not found in MES data.')}</p></div>}
               {entryMode === 'ph' ? <section className="min-h-0 min-w-0 flex-1 overflow-auto p-3"><header className="mb-3 flex items-center justify-between border-b border-line pb-2"><h2 className="text-[11px] font-bold uppercase tracking-[0.14em]">{t('phInspection')}</h2><span className="font-mono text-[9px] text-slate-500">8 {t('tanks')}</span></header>{selectedOrderRecord ? <p className="mb-3 text-[10px] text-slate-600">{t('operationRecord')}: <strong className="font-mono text-industrial">{selectedOrderRecord.orderNumber || '—'}</strong> · {selectedOrderRecord.item || '—'} · {selectedOrderRecord.lotNumber || '—'}</p> : <p className="mb-3 border border-warning bg-hmiWarning p-2 text-[10px] font-bold text-warning">{language === 'vi' ? 'Cần lưu thông số của đơn này trước khi ghi checklist pH.' : 'Save operation data for this order before the pH checklist.'}</p>}<div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">{Array.from({ length: 8 }, (_, tank) => <label key={tank} className="grid min-w-0 gap-1 p-2"><span className="text-[10px] font-bold uppercase text-industrial">{t('tank')} {tank}</span><span className="flex h-12 min-w-0 border-2 border-line"><input type="number" inputMode="decimal" step="any" value={phValues[tank] ?? ''} onChange={(event) => setPhValues((current) => ({ ...current, [tank]: event.target.value }))} className="min-w-0 flex-1 text-center font-mono text-lg font-bold text-industrial outline-none" aria-label={`${t('tank')} ${tank} pH`} /><span className="flex w-10 shrink-0 items-center justify-center border-l-2 border-line bg-surfaceMuted font-mono text-[10px] font-bold">pH</span></span></label>)}</div><div className="mt-3 min-w-0"><label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase text-slate-500">{t('note')}<input value={phNote} onChange={(event) => setPhNote(event.target.value)} className="min-h-9 min-w-0 border-2 border-line px-2 text-xs font-semibold normal-case" /></label></div>{phError && <p role="alert" className="mt-3 border border-alarm bg-hmiAlarm p-2 text-[10px] font-bold text-alarm">{phError}</p>}{phSaved && <p role="status" className="mt-3 border border-success bg-hmiNormal p-2 text-[10px] font-bold text-success">{language === 'vi' ? 'ĐÃ LƯU CHECKLIST pH' : 'pH CHECKLIST SAVED'}</p>}</section> : <>
               <>
-                <section className="scouring-record-group border-b border-line bg-white">
+                <section className="scouring-record-group bg-white">
                   <div className="bg-white">
                     <div className="border-b border-line"><h3 className="flex items-center justify-between px-3 pt-4 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500"><span>{t('chemicalInput')}</span><span className="font-mono">{completedFields(chemicalFields, values)}/{chemicalFields.length} ✓</span></h3><FieldGrid fields={chemicalFields} values={values} showValidation={saveAttempted} onChange={updateValue} columns={5} /></div>
                     <div className="border-b border-line"><h3 className="flex items-center justify-between px-3 pt-4 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500"><span>{t('processConditions')}</span><span className="font-mono">{completedFields(processFields, values)}/{processFields.length} ✓</span></h3><FieldGrid fields={processFields} values={values} showValidation={saveAttempted} onChange={updateValue} columns={5} /></div>
@@ -376,10 +418,10 @@ export function ScouringRecordPage() {
               {saveAttempted && processFields.some((field) => fieldMessage(values[field.key], field) === 'warning') && <div className="border border-warning bg-hmiWarning px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-warning">DATA / PROCESS WARNING · Values outside the expected range can still be saved.</div>}
               {saveAttempted && hasBlockingErrors && <div className="border border-alarm bg-hmiAlarm px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-alarm">{t('completeRequired')}</div>}
               {saveError && <div className="border border-alarm bg-hmiAlarm px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-alarm">SAVE ERROR · {saveError}</div>}
-              {saveSuccess && <div className="border border-success bg-hmiNormal px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-success">RECORD SAVED · You can now record pH inspection.</div>}
+              {saveSuccess && <div role="status" className="border border-success bg-hmiNormal px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-success">{editingRecordId !== null ? (language === 'vi' ? 'ĐÃ CẬP NHẬT BẢN GHI · Lịch sử vẫn giữ nguyên một dòng.' : 'RECORD UPDATED · History remains a single row.') : (language === 'vi' ? 'ĐÃ LƯU BẢN GHI · Có thể tiếp tục ghi checklist pH.' : 'RECORD SAVED · You can now record pH inspection.')}</div>}
               </>}</section>
+            {isScouringOperator && <div className="scouring-record-notices min-w-0"><SupportChatWidget embedded /></div>}
           </div>
-          {isScouringOperator && <div className="mt-2"><SupportChatWidget embedded /></div>}
         </div>
         <div className="scouring-record-actions grid shrink-0 grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)] gap-2 border-t border-line bg-hmiConsole p-2">
           <div className="scouring-record-back-action flex items-center">
@@ -387,7 +429,7 @@ export function ScouringRecordPage() {
           </div>
           <div className="scouring-record-action-buttons flex justify-end gap-2">
             <HMIButton size="large" variant="secondary" className="border-line bg-white" onClick={() => navigate('/ws3')}>{t('cancel')}</HMIButton>
-            {entryMode === 'operation' ? <HMIButton size="large" variant="primary" disabled={saving || saveSuccess || productionLoading || !production || !values.orderNumber.trim()} onClick={saveRecord}>{saving ? t('saving') : t('saveRecord')}</HMIButton> : <HMIButton size="large" variant="primary" disabled={phSaving || phSaved || !selectedOrderRecord} onClick={() => void savePhInspection()}>{phSaving ? t('saving') : t('saveCheck')}</HMIButton>}
+            {entryMode === 'operation' ? <HMIButton size="large" variant="primary" disabled={saving || saveSuccess || productionLoading || !production || !values.orderNumber.trim()} onClick={saveRecord}>{saving ? t('saving') : editingRecordId !== null ? (language === 'vi' ? 'CẬP NHẬT BẢN GHI' : 'UPDATE RECORD') : t('saveRecord')}</HMIButton> : <HMIButton size="large" variant="primary" disabled={phSaving || phSaved || !selectedOrderRecord} onClick={() => void savePhInspection()}>{phSaving ? t('saving') : t('saveCheck')}</HMIButton>}
           </div>
         </div>
         </div>

@@ -22,6 +22,7 @@ export type UnrollingWorkerProfile = {
 
 export type UnrollingOrder = {
   pk_no: string;
+  sop_no: string | null;
   production_date: string;
   item_code: string | null;
   item_name: string | null;

@@ -270,7 +270,7 @@ export function BuffingPage() {
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : '';
       setError(message.includes('Không tìm thấy mã đơn trong dữ liệu MES')
-        ? (language === 'vi' ? 'Không tìm thấy mã đơn trong dữ liệu MES. Vui lòng kiểm tra mã PKP và thử lại.' : 'Production order was not found in MES. Check the PKP number and try again.')
+        ? (language === 'vi' ? 'Không tìm thấy mã đơn trong dữ liệu MES. Vui lòng kiểm tra mã SOP và thử lại.' : 'Production order was not found in MES. Check the SOP number and try again.')
         : message || cameraText.saveFailed);
     } finally { setSaving(false); }
   };

@@ -155,7 +155,7 @@ export function UnrollingCollectionPage() {
                 className="h-8 w-full min-w-0 border border-line bg-white px-2 text-xs font-medium normal-case text-slate-800 focus:border-industrialDark focus:outline-none focus:ring-1 focus:ring-industrialDark" />
             </label>
             <label className="flex min-w-0 flex-col gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-              {tx('Tìm mã PKP', 'Find PKP')}
+              {tx('Tìm mã SOP / PKP', 'Find SOP / PKP')}
               <input type="search" value={search} disabled={Boolean(actingRollId)} onChange={(e) => { setSearch(e.target.value); resetSelection(); }}
                 placeholder={tx('Nhập mã đơn…', 'Enter order…')} className="h-8 w-full min-w-0 border border-line bg-white px-2 text-xs font-medium normal-case text-slate-800 focus:border-industrialDark focus:outline-none focus:ring-1 focus:ring-industrialDark" />
             </label>
@@ -166,7 +166,8 @@ export function UnrollingCollectionPage() {
             {orders.map((order) => <button key={order.pk_no} type="button" disabled={busy}
               onClick={() => { setSelectedPk(order.pk_no); }} aria-pressed={selectedPk === order.pk_no}
               className={`flex min-h-[4.5rem] w-full items-center justify-between gap-2 border-b border-line border-l-4 px-3 py-2.5 text-left transition-colors ${selectedPk === order.pk_no ? 'border-l-industrialDark bg-hmiSelected' : 'border-l-transparent bg-white hover:bg-hmiHover'}`}>
-              <span className="min-w-0"><strong className={`block truncate text-xs text-industrialDark sm:text-sm ${selectedPk === order.pk_no ? 'font-bold' : 'font-semibold'}`}>{order.pk_no}</strong>
+              <span className="min-w-0"><strong className={`block truncate text-xs text-industrialDark sm:text-sm ${selectedPk === order.pk_no ? 'font-bold' : 'font-semibold'}`}>{order.sop_no || order.pk_no}</strong>
+                {order.sop_no && <small className="mt-0.5 block truncate font-mono text-[9px] text-slate-500">PKP: {order.pk_no}</small>}
                 <small className="mt-1 block truncate text-[10px] text-slate-600">{order.item_code} · {order.production_date}</small></span>
               <span className={`shrink-0 text-right ${order.collection_complete ? 'text-success' : 'text-warning'}`}>
                 <strong className="block text-sm font-bold tabular-nums">{order.collected_rolls}/{order.expected_rolls}</strong>
@@ -178,7 +179,7 @@ export function UnrollingCollectionPage() {
         <section className="flex min-h-[20rem] min-w-0 flex-col overflow-hidden border-2 border-industrialDark bg-white lg:min-h-0">
           {!selectedOrder ? <p className="p-8 text-center text-sm text-slate-500">{loading ? tx('Đang tải đơn…', 'Loading orders…') : tx('Chọn đơn bên trái để gom cuộn.', 'Choose an order to collect rolls.')}</p> : <>
             <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 bg-white px-4 py-3">
-              <h1 className="text-xl font-bold tracking-wide text-industrialDark">{selectedOrder.pk_no}</h1>
+              <div><h1 className="text-xl font-bold tracking-wide text-industrialDark">{selectedOrder.sop_no || selectedOrder.pk_no}</h1>{selectedOrder.sop_no && <p className="mt-1 font-mono text-xs text-slate-500">PKP: {selectedOrder.pk_no}</p>}</div>
               <div className="flex flex-wrap items-center gap-2">
               <span role="status" className={`inline-flex items-center gap-2 border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${selectedOrder.collection_complete ? 'border-success bg-hmiNormal text-success' : 'border-warning bg-hmiWarning text-warning'}`}>
                 <span className="text-[9px]">●</span>{orderStatus(selectedOrder)}

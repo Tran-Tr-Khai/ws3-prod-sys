@@ -19,7 +19,7 @@ from app.config.settings import get_settings
 from app.db.session import get_db
 from app.models.buffing import BuffingCheck, BuffingCheckImage
 from app.api.routes.machine_orders import set_order_progress
-from app.models.ws3_production import WS3ProductionOrder
+from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code
 from app.schemas.buffing import BuffingCheckCreate, BuffingCheckResponse, BuffingImageResponse
 from app.security.auth import get_current_user
 
@@ -72,12 +72,11 @@ def check_response(check: BuffingCheck) -> BuffingCheckResponse:
 @router.post("", response_model=BuffingCheckResponse, status_code=201)
 def create_buffing_check(payload: BuffingCheckCreate, db: Session = Depends(get_db)) -> BuffingCheckResponse:
     normalized_order = payload.order_number.strip()
-    order_exists = db.scalar(
-        select(WS3ProductionOrder.id)
-        .where(func.upper(func.trim(WS3ProductionOrder.pk_no)) == normalized_order.upper())
-        .limit(1)
-    )
-    if order_exists is None:
+    try:
+        _order_rows, _aliases = resolve_ws3_order_code(db, normalized_order)
+    except AmbiguousWS3OrderCode as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not _order_rows:
         raise HTTPException(status_code=422, detail="Không tìm thấy mã đơn trong dữ liệu MES.")
     payload.order_number = normalized_order
     check = BuffingCheck(**payload.model_dump())
@@ -99,7 +98,12 @@ def list_buffing_checks(
     if check_date is not None:
         statement = statement.where(BuffingCheck.check_date == check_date)
     if order_number and order_number.strip():
-        statement = statement.where(func.upper(func.trim(BuffingCheck.order_number)) == order_number.strip().upper())
+        try:
+            _rows, aliases = resolve_ws3_order_code(db, order_number)
+        except AmbiguousWS3OrderCode as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        aliases = aliases or {order_number.strip().upper()}
+        statement = statement.where(func.upper(func.trim(BuffingCheck.order_number)).in_(aliases))
     statement = statement.order_by(desc(BuffingCheck.checked_at), desc(BuffingCheck.id))
     return [check_response(check) for check in db.scalars(statement).all()]
 
@@ -117,7 +121,12 @@ def export_buffing_checks(
     if check_date is not None:
         statement = statement.where(BuffingCheck.check_date == check_date)
     if order_number and order_number.strip():
-        statement = statement.where(func.upper(func.trim(BuffingCheck.order_number)) == order_number.strip().upper())
+        try:
+            _rows, aliases = resolve_ws3_order_code(db, order_number)
+        except AmbiguousWS3OrderCode as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        aliases = aliases or {order_number.strip().upper()}
+        statement = statement.where(func.upper(func.trim(BuffingCheck.order_number)).in_(aliases))
     checks = db.scalars(statement.order_by(desc(BuffingCheck.checked_at), desc(BuffingCheck.id))).all()
 
     workbook = Workbook()

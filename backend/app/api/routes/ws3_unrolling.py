@@ -105,6 +105,7 @@ def _serialize_report_order(
     transferred_rolls = sum(roll.collection_status == "TRANSFERRED" for roll in rolls)
     return WS3UnrollingOrderResponse(
         pk_no=pk_no,
+        sop_no=report_order.get("sop_no"),
         production_date=str(report_order["production_date"]),
         item_code=report_order.get("item_code"),
         item_name=report_order.get("item_name"),
@@ -156,7 +157,16 @@ def list_unrolling_orders(
         WS3ProductionOrder.production_date.is_not(None),
     )
     if q.strip():
-        statement = statement.where(WS3ProductionOrder.pk_no.icontains(q.strip(), autoescape=True))
+        matching_orders = select(WS3ProductionOrder.pk_no).where(
+            WS3ProductionOrder.pk_no.is_not(None),
+            WS3ProductionOrder.pk_no != "",
+            WS3ProductionOrder.production_date.is_not(None),
+            WS3ProductionOrder.pk_no.icontains(q.strip(), autoescape=True)
+            | WS3ProductionOrder.invoice_no.icontains(q.strip(), autoescape=True),
+        )
+        # Search may match a single SOP line, but the selected production
+        # order must still contain every SOP/roll line grouped under its PKP.
+        statement = statement.where(WS3ProductionOrder.pk_no.in_(matching_orders))
     if order_date is not None:
         statement = statement.where(WS3ProductionOrder.production_date == order_date.isoformat())
     source_orders = db.scalars(statement).all()

@@ -11,6 +11,7 @@ from app.models.machine_order_state import MachineOrderState
 from app.models.scouring import ScouringRecord
 from app.models.user import User
 from app.security.auth import get_current_user, role_codes
+from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code
 
 
 router = APIRouter(prefix="/machine-orders", tags=["machine-orders"])
@@ -76,6 +77,17 @@ def get_order_progress(
             MachineOrderState.order_number == normalized,
         )
     )
+    if state is None:
+        try:
+            _rows, aliases = resolve_ws3_order_code(db, normalized)
+        except AmbiguousWS3OrderCode as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if aliases:
+            state = db.scalar(
+                select(MachineOrderState)
+                .where(MachineOrderState.machine_id == machine_id, func.upper(MachineOrderState.order_number).in_(aliases))
+                .order_by(MachineOrderState.updated_at.desc())
+            )
     return state_response(state) if state else None
 
 
@@ -92,16 +104,26 @@ def update_order_progress(
 
     try:
         state = set_order_progress(db, payload.machine_id, normalized, payload.order_progress)
+        try:
+            _rows, aliases = resolve_ws3_order_code(db, normalized)
+        except AmbiguousWS3OrderCode as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if aliases:
+            db.execute(
+                update(MachineOrderState)
+                .where(MachineOrderState.machine_id == payload.machine_id, func.upper(MachineOrderState.order_number).in_(aliases))
+                .values(order_progress=payload.order_progress)
+            )
         if payload.machine_id == "BU-01":
             db.execute(
                 update(BuffingCheck)
-                .where(BuffingCheck.machine_id == payload.machine_id, func.upper(func.trim(BuffingCheck.order_number)) == normalized)
+                .where(BuffingCheck.machine_id == payload.machine_id, func.upper(func.trim(BuffingCheck.order_number)).in_(aliases or {normalized}))
                 .values(order_progress=payload.order_progress)
             )
         else:
             db.execute(
                 update(ScouringRecord)
-                .where(ScouringRecord.machine_id == payload.machine_id, func.upper(func.trim(ScouringRecord.order_number)) == normalized)
+                .where(ScouringRecord.machine_id == payload.machine_id, func.upper(func.trim(ScouringRecord.order_number)).in_(aliases or {normalized}))
                 .values(order_progress=payload.order_progress)
             )
         db.commit()

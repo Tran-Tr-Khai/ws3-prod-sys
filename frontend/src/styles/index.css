@@ -17,6 +17,7 @@
 @container overview (min-width: 900px) {
   .operator-overview-layout {
     grid-template-columns: minmax(0, 1fr) 320px;
+    column-gap: 2rem;
   }
 
   .operator-overview-machines {
@@ -27,6 +28,17 @@
   .operator-overview-notices {
     grid-column: 2;
     grid-row: 1;
+  }
+}
+
+@container overview (min-width: 1200px) {
+  .operator-overview-layout {
+    /* Match the default three-column machine-card width used by admin. */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .operator-overview-notices {
+    grid-column: 3;
   }
 }
 
@@ -162,6 +174,29 @@ body {
   padding-bottom: 1rem;
 }
 
+/* Keep the two-level Scouring history header's vertical dividers aligned. */
+.scouring-history-table thead th {
+  border-right: 1px solid #9aa8af;
+  border-bottom: 1px solid #9aa8af;
+}
+
+.scouring-history-table thead tr:first-child th[colspan] {
+  border-bottom-color: transparent;
+}
+
+.scouring-history-table thead tr:first-child th[rowspan] {
+  border-bottom: 1px solid #9aa8af;
+}
+
+.scouring-history-table tbody td {
+  border-bottom: 1px solid #d5e0e5;
+}
+
+.scouring-history-table thead th:last-child,
+.scouring-history-table tbody td:last-child {
+  border-right: 0;
+}
+
 .scouring-record-field .text-slate-500 {
   color: #607783;
 }
@@ -171,6 +206,27 @@ body {
   max-width: none;
   margin-left: 0;
   margin-right: 0;
+}
+
+@media (min-width: 1200px) {
+  .scouring-record-workspace.scouring-record-workspace-with-notices {
+    grid-template-columns: minmax(220px, 0.85fr) minmax(620px, 2.8fr) minmax(260px, 1fr);
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .scouring-record-workspace.scouring-record-workspace-with-notices > aside,
+  .scouring-record-workspace.scouring-record-workspace-with-notices > section,
+  .scouring-record-workspace.scouring-record-workspace-with-notices > .scouring-record-notices {
+    height: auto;
+    min-height: 0;
+    align-self: stretch;
+  }
+
+  .scouring-record-notices .operational-notice-dock {
+    height: 100%;
+    max-height: none;
+  }
 }
 
 .scouring-screen-frame {
@@ -258,6 +314,10 @@ body {
   .scouring-record-workspace {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.5rem;
+  }
+
+  .scouring-record-workspace.scouring-record-workspace-with-notices {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .scouring-record-context,

@@ -338,6 +338,32 @@ export async function getScouringRecords(options: RequestOptions = {}): Promise<
   return getScouringRecordsForOrder(undefined, options);
 }
 
+export async function downloadScouringReport(filters: {
+  date?: string;
+  orderProgress?: 'IN_PROGRESS' | 'COMPLETED' | 'UNKNOWN' | '';
+  result?: 'COMPLETE' | 'WARNING' | 'INCOMPLETE' | '';
+  search?: string;
+  language: 'vi' | 'en';
+}): Promise<Blob> {
+  const params = new URLSearchParams({ language: filters.language });
+  if (filters.date) params.set('record_date', filters.date);
+  if (filters.orderProgress) params.set('order_progress', filters.orderProgress);
+  if (filters.result) params.set('result', filters.result);
+  if (filters.search?.trim()) params.set('search', filters.search.trim());
+  let response: Response;
+  try {
+    response = await fetch(`${scouringRecordsPath}/export?${params.toString()}`, { credentials: 'include' });
+  } catch {
+    throw new ScouringApiError('Unable to reach the Scouring backend.', { code: 'network_error' });
+  }
+  if (!response.ok) {
+    const body = await readErrorBody(response);
+    const message = typeof body.detail === 'string' ? body.detail : `Scouring API returned HTTP ${response.status}`;
+    throw new ScouringApiError(body.message || message, { status: response.status, code: body.error || 'scouring_api_error', details: body.details });
+  }
+  return response.blob();
+}
+
 export async function getScouringRecordsForOrder(orderNumber?: string, options: RequestOptions = {}): Promise<ScouringRecord[]> {
   const query = orderNumber?.trim() ? `?order_number=${encodeURIComponent(orderNumber.trim())}` : '';
   const response = await request<ScouringRecordApiResponse[]>(`${scouringRecordsPath}${query}`, { signal: options.signal });
@@ -360,6 +386,20 @@ export async function createScouringRecord(
 ): Promise<ScouringRecord> {
   const response = await request<ScouringRecordApiResponse>(scouringRecordsPath, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(toApiRequest(payload)),
+    signal: options.signal,
+  });
+  return fromApiResponse(response);
+}
+
+export async function updateScouringRecord(
+  recordId: number,
+  payload: ScouringRecordCreatePayload,
+  options: RequestOptions = {},
+): Promise<ScouringRecord> {
+  const response = await request<ScouringRecordApiResponse>(`${scouringRecordsPath}/${encodeURIComponent(recordId)}`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(toApiRequest(payload)),
     signal: options.signal,

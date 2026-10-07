@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
-import { getScouringPhInspections, getScouringRecords, type ScouringPhInspection, type ScouringRecord } from './scouringApi';
+import { downloadScouringReport, getScouringPhInspections, getScouringRecords, type ScouringPhInspection, type ScouringRecord } from './scouringApi';
 import { useLanguage } from '../../i18n/LanguageContext';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { ensureVietnamesePdfFonts } from '../../utils/pdfFonts';
 
 type RecordStatus = 'COMPLETE' | 'WARNING' | 'INCOMPLETE';
 type OrderProgress = 'IN_PROGRESS' | 'COMPLETED' | 'UNKNOWN';
@@ -25,7 +22,11 @@ function orderProgressLabel(progress: OrderProgress, language: string): string {
 }
 
 function OrderProgressBadge({ progress, language }: { progress: OrderProgress; language: string }) {
-  const style = progress === 'COMPLETED' ? 'border-success bg-hmiNormal text-success' : progress === 'IN_PROGRESS' ? 'border-info bg-hmiInfo text-industrial' : 'border-line bg-hmiSection text-slate-500';
+  const style = progress === 'COMPLETED'
+    ? 'border-green-600 bg-green-100 text-green-800'
+    : progress === 'IN_PROGRESS'
+      ? 'border-blue-500 bg-blue-100 text-blue-800'
+      : 'border-slate-400 bg-slate-100 text-slate-600';
   return <span className={`inline-flex border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${style}`}>{orderProgressLabel(progress, language)}</span>;
 }
 
@@ -56,6 +57,8 @@ export function ScouringHistoryPage() {
   const { t, language } = useLanguage();
   const [records, setRecords] = useState<ScouringRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [date, setDate] = useState('');
   const [status, setStatus] = useState<RecordStatus | ''>('');
@@ -101,65 +104,35 @@ export function ScouringHistoryPage() {
   }, [selectedRecordId]);
   const clearFilters = () => { setDate(''); setStatus(''); setOrderProgress(''); setOperatorSearch(''); };
 
-  const exportPdf = async () => {
-    if (!selectedRecord) return;
-
-    const document = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    await ensureVietnamesePdfFonts(document);
-    const detailRows: Array<[string, string]> = [
-      [t('recordedTime'), formatDateTime(selectedRecord.recordedAt)],
-      [t('machine'), selectedRecord.machineId],
-      [t('operator'), selectedRecord.operatorName || selectedRecord.operatorIdentifier || '—'],
-      [language === 'vi' ? 'ID nhân viên' : 'Employee ID', selectedRecord.operatorIdentifier || '—'],
-      [language === 'vi' ? 'Ca làm' : 'Shift', selectedRecord.shift || '—'],
-      [language === 'vi' ? 'Tiến độ đơn' : 'Order progress', orderProgressLabel(selectedRecord.orderProgress ?? 'UNKNOWN', language)],
-      [t('orderNumber'), selectedRecord.orderNumber || '—'],
-      [t('item'), selectedRecord.item || '—'],
-      [t('lotYarn'), selectedRecord.lotYarn || '—'],
-      [t('lotNumber'), selectedRecord.lotNumber || '—'],
-      [t('chemicalInput'), ''],
-      ['NaOH', `${selectedRecord.naoh ?? '—'} ${selectedRecord.naoh === null ? '' : 'L'}`],
-      ['Soap', `${selectedRecord.soap ?? '—'} ${selectedRecord.soap === null ? '' : 'L'}`],
-      ['Desizer', `${selectedRecord.desizer ?? '—'} ${selectedRecord.desizer === null ? '' : 'L'}`],
-      ['H2O2', `${selectedRecord.h2o2 ?? '—'} ${selectedRecord.h2o2 === null ? '' : 'L'}`],
-      ['Chelate', `${selectedRecord.chelate ?? '—'} ${selectedRecord.chelate === null ? '' : 'L'}`],
-      [t('processConditions'), ''],
-      [t('speed'), `${selectedRecord.speed ?? '—'} ${selectedRecord.speed === null ? '' : 'm/min'}`],
-      [t('temperature'), `${selectedRecord.temperature ?? '—'} ${selectedRecord.temperature === null ? '' : '°C'}`],
-      [t('cylinderTemperature'), `${selectedRecord.cylinderTemperature ?? '—'} ${selectedRecord.cylinderTemperature === null ? '' : '°C'}`],
-      [t('production'), ''],
-      [t('inputMeters'), `${selectedRecord.inputFabricMeters ?? '—'} ${selectedRecord.inputFabricMeters === null ? '' : 'm'}`],
-      [t('outputMeters'), `${selectedRecord.outputFabricMeters ?? '—'} ${selectedRecord.outputFabricMeters === null ? '' : 'm'}`],
-      [language === 'vi' ? 'Hao hụt' : 'Loss', `${selectedRecord.lossMeters ?? '—'} ${selectedRecord.lossMeters === null ? '' : 'm'}`],
-      [t('status'), statusFor(selectedRecord)],
-      ...warningsFor(selectedRecord).map((warning) => [t('warning'), warning] as [string, string]),
-    ];
-
-    autoTable(document, {
-      startY: 10,
-      head: [['FIELD', 'VALUE']],
-      body: detailRows,
-      theme: 'grid',
-      styles: { font: 'Arial', fontSize: 9, cellPadding: 3, textColor: [36, 59, 74], lineColor: [196, 208, 214], lineWidth: 0.2 },
-      headStyles: { font: 'Arial', fillColor: [71, 98, 113], textColor: [255, 255, 255], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [244, 248, 250] },
-      columnStyles: { 0: { cellWidth: 62, fontStyle: 'bold' }, 1: { cellWidth: 118 } },
-      didParseCell: (data) => {
-        if (data.section === 'body' && [7, 13, 17].includes(data.row.index)) {
-          data.cell.styles.fillColor = [71, 98, 113];
-          data.cell.styles.textColor = [255, 255, 255];
-          data.cell.styles.fontStyle = 'bold';
-        }
-      },
-    });
-    document.save(`scouring-record-${selectedRecord.id}.pdf`);
+  const exportExcel = async () => {
+    if (loading || exporting || filteredRecords.length === 0) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const blob = await downloadScouringReport({ date, orderProgress, result: status, search: operatorSearch, language: language === 'vi' ? 'vi' : 'en' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `scouring-report-${date || 'all'}.xlsx`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (reason) {
+      setExportError(reason instanceof Error ? reason.message : (language === 'vi' ? 'Không thể tải báo cáo Excel.' : 'Unable to download Excel report.'));
+    } finally {
+      setExporting(false);
+    }
   };
 
   return <WS3Shell title="WS3 / Scouring History" subtitle="Stored Scouring records · PostgreSQL" machineId="SC-01" machineLabel="Scouring" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
       <div className="scouring-screen-frame scouring-full-width-frame mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
+      <header className="flex min-h-8 shrink-0 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white">
+        <h2 className="text-xs font-bold uppercase tracking-wider">{t('history')}</h2>
+        <div className="flex items-center gap-2"><span className="hidden text-[10px] font-semibold uppercase text-slate-300 sm:inline">{t('newestFirst')}</span><HMIButton size="compact" variant="secondary" className="!min-h-6 !px-2 !py-1 !text-[9px]" onClick={() => void exportExcel()} disabled={loading || exporting || filteredRecords.length === 0}>{exporting ? (language === 'vi' ? 'ĐANG XUẤT…' : 'EXPORTING…') : `${t('overview')} EXCEL`}</HMIButton></div>
+      </header>
       <section className="shrink-0 border-b-2 border-industrialDark">
-        <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">{t('recordFilters')}</h2><span className="font-mono text-[10px] uppercase tracking-wider">{filteredRecords.length} / {records.length}</span></header>
         <div className="bg-hmiSection p-2"><div className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(150px,0.8fr)_minmax(150px,0.8fr)_minmax(180px,0.8fr)_minmax(260px,2fr)_36px]">
           <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">{t('recordedTime')}<input type="date" className="min-h-9 border-2 border-line bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-industrial" value={date} onChange={(event) => setDate(event.target.value)} /></label>
           <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}<select className="min-h-9 border-2 border-line bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-industrial" value={orderProgress} onChange={(event) => setOrderProgress(event.target.value as OrderProgress | '')}><option value="">{language === 'vi' ? 'Tất cả tiến độ' : 'All progress'}</option><option value="IN_PROGRESS">{orderProgressLabel('IN_PROGRESS', language)}</option><option value="COMPLETED">{orderProgressLabel('COMPLETED', language)}</option><option value="UNKNOWN">{orderProgressLabel('UNKNOWN', language)}</option></select></label>
@@ -168,32 +141,32 @@ export function ScouringHistoryPage() {
           <button type="button" className="inline-flex min-h-9 w-9 items-center justify-center border-2 border-line bg-white text-lg font-bold leading-none text-industrialDark hover:border-industrialDark hover:bg-hmiHover" onClick={clearFilters} aria-label={t('clearFilters')} title={t('clearFilters')}>×</button>
         </div></div>
       </section>
+      {exportError ? <div role="alert" className="shrink-0 border-b border-alarm bg-hmiWarning px-3 py-2 text-[10px] font-semibold text-alarm">{language === 'vi' ? 'Không thể xuất báo cáo Excel:' : 'Unable to export Excel report:'} {exportError}</div> : null}
       <div className="min-h-0 flex-1">
         <section className="flex h-full min-h-0 min-w-0 flex-col bg-panel">
-          <header className="flex min-h-8 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white">
-            <h2 className="text-xs font-bold uppercase tracking-wider">{t('history')}</h2>
-            <div className="flex items-center gap-2"><span className="hidden text-[10px] font-semibold uppercase text-slate-300 sm:inline">{t('newestFirst')}</span><HMIButton size="compact" className="!min-h-6 !px-2 !py-1 !text-[9px]" onClick={exportPdf} disabled={!selectedRecord}>{t('overview')} PDF</HMIButton></div>
-          </header>
           {loading ? <div className="p-6 text-center text-xs font-bold uppercase tracking-wide text-slate-500">{t('loadingRecords')}</div>
             : error ? <div className="p-6 text-center text-xs font-semibold uppercase tracking-wide text-alarm"><p>{t('unableToLoadRecords')}</p><p className="mt-1 font-normal normal-case">{error}</p><HMIButton size="compact" className="mt-3" onClick={() => window.location.reload()}>{t('retry')}</HMIButton></div>
               : filteredRecords.length === 0 ? <div className="p-6 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">{records.length === 0 ? t('noRecords') : t('noMatchingRecords')}</div>
-                : <><p className="shrink-0 px-2 py-1 text-[9px] font-semibold text-slate-500 sm:hidden">{language === 'vi' ? 'Vuốt ngang để xem đầy đủ thông tin' : 'Swipe horizontally to see all columns'}</p><div className="min-h-0 flex-1 overflow-auto"><table className="w-full min-w-[2500px] border-collapse text-left text-[10px]"><thead className="sticky top-0 z-10 bg-industrial text-[9px] uppercase tracking-wider text-white"><tr>
-                  <th rowSpan={2} className="whitespace-nowrap border-r border-white/40 px-2 py-2">{t('phInspection')}</th>
-                  <th colSpan={10} className="border-r border-white/40 px-2 py-2 text-center">{language === 'vi' ? 'Thông tin chung' : 'General information'}</th>
-                  <th colSpan={5} className="border-r border-white/40 px-2 py-2 text-center">{language === 'vi' ? 'Hóa chất' : 'Chemicals'}</th>
-                  <th colSpan={3} className="border-r border-white/40 px-2 py-2 text-center">{language === 'vi' ? 'Điều kiện quy trình' : 'Process conditions'}</th>
-                  <th colSpan={4} className="border-r border-white/40 px-2 py-2 text-center">{t('production')}</th>
-                  <th rowSpan={2} className="whitespace-nowrap border-l border-white/40 px-2 py-2">{language === 'vi' ? 'Kết quả' : 'Result'}</th>
+                : <><p className="shrink-0 px-2 py-1 text-[9px] font-semibold text-slate-500 sm:hidden">{language === 'vi' ? 'Vuốt ngang để xem đầy đủ thông tin' : 'Swipe horizontally to see all columns'}</p><div className="min-h-0 flex-1 overflow-auto"><table className="scouring-history-table w-max min-w-max table-auto border-separate border-spacing-0 text-left text-[10px]"><thead className="sticky top-0 z-10 bg-industrial text-[9px] uppercase tracking-wider text-white"><tr>
+                  <th rowSpan={2} className="whitespace-nowrap px-2 py-2">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}</th>
+                  <th rowSpan={2} className="whitespace-nowrap px-2 py-2">{t('phInspection')}</th>
+                  <th colSpan={9} className="px-2 py-2 text-center">{language === 'vi' ? 'Thông tin chung' : 'General information'}</th>
+                  <th colSpan={5} className="px-2 py-2 text-center">{language === 'vi' ? 'Hóa chất' : 'Chemicals'}</th>
+                  <th colSpan={3} className="px-2 py-2 text-center">{language === 'vi' ? 'Điều kiện quy trình' : 'Process conditions'}</th>
+                  <th colSpan={3} className="px-2 py-2 text-center">{t('production')}</th>
+                  <th rowSpan={2} className="whitespace-nowrap px-2 py-2">{language === 'vi' ? 'Kết quả' : 'Result'}</th>
                 </tr><tr>
-                  {[t('recordedTime'),t('machine'),t('orderNumber'),t('item'),t('lotYarn'),t('lotNumber'),t('operator'),language === 'vi' ? 'ID nhân viên' : 'Employee ID',language === 'vi' ? 'Ca' : 'Shift',language === 'vi' ? 'Tiến độ đơn' : 'Order progress','NaOH (L)','Soap (L)','Desizer (L)','H2O2 (L)','Chelate (L)',`${t('speed')} (m/min)`,`${t('temperature')} (°C)`,language === 'vi' ? 'Nhiệt độ lô gia (°C)' : 'Cylinder temp. (°C)',language === 'vi' ? 'Mét đầu vào' : 'Input (m)',language === 'vi' ? 'Mét đầu ra' : 'Output (m)',language === 'vi' ? 'Sản lượng' : 'Production (m)',language === 'vi' ? 'Hao hụt (m)' : 'Loss (m)'].map((heading, index) => <th key={`${heading}-${index}`} className="whitespace-nowrap border-r border-white/40 px-2 py-2">{heading}</th>)}
+                  {[t('recordedTime'),t('machine'),t('orderNumber'),t('item'),t('lotYarn'),t('lotNumber'),t('operator'),language === 'vi' ? 'ID nhân viên' : 'Employee ID',language === 'vi' ? 'Ca' : 'Shift','NaOH (L)','Soap (L)','Desizer (L)','H2O2 (L)','Chelate (L)',`${t('speed')} (m/min)`,`${t('temperature')} (°C)`,language === 'vi' ? 'Nhiệt độ lô gia (°C)' : 'Cylinder temp. (°C)',language === 'vi' ? 'Mét đầu vào' : 'Input (m)',language === 'vi' ? 'Mét đầu ra' : 'Output (m)',language === 'vi' ? 'Hao hụt (m)' : 'Loss (m)'].map((heading, index) => <th key={`${heading}-${index}`} className="whitespace-nowrap px-2 py-2">{heading}</th>)}
                 </tr></thead><tbody>{filteredRecords.map((record) => <tr key={record.id} className={`cursor-pointer border-b border-line hover:bg-hmiHover ${selectedRecord?.id === record.id ? 'bg-hmiSelected' : 'bg-white'}`} onClick={() => { setSelectedId(record.id); setPhDialogOpen(false); }}>
+                  <td className="whitespace-nowrap border-r border-line px-2 py-2"><OrderProgressBadge progress={record.orderProgress ?? 'UNKNOWN'} language={language} /></td>
                   <td className="whitespace-nowrap border-r border-line px-2 py-2">{phInspectionCounts[record.id] ? <button type="button" className="font-bold text-industrial underline" onClick={(event) => { event.stopPropagation(); setSelectedId(record.id); setPhDialogOpen(true); }}>{t('view')} ({phInspectionCounts[record.id]})</button> : '—'}</td>
-                  <td className="whitespace-nowrap border-r border-line px-2 py-2 font-mono font-semibold">{formatDateTime(record.recordedAt)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2">{record.machineId}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 font-mono font-bold text-industrial">{record.orderNumber || '—'}</td><td className="max-w-[260px] truncate border-r border-line px-2 py-2" title={record.item || ''}>{record.item || '—'}</td><td className="whitespace-nowrap border-r border-line px-2 py-2">{record.lotYarn || '—'}</td><td className="whitespace-nowrap border-r border-line px-2 py-2">{record.lotNumber || '—'}</td><td className="whitespace-nowrap border-r border-line px-2 py-2">{record.operatorName || '—'}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 font-mono">{record.operatorIdentifier || '—'}</td><td className="whitespace-nowrap border-r border-line px-2 py-2">{record.shift || '—'}</td><td className="whitespace-nowrap border-r border-line px-2 py-2"><OrderProgressBadge progress={record.orderProgress ?? 'UNKNOWN'} language={language} /></td>
-                  {[record.naoh,record.soap,record.desizer,record.h2o2,record.chelate].map((value, index) => <td key={index} className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(value)}</td>)}<td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.speed)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.temperature)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.cylinderTemperature)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.inputFabricMeters)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.outputFabricMeters)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.productionQuantityMeters)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.lossMeters)}</td>
+                  <td className="whitespace-nowrap border-r border-line px-2 py-2 font-mono font-semibold">{formatDateTime(record.recordedAt)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2">{record.machineId}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 font-mono font-bold text-industrial">{record.orderNumber || '—'}</td><td className="max-w-[260px] truncate border-r border-line px-2 py-2" title={record.item || ''}>{record.item || '—'}</td><td className="whitespace-nowrap border-r border-line px-2 py-2">{record.lotYarn || '—'}</td><td className="whitespace-nowrap border-r border-line px-2 py-2">{record.lotNumber || '—'}</td><td className="whitespace-nowrap border-r border-line px-2 py-2">{record.operatorName || '—'}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 font-mono">{record.operatorIdentifier || '—'}</td><td className="whitespace-nowrap border-r border-line px-2 py-2">{record.shift || '—'}</td>
+                  {[record.naoh,record.soap,record.desizer,record.h2o2,record.chelate].map((value, index) => <td key={index} className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(value)}</td>)}<td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.speed)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.temperature)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.cylinderTemperature)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.inputFabricMeters)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.outputFabricMeters)}</td><td className="whitespace-nowrap border-r border-line px-2 py-2 text-right font-mono">{formatValue(record.lossMeters)}</td>
                   <td className="whitespace-nowrap px-2 py-2"><StatusText record={record} label={(value) => value === 'COMPLETE' ? t('complete') : value === 'WARNING' ? t('warning') : t('incomplete')} /></td>
                 </tr>)}</tbody></table></div></>}
         </section>
       </div>
+      <footer className="shrink-0 border-t border-line bg-hmiSection px-3 py-1 text-right font-mono text-[10px] font-bold uppercase text-slate-500">{filteredRecords.length} / {records.length} {language === 'vi' ? 'bản ghi' : 'records'}</footer>
       </div>
       {phDialogOpen ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/70 p-3" role="presentation" onClick={() => setPhDialogOpen(false)}><section role="dialog" aria-modal="true" aria-labelledby="ph-dialog-title" className="flex max-h-[85vh] w-full max-w-xl flex-col border-2 border-industrialDark bg-white shadow-xl" onClick={(event) => event.stopPropagation()}><header className="flex items-center justify-between bg-industrialDark px-3 py-2 text-white"><h2 id="ph-dialog-title" className="text-xs font-bold uppercase">{t('phInspection')} · {selectedRecord?.orderNumber || `ID ${selectedRecord?.id ?? ''}`}</h2><button type="button" aria-label={t('cancel')} className="px-2 text-lg" onClick={() => setPhDialogOpen(false)}>×</button></header><div className="min-h-0 overflow-auto">{phInspections.length ? <PhInspectionGroup inspections={phInspections} /> : <p className="p-5 text-center text-xs text-slate-500">{language === 'vi' ? 'Chưa có dữ liệu pH.' : 'No pH inspection data.'}</p>}</div></section></div> : null}
     </div>
