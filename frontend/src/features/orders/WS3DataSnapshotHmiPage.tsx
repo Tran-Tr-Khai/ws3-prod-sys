@@ -4,14 +4,10 @@ import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useAuth } from '../../auth/AuthContext';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { replaceWS3Snapshot } from './ws3OrderApi';
+import { ws3DataSourceLabels, type WS3DataSource } from './ws3DataSourceLabels';
 import { WS3SupervisorNav } from './WS3SupervisorNav';
 
-type SourceKey = 'order' | 'machine' | 'worker';
-const sources: Record<SourceKey, { vi: string; en: string }> = {
-  order: { vi: '7449 · Greige Fabric Out Management', en: '7449 · Greige Fabric Out Management' },
-  machine: { vi: '7463 · Weaving Ship List', en: '7463 · Weaving Ship List' },
-  worker: { vi: '7642 · Weaving Prod List', en: '7642 · Weaving Prod List' },
-};
+type SourceKey = WS3DataSource;
 
 export function WS3DataSnapshotHmiPage() {
   const { user } = useAuth();
@@ -45,7 +41,7 @@ export function WS3DataSnapshotHmiPage() {
             <header className="flex min-h-8 items-center justify-between border-b border-industrialDark bg-industrialDark px-3 py-1 text-white"><h1 className="text-[11px] font-bold uppercase tracking-[0.14em]">{tx('Cập nhật dữ liệu sản xuất', 'Production data update')}</h1><span className="text-[9px] uppercase tracking-wider text-slate-300">3 {tx('nguồn', 'sources')}</span></header>
             <div className="border-b border-line bg-white px-3 py-3 text-[10px] text-slate-600">{tx('Chọn các file báo cáo Excel cần cập nhật dữ liệu xem đơn.', 'Select the Excel reports to update the order information.')}</div>
             <div className="grid gap-2 p-2 md:grid-cols-2 xl:grid-cols-3">
-              {(Object.keys(sources) as SourceKey[]).map((key) => { const label = sources[key]; return <label key={key} className={`flex min-h-32 cursor-pointer flex-col border-2 bg-white p-3 transition-colors ${files[key] ? 'border-success bg-hmiNormal' : 'border-line hover:border-industrial'}`}>
+              {(Object.keys(ws3DataSourceLabels) as SourceKey[]).map((key) => { const label = ws3DataSourceLabels[key]; return <label key={key} className={`flex min-h-32 cursor-pointer flex-col border-2 bg-white p-3 transition-colors ${files[key] ? 'border-success bg-hmiNormal' : 'border-line hover:border-industrial'}`}>
                 <span className="text-[11px] font-bold tracking-wide text-industrialDark">{language === 'vi' ? label.vi : label.en}</span>
                 <input key={`${key}-${selectionVersion}`} disabled={loading} type="file" accept=".xls,.xlsx" className="mt-auto text-[10px]" onChange={(event) => { const file = event.target.files?.[0]; setFiles((current) => ({ ...current, [key]: file })); }} />
                 <span className="mt-2 truncate border-t border-line pt-2 text-[10px] font-semibold text-slate-600">{files[key]?.name ?? tx('Chưa chọn file', 'No file selected')}</span>

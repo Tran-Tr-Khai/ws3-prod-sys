@@ -444,13 +444,15 @@ function fromMachineOrderProgress(response: MachineOrderProgressApiResponse): Ma
 
 const machineOrderProgressPath = `${apiBaseUrl}/api/machine-orders/progress`;
 
-export async function getMachineOrderProgress(machineId: 'BU-01' | 'SC-01', orderNumber: string, options: RequestOptions = {}): Promise<MachineOrderProgress | null> {
+export type OrderProgressMachineId = 'BU-01' | 'SC-01' | 'TE-01' | 'TE-02';
+
+export async function getMachineOrderProgress(machineId: OrderProgressMachineId, orderNumber: string, options: RequestOptions = {}): Promise<MachineOrderProgress | null> {
   const query = `?machine_id=${encodeURIComponent(machineId)}&order_number=${encodeURIComponent(orderNumber.trim())}`;
   const response = await request<MachineOrderProgressApiResponse | null>(`${machineOrderProgressPath}${query}`, { signal: options.signal });
   return response ? fromMachineOrderProgress(response) : null;
 }
 
-export async function saveMachineOrderProgress(machineId: 'BU-01' | 'SC-01', orderNumber: string, orderProgress: 'IN_PROGRESS' | 'COMPLETED', options: RequestOptions = {}): Promise<MachineOrderProgress> {
+export async function saveMachineOrderProgress(machineId: OrderProgressMachineId, orderNumber: string, orderProgress: 'IN_PROGRESS' | 'COMPLETED', options: RequestOptions = {}): Promise<MachineOrderProgress> {
   const response = await request<MachineOrderProgressApiResponse>(machineOrderProgressPath, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ machine_id: machineId, order_number: orderNumber.trim(), order_progress: orderProgress }),

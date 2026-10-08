@@ -1,5 +1,9 @@
 # WS3 Backend
 
+See the repository [documentation index](../docs/README.md) for system
+architecture, production workflows, local development and deployment. This
+file retains the backend-focused quick start.
+
 ## Setup with uv
 
 From the repository root:

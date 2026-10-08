@@ -1,5 +1,10 @@
 # Alembic: repair, verification, and deployment
 
+For the normal website rollout on the Ubuntu server, use
+[production.md](production.md). The rollout below is specifically scoped to
+the separate `ws3-lan-test` Compose project and must not be copied unchanged
+for the live `ws3` stack.
+
 ## Root cause and repair
 
 The former revision 0001 imported current ORM models and called
@@ -62,7 +67,7 @@ tests. The production startup sequence reached revision 0035, schema comparison
 reported no new operations, and the isolated backend returned HTTP 200 with
 `{"status":"ok"}` from `/health`. No Ubuntu server database was changed or verified.
 
-## Ubuntu rollout: ws3-lan-test only
+## Isolated Ubuntu rollout: ws3-lan-test only
 
 The existing `ws3` stack is separate. Do not stop it, remove its volumes, or
 change its database. These commands target only `ws3-lan-test`. Run from

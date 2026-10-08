@@ -6,13 +6,9 @@ import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { WS3SupervisorNav } from './WS3SupervisorNav';
 import { getWS3WarehouseRecords, getWS3WarehouseSummary, type WS3WarehousePage, type WS3WarehouseSource, type WS3WarehouseSummary } from './ws3OrderApi';
+import { ws3DataSourceLabels } from './ws3DataSourceLabels';
 
 const sourceKeys: WS3WarehouseSource[] = ['order', 'machine', 'worker'];
-const sourceNames: Record<WS3WarehouseSource, [string, string]> = {
-  order: ['Đơn sản xuất WS3', 'WS3 production orders'],
-  machine: ['Roll từ máy dệt', 'Weaving machine rolls'],
-  worker: ['Ca và công nhân', 'Shifts and workers'],
-};
 const pageSize = 50;
 
 export function WS3DataWarehousePage() {
@@ -68,7 +64,7 @@ export function WS3DataWarehousePage() {
           {sourceKeys.map((key) => {
             const info = summary?.[key];
             return <button key={key} type="button" onClick={() => { setSource(key); setOffset(0); setSortBy(null); setSortDirection('asc'); }} className={`min-w-0 border-b-2 p-3 text-left transition-colors ${source === key ? 'border-industrialDark bg-hmiSection' : 'border-transparent bg-white hover:bg-hmiHover'}`}>
-              <span className="block text-[11px] font-bold uppercase tracking-wide">{sourceNames[key][language === 'vi' ? 0 : 1]}</span>
+              <span className="block text-[11px] font-bold uppercase tracking-wide">{language === 'vi' ? ws3DataSourceLabels[key].vi : ws3DataSourceLabels[key].en}</span>
               <strong className="mt-1 block font-mono text-xl tabular-nums">{info?.count.toLocaleString() ?? '—'}</strong>
               <span className="mt-1 block text-[10px] text-slate-500">{info?.first_date || '—'}{info?.last_date && info.last_date !== info.first_date ? ` → ${info.last_date}` : ''}</span>
               <span className="mt-1 block truncate text-[9px] text-slate-400">{tx('Cập nhật', 'Updated')}: {info?.updated_at ? new Date(info.updated_at).toLocaleString(language === 'vi' ? 'vi-VN' : 'en-GB') : '—'}</span>

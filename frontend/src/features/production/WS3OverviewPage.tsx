@@ -16,7 +16,7 @@ const processes = [
   { name: 'Dyeing', code: 'DY-01', available: false },
   { name: 'Washing', code: 'WA-01', available: false },
   { name: 'Skachar', code: 'SK-01', available: false },
-  { name: 'Tentering', code: 'TE-01', available: false },
+  { name: 'Tentering', code: 'TE-01', available: true },
   { name: 'Calendaring', code: 'CA-01', available: false },
   { name: 'Raising', code: 'RA-01', available: false },
   { name: 'Sueding', code: 'SU-01', available: false },
@@ -24,14 +24,16 @@ const processes = [
 
 const overviewMachineFilterKey = 'ws3.overview.selected-machines';
 const defaultOverviewMachineCodes = ['UN-01', 'BU-01', 'SC-01', 'TE-01'];
-const overviewFilterProcesses = processes.filter((process) => process.available || process.code === 'TE-01');
+const overviewFilterProcesses = processes.filter((process) => process.available);
 
 function getInitialOverviewMachineSelection(): string[] {
   try {
     const stored: unknown = JSON.parse(window.localStorage.getItem(overviewMachineFilterKey) ?? 'null');
     if (Array.isArray(stored) && stored.every((code) => typeof code === 'string')) {
       const validCodes = new Set(overviewFilterProcesses.map((process) => process.code));
-      return stored.filter((code): code is string => validCodes.has(code));
+      const selection = stored.filter((code): code is string => validCodes.has(code));
+      if (stored.includes('TE-02') && !selection.includes('TE-01')) selection.push('TE-01');
+      return selection;
     }
   } catch {
     // Use the default machines when saved preferences are unavailable.
@@ -69,6 +71,7 @@ export function WS3OverviewPage() {
   const { user } = useAuth();
   const isMachineOperator = user?.role === 'OPERATOR' && user.machineIds.length > 0;
   const [selectedMachineCodes, setSelectedMachineCodes] = useState<string[]>(getInitialOverviewMachineSelection);
+  const [selectedTenteringMachine, setSelectedTenteringMachine] = useState('TE-01');
   const [latestRecord, setLatestRecord] = useState<ScouringRecord | null>(null);
   const [scouringRecords, setScouringRecords] = useState<ScouringRecord[]>([]);
   const [scouringProduction, setScouringProduction] = useState<WS3ProductionOrderReport | null>(null);
@@ -214,8 +217,14 @@ export function WS3OverviewPage() {
   const groupForPrefix: Record<string, string> = { UN: 'UNROLLING', BU: 'BUFFING', SC: 'SCOURING', DY: 'DYEING', WA: 'WASHING', SK: 'SKACHAR', TE: 'TENTERING', CA: 'CALENDARING' };
   const machineGroup = (processCode: string) => groupForPrefix[prefix(processCode)];
   const noticeByGroup = new Map(notices.map((notice) => [notice.recipientGroup, notice]));
+  const availableTenteringMachines = user?.role === 'OPERATOR'
+    ? ['TE-01', 'TE-02'].filter((machineId) => user.machineIds.includes(machineId))
+    : ['TE-01', 'TE-02'];
+  const activeTenteringMachine = availableTenteringMachines.includes(selectedTenteringMachine)
+    ? selectedTenteringMachine
+    : availableTenteringMachines[0] ?? 'TE-01';
   const visibleProcesses = canManageOrders ? processes : [
-    ...processes.filter((process) => process.available && user?.machineIds.includes(process.code)),
+    ...processes.filter((process) => process.available && (user?.machineIds.includes(process.code) || (process.name === 'Tentering' && availableTenteringMachines.length > 0))),
     ...(user?.machineIds ?? []).flatMap((machineId) => {
       const definition = processes.find((process) => !process.available && prefix(process.code) === prefix(machineId));
       return definition ? [{ ...definition, code: machineId }] : [];
@@ -228,7 +237,7 @@ export function WS3OverviewPage() {
   useEffect(() => {
     window.localStorage.setItem(overviewMachineFilterKey, JSON.stringify(selectedMachineCodes));
   }, [selectedMachineCodes]);
-  const processMachineId = (process: typeof processes[number]) => process.code;
+  const processMachineId = (process: typeof processes[number]) => process.name === 'Tentering' ? activeTenteringMachine : process.code;
   const processEntryPath = (process: typeof processes[number]) => process.name === 'Unrolling' ? '/machine/unrolling/record' : process.name === 'Buffing' ? '/machine/buffing/record' : process.name === 'Scouring' ? '/machine/scouring/record/operation' : `/machine/${processMachineId(process)}/record`;
 
   return (
@@ -257,10 +266,15 @@ export function WS3OverviewPage() {
         </details>}
         <div className={isMachineOperator ? 'operator-overview-machines grid min-w-0 grid-cols-1 gap-2' : 'grid gap-2 sm:grid-cols-2 lg:grid-cols-3'}>
           {displayedProcesses.map((process) => (
-            <article key={process.name} className={`flex min-w-0 flex-col bg-white ${process.available ? 'border-2 border-industrial' : 'border border-line'}`}>
+            <article key={process.code} className={`flex min-w-0 flex-col bg-white ${process.available ? 'border-2 border-industrial' : 'border border-line'}`}>
               <header className={`flex min-h-9 items-center justify-between px-3 py-2 text-white ${process.available ? 'bg-industrial' : 'bg-industrialDark'}`}>
                 <h2 className="font-mono text-sm font-bold uppercase tracking-[0.1em]">{process.name}</h2>
-                <span className="font-mono text-[9px] text-slate-300">{canManageOrders ? process.code : user?.machineIds.filter((id) => prefix(id) === prefix(process.code)).join(' · ')}</span>
+                {process.name === 'Tentering' ? availableTenteringMachines.length > 1
+                  ? <select aria-label={language === 'vi' ? 'Chọn máy Tentering' : 'Select Tentering machine'} value={activeTenteringMachine} onChange={(event) => setSelectedTenteringMachine(event.target.value)} className="min-h-8 border-2 border-line bg-white px-2 text-[9px] font-bold text-industrialDark">
+                    {availableTenteringMachines.map((machineId) => <option key={machineId} value={machineId}>{machineId === 'TE-01' ? 'TENTER 1' : 'TENTER 2'}</option>)}
+                  </select>
+                  : <span className="font-mono text-[9px] text-slate-300">{activeTenteringMachine === 'TE-01' ? 'TENTER 1' : 'TENTER 2'}</span>
+                  : <span className="font-mono text-[9px] text-slate-300">{canManageOrders ? process.code : user?.machineIds.filter((id) => prefix(id) === prefix(process.code)).join(' · ')}</span>}
               </header>
               {canManageOrders ? showNotices ? <section className="min-h-[150px] flex-1 px-3 py-3">
                 <div className="mb-2 flex items-center justify-between gap-2 border-b border-line pb-2"><h3 className="font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('notifications')}</h3>{noticeByGroup.get(machineGroup(process.code)) && <time className="shrink-0 text-[9px] text-slate-500">{formatDateTime(noticeByGroup.get(machineGroup(process.code))!.sentAt, language)}</time>}</div>
@@ -287,7 +301,7 @@ export function WS3OverviewPage() {
                 <section className="min-w-0 px-3 py-3">
                   <h3 className="mb-2 border-b border-line pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('operation')}</h3>
                   <dl className={`grid gap-2 text-[10px] ${process.name === 'Buffing' ? '[&>div:last-child]:hidden' : ''}`}>
-                    <div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('machine')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{canManageOrders ? process.code : user?.machineIds.filter((id) => prefix(id) === prefix(process.code)).join(' · ')}</dd></div>
+                    <div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('machine')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{process.name === 'Tentering' || canManageOrders ? processMachineId(process) : user?.machineIds.filter((id) => prefix(id) === prefix(process.code)).join(' · ')}</dd></div>
                     {process.name === 'Scouring' && latestRecord && (canManageOrders || user?.machineIds.includes(latestRecord.machineId)) && <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Ca' : 'Shift'}</dt><dd className="mt-0.5 font-semibold">{latestRecord.shift || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestRecord.operatorName || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</dt><dd className="mt-0.5 font-mono font-semibold">{latestRecord.operatorIdentifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Bắt đầu đơn' : 'Order started'}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{scouringOrderStartedAt ? formatDateTime(scouringOrderStartedAt, language) : '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestRecord.recordedAt, language)}</dd></div></>}
                     {process.name === 'Buffing' && latestBuffingCheck && (canManageOrders || user?.machineIds.includes(latestBuffingCheck.machineId)) && <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestBuffingCheck.operatorName || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</dt><dd className="mt-0.5 font-mono font-semibold">{latestBuffingCheck.operatorIdentifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestBuffingCheck.checkedAt)}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('status')}</dt><dd className={`mt-0.5 font-bold ${buffingStatus === 'COMPLETE' ? 'text-success' : 'text-warning'}`}>{buffingStatus === 'COMPLETE' ? t('complete') : t('warning')}</dd></div></>}
                     {process.name === 'Scouring' && !latestRecord && <dd className="text-slate-500">{loading ? t('loadingRecorded') : t('noScouringRecords')}</dd>}
@@ -300,7 +314,7 @@ export function WS3OverviewPage() {
                   {process.name === 'Scouring' ? <>{scouringProductionSummary}{scouringQuickStatuses}</> : process.name === 'Buffing' ? null : process.name !== 'Unrolling' ? <p className="text-xs text-slate-500">{language === 'vi' ? 'Nội dung riêng của máy sẽ được bổ sung sau.' : 'Machine-specific content will be added later.'}</p> : <p className="text-xs text-slate-500">{t('noData')}</p>}
                 </section>
               </div>}
-              <div className="mt-auto border-t border-line px-3 py-3"><Link to={processEntryPath(process)} className="inline-flex w-full"><HMIButton size="compact" variant="secondary" className="w-full">{process.name === 'Unrolling' ? (language === 'vi' ? 'XEM ĐƠN & IN PHIẾU' : 'VIEW ORDERS & PRINT SLIPS') : process.name === 'Buffing' ? t('openBuffing') : process.name === 'Scouring' ? t('openScouring') : language === 'vi' ? 'NHẬP THÔNG TIN VẬN HÀNH' : 'ENTER OPERATION INFO'}</HMIButton></Link></div>
+              <div className="mt-auto border-t border-line px-3 py-3"><Link to={processEntryPath(process)} className="inline-flex w-full"><HMIButton size="compact" variant="secondary" className="w-full">{process.name === 'Unrolling' ? (language === 'vi' ? 'XEM ĐƠN & IN PHIẾU' : 'VIEW ORDERS & PRINT SLIPS') : process.name === 'Buffing' ? t('openBuffing') : process.name === 'Scouring' ? t('openScouring') : process.name === 'Tentering' ? (language === 'vi' ? `MỞ ${activeTenteringMachine === 'TE-01' ? 'TENTER 1' : 'TENTER 2'}` : `OPEN ${activeTenteringMachine === 'TE-01' ? 'TENTER 1' : 'TENTER 2'}`) : language === 'vi' ? 'NHẬP THÔNG TIN VẬN HÀNH' : 'ENTER OPERATION INFO'}</HMIButton></Link></div>
             </article>
           ))}
         </div>
