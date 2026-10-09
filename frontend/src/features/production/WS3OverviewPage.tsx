@@ -2,12 +2,13 @@ import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
-import { getBuffingChecks, getScouringRecords, type BuffingCheck, type ScouringRecord } from '../machines/scouringApi';
+import { getBuffingChecks, getMachineOrderProgress, getScouringRecords, type BuffingCheck, type ScouringRecord } from '../machines/scouringApi';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useAuth } from '../../auth/AuthContext';
 import { getMachineNotices, type MachineNotice } from '../support/supportApi';
 import { SupportChatWidget } from '../support/SupportChatWidget';
 import { getWS3ProductionOrderContext, getWS3ProductionReport, type WS3ProductionOrderReport, type WS3ProductionReport } from '../orders/ws3OrderApi';
+import { getTenteringOrderSource, getTenteringOrders, type TenteringOrder } from '../machines/tenteringApi';
 
 const processes = [
   { name: 'Unrolling', code: 'UN-01', available: true },
@@ -73,11 +74,13 @@ export function WS3OverviewPage() {
   const [selectedMachineCodes, setSelectedMachineCodes] = useState<string[]>(getInitialOverviewMachineSelection);
   const [selectedTenteringMachine, setSelectedTenteringMachine] = useState('TE-01');
   const [latestRecord, setLatestRecord] = useState<ScouringRecord | null>(null);
+  const [scouringCanonicalProgress, setScouringCanonicalProgress] = useState<'IN_PROGRESS' | 'COMPLETED' | null>(null);
   const [scouringRecords, setScouringRecords] = useState<ScouringRecord[]>([]);
   const [scouringProduction, setScouringProduction] = useState<WS3ProductionOrderReport | null>(null);
   const [scouringProductionLoading, setScouringProductionLoading] = useState(false);
   const [scouringProductionError, setScouringProductionError] = useState(false);
   const [latestBuffingCheck, setLatestBuffingCheck] = useState<BuffingCheck | null>(null);
+  const [buffingCanonicalProgress, setBuffingCanonicalProgress] = useState<'IN_PROGRESS' | 'COMPLETED' | null>(null);
   const [buffingChecks, setBuffingChecks] = useState<BuffingCheck[] | null>(null);
   const [buffingOrderStartedAt, setBuffingOrderStartedAt] = useState<string | null>(null);
   const [buffingProduction, setBuffingProduction] = useState<WS3ProductionOrderReport | null>(null);
@@ -89,6 +92,11 @@ export function WS3OverviewPage() {
   const [showNotices] = useState(false);
   const [unrollingReport, setUnrollingReport] = useState<WS3ProductionReport | null>(null);
   const [unrollingLoadFailed, setUnrollingLoadFailed] = useState(false);
+  const [tenteringOrders, setTenteringOrders] = useState<TenteringOrder[]>([]);
+  const [tenteringLoading, setTenteringLoading] = useState(false);
+  const [tenteringLoadFailed, setTenteringLoadFailed] = useState(false);
+  const [tenteringMesMeters, setTenteringMesMeters] = useState<{ key: string; value: number | null } | null>(null);
+  const [tenteringMesMetersLoading, setTenteringMesMetersLoading] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -103,6 +111,16 @@ export function WS3OverviewPage() {
       });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const orderNumber = latestRecord?.orderNumber?.trim();
+    if (!orderNumber) { setScouringCanonicalProgress(null); return; }
+    let active = true;
+    void getMachineOrderProgress('SC-01', orderNumber)
+      .then((progress) => { if (active) setScouringCanonicalProgress(progress?.orderProgress ?? null); })
+      .catch(() => { if (active) setScouringCanonicalProgress(null); });
+    return () => { active = false; };
+  }, [latestRecord?.orderNumber]);
 
   useEffect(() => {
     const canView = user && (['ADMIN', 'SUPERVISOR', 'PRODUCTION_MANAGER'].includes(user.role) || user.machineIds.includes('SC-01'));
@@ -146,6 +164,16 @@ export function WS3OverviewPage() {
       })
       .catch(() => { setLatestBuffingCheck(null); setBuffingOrderStartedAt(null); setBuffingChecks(null); });
   }, []);
+
+  useEffect(() => {
+    const orderNumber = latestBuffingCheck?.orderNumber?.trim();
+    if (!orderNumber) { setBuffingCanonicalProgress(null); return; }
+    let active = true;
+    void getMachineOrderProgress('BU-01', orderNumber)
+      .then((progress) => { if (active) setBuffingCanonicalProgress(progress?.orderProgress ?? null); })
+      .catch(() => { if (active) setBuffingCanonicalProgress(null); });
+    return () => { active = false; };
+  }, [latestBuffingCheck?.orderNumber]);
 
   useEffect(() => {
     const canView = user && (['ADMIN', 'SUPERVISOR'].includes(user.role) || user.machineIds.includes('BU-01'));
@@ -202,7 +230,9 @@ export function WS3OverviewPage() {
               </div>
             </div>
           : <p className="text-xs text-slate-500">{language === 'vi' ? 'Không tìm thấy mã đơn này trong snapshot MES hiện tại.' : 'This order is not in the current MES snapshot.'}</p>;
-  const scouringQuickStatuses = latestRecord && <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line pt-2 text-[10px]"><div><span className="block text-[9px] font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Kết quả kiểm tra' : 'Inspection result'}</span><span className={`font-bold ${recordStatus === 'COMPLETE' ? 'text-success' : 'text-warning'}`}>{recordStatus === 'COMPLETE' ? (language === 'vi' ? 'ĐẠT' : 'PASS') : (language === 'vi' ? 'CẢNH BÁO' : 'WARNING')}</span></div><div><span className="block text-[9px] font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}</span><span className={`font-bold ${latestRecord.orderProgress === 'COMPLETED' ? 'text-success' : latestRecord.orderProgress === 'IN_PROGRESS' ? 'text-info' : 'text-slate-500'}`}>{latestRecord.orderProgress === 'COMPLETED' ? (language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED') : latestRecord.orderProgress === 'IN_PROGRESS' ? (language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS') : (language === 'vi' ? 'CHƯA CẬP NHẬT' : 'NOT SET')}</span></div></div>;
+  const scouringOrderProgress = scouringCanonicalProgress ?? latestRecord?.orderProgress ?? null;
+  const buffingOrderProgress = buffingCanonicalProgress ?? latestBuffingCheck?.orderProgress ?? null;
+  const scouringQuickStatuses = latestRecord && <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line pt-2 text-[10px]"><div><span className="block text-[9px] font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Kết quả kiểm tra' : 'Inspection result'}</span><span className={`font-bold ${recordStatus === 'COMPLETE' ? 'text-success' : 'text-warning'}`}>{recordStatus === 'COMPLETE' ? (language === 'vi' ? 'ĐẠT' : 'PASS') : (language === 'vi' ? 'CẢNH BÁO' : 'WARNING')}</span></div><div><span className="block text-[9px] font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}</span><span className={`font-bold ${scouringOrderProgress === 'COMPLETED' ? 'text-success' : scouringOrderProgress === 'IN_PROGRESS' ? 'text-info' : 'text-slate-500'}`}>{scouringOrderProgress === 'COMPLETED' ? (language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED') : scouringOrderProgress === 'IN_PROGRESS' ? (language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS') : (language === 'vi' ? 'CHƯA CẬP NHẬT' : 'NOT SET')}</span></div></div>;
   const canManageOrders = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
   const canViewMesOrders = canManageOrders;
   useEffect(() => {
@@ -223,6 +253,58 @@ export function WS3OverviewPage() {
   const activeTenteringMachine = availableTenteringMachines.includes(selectedTenteringMachine)
     ? selectedTenteringMachine
     : availableTenteringMachines[0] ?? 'TE-01';
+  useEffect(() => {
+    let active = true;
+    setTenteringLoading(true);
+    setTenteringLoadFailed(false);
+    void getTenteringOrders(activeTenteringMachine)
+      .then((orders) => { if (active) setTenteringOrders(orders); })
+      .catch(() => { if (active) { setTenteringOrders([]); setTenteringLoadFailed(true); } })
+      .finally(() => { if (active) setTenteringLoading(false); });
+    return () => { active = false; };
+  }, [activeTenteringMachine]);
+  const latestTenteringOrder = tenteringOrders[0] ?? null;
+  const latestTenteringSopNo = latestTenteringOrder?.sop_no ?? '';
+  useEffect(() => {
+    if (!latestTenteringSopNo) {
+      setTenteringMesMeters(null);
+      setTenteringMesMetersLoading(false);
+      return;
+    }
+    let active = true;
+    const key = `${activeTenteringMachine}:${latestTenteringSopNo}`;
+    setTenteringMesMeters(null);
+    setTenteringMesMetersLoading(true);
+    void getTenteringOrderSource(activeTenteringMachine, latestTenteringSopNo)
+      .then((source) => {
+        if (!active) return;
+        const rolls = source?.rolls ?? [];
+        const hasCompleteMeters = rolls.length > 0 && rolls.every((roll) => roll.length_meters !== null && Number.isFinite(roll.length_meters));
+        setTenteringMesMeters({ key, value: hasCompleteMeters ? rolls.reduce((total, roll) => total + (roll.length_meters ?? 0), 0) : null });
+      })
+      .catch(() => { if (active) setTenteringMesMeters({ key, value: null }); })
+      .finally(() => { if (active) setTenteringMesMetersLoading(false); });
+    return () => { active = false; };
+  }, [activeTenteringMachine, latestTenteringSopNo]);
+  const tenteringPlannedTotal = latestTenteringOrder?.entries.reduce((total, entry) => total + (entry.planned_quantity ?? 0), 0) ?? 0;
+  const tenteringMesMetersKey = latestTenteringOrder ? `${activeTenteringMachine}:${latestTenteringOrder.sop_no}` : '';
+  const tenteringActualTotal = tenteringMesMeters?.key === tenteringMesMetersKey ? tenteringMesMeters.value : null;
+  const formatTenteringQuantity = (value: number) => value.toLocaleString(language === 'vi' ? 'vi-VN' : 'en-US', { maximumFractionDigits: 3 });
+  const tenteringProductionSummary = tenteringLoading
+    ? <p className="text-xs text-slate-500">{language === 'vi' ? 'Đang tải báo cáo Tentering…' : 'Loading Tentering report…'}</p>
+    : tenteringLoadFailed
+      ? <p role="status" className="text-xs text-warning">{language === 'vi' ? 'Không tải được báo cáo Tentering.' : 'Unable to load the Tentering report.'}</p>
+      : latestTenteringOrder
+        ? <div className="grid gap-2 text-[10px] sm:grid-cols-2">
+            <div><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Mã SOP' : 'SOP'}</span><span className="font-mono font-bold text-industrial">{latestTenteringOrder.sop_no}</span></div>
+            <div><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Khách hàng' : 'Customer'}</span><span className="font-semibold">{latestTenteringOrder.customer || '—'}</span></div>
+            <div className="sm:col-span-2"><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Mặt hàng' : 'Item'}</span><span className="font-semibold">{latestTenteringOrder.item_description || '—'}</span></div>
+            <div><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Tổng cuộn' : 'Total rolls'}</span><span className="font-mono font-bold">{latestTenteringOrder.entries.length}</span></div>
+            <div><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Sản lượng theo đơn' : 'Planned quantity'}</span><span className="font-mono font-bold">{tenteringPlannedTotal ? formatTenteringQuantity(tenteringPlannedTotal) : '—'}</span></div>
+            <div><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Sản lượng thực tế' : 'Actual quantity'}</span><span className="font-mono text-lg font-bold text-industrial">{tenteringMesMetersLoading ? '…' : tenteringActualTotal !== null ? formatTenteringQuantity(tenteringActualTotal) : '—'}</span></div>
+            <div className="mt-1 border-t border-line pt-2 sm:col-span-2"><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}</span><span className={`font-bold ${latestTenteringOrder.order_progress === 'COMPLETED' ? 'text-success' : 'text-info'}`}>{latestTenteringOrder.order_progress === 'COMPLETED' ? (language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED') : (language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS')}</span></div>
+          </div>
+        : <p className="text-xs text-slate-500">{language === 'vi' ? 'Chưa có đơn Tentering được ghi nhận cho máy này.' : 'No Tentering orders recorded for this machine yet.'}</p>;
   const visibleProcesses = canManageOrders ? processes : [
     ...processes.filter((process) => process.available && (user?.machineIds.includes(process.code) || (process.name === 'Tentering' && availableTenteringMachines.length > 0))),
     ...(user?.machineIds ?? []).flatMap((machineId) => {
@@ -285,23 +367,27 @@ export function WS3OverviewPage() {
                   {process.name === 'Buffing' && <div className="mb-2 grid grid-cols-2 gap-2 text-[10px]"><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('machine')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{process.code}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Ca' : 'Shift'}</dt><dd className="mt-0.5 font-semibold">{latestBuffingCheck?.shift || '—'}</dd></div></div>}
                   {process.name === 'Buffing' && latestBuffingCheck && <div className="mb-2 text-[10px]"><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Bắt đầu đơn' : 'Order started'}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{buffingOrderStartedAt ? formatDateTime(buffingOrderStartedAt, language) : '—'}</dd></div>}
                   {process.name === 'Scouring' && latestRecord && <div className="mb-2 grid grid-cols-2 gap-2 text-[10px]"><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('machine')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{latestRecord.machineId}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Ca' : 'Shift'}</dt><dd className="mt-0.5 font-semibold">{latestRecord.shift || '—'}</dd></div></div>}
+                  {process.name === 'Tentering' && latestTenteringOrder && <div className="mb-2 grid grid-cols-2 gap-2 text-[10px]"><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('machine')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{activeTenteringMachine}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Ca' : 'Shift'}</dt><dd className="mt-0.5 font-semibold">{latestTenteringOrder.shift || '—'}</dd></div></div>}
                   {process.name === 'Scouring' && latestRecord && <div className="mb-2 text-[10px]"><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Bắt đầu đơn' : 'Order started'}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{scouringOrderStartedAt ? formatDateTime(scouringOrderStartedAt, language) : '—'}</dd></div>}
-                  <dl className={`grid gap-2 text-[10px] ${process.name === 'Buffing' ? '[&>div:first-child]:hidden [&>div:last-child]:hidden' : process.name === 'Scouring' && latestRecord ? '[&>div:first-child]:hidden' : ''}`}>
+                  {process.name === 'Tentering' && latestTenteringOrder && <div className="mb-2 text-[10px]"><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Bắt đầu đơn' : 'Order started'}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestTenteringOrder.created_at, language)}</dd></div>}
+                  <dl className={`grid gap-2 text-[10px] ${process.name === 'Buffing' ? '[&>div:first-child]:hidden [&>div:last-child]:hidden' : (process.name === 'Scouring' && latestRecord) || (process.name === 'Tentering' && latestTenteringOrder) ? '[&>div:first-child]:hidden' : ''}`}>
                     <div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('machine')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{process.code}</dd></div>
-                    {process.name === 'Unrolling' ? <dd className="text-slate-600">{language === 'vi' ? 'Đơn và danh sách cuộn lấy trực tiếp từ MES.' : 'Orders and rolls are supplied directly from MES.'}</dd> : process.name === 'Scouring' && latestRecord ? <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestRecord.operatorName || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</dt><dd className="mt-0.5 font-mono font-semibold">{latestRecord.operatorIdentifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestRecord.recordedAt, language)}</dd></div></> : process.name === 'Buffing' && latestBuffingCheck ? <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestBuffingCheck.operatorName || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</dt><dd className="mt-0.5 font-mono font-semibold">{latestBuffingCheck.operatorIdentifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestBuffingCheck.checkedAt)}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('status')}</dt><dd className={`mt-0.5 font-bold ${buffingStatus === 'COMPLETE' ? 'text-success' : 'text-warning'}`}>{buffingStatus === 'COMPLETE' ? t('complete') : t('warning')}</dd></div></> : process.name === 'Scouring' ? <dd className="text-slate-500">{loading ? t('loadingRecorded') : t('noScouringRecords')}</dd> : process.name === 'Buffing' ? <dd className="text-slate-500">{t('noBuffingRecords')}</dd> : process.name !== 'Unrolling' ? <dd className="text-slate-500">{language === 'vi' ? 'Chưa có thông tin vận hành.' : 'No operation information yet.'}</dd> : null}
+                    {process.name === 'Tentering' && latestTenteringOrder && <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestTenteringOrder.operator_name || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</dt><dd className="mt-0.5 font-mono font-semibold">{latestTenteringOrder.operator_identifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestTenteringOrder.updated_at, language)}</dd></div></>}
+                    {process.name === 'Unrolling' ? <dd className="text-slate-600">{language === 'vi' ? 'Đơn và danh sách cuộn lấy trực tiếp từ MES.' : 'Orders and rolls are supplied directly from MES.'}</dd> : process.name === 'Scouring' && latestRecord ? <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestRecord.operatorName || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</dt><dd className="mt-0.5 font-mono font-semibold">{latestRecord.operatorIdentifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestRecord.recordedAt, language)}</dd></div></> : process.name === 'Buffing' && latestBuffingCheck ? <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestBuffingCheck.operatorName || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</dt><dd className="mt-0.5 font-mono font-semibold">{latestBuffingCheck.operatorIdentifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestBuffingCheck.checkedAt)}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('status')}</dt><dd className={`mt-0.5 font-bold ${buffingStatus === 'COMPLETE' ? 'text-success' : 'text-warning'}`}>{buffingStatus === 'COMPLETE' ? t('complete') : t('warning')}</dd></div></> : process.name === 'Scouring' ? <dd className="text-slate-500">{loading ? t('loadingRecorded') : t('noScouringRecords')}</dd> : process.name === 'Buffing' ? <dd className="text-slate-500">{t('noBuffingRecords')}</dd> : process.name === 'Tentering' ? latestTenteringOrder ? null : <dd className="text-slate-500">{tenteringLoading ? (language === 'vi' ? 'Đang tải dữ liệu Tentering…' : 'Loading Tentering data…') : tenteringLoadFailed ? (language === 'vi' ? 'Không tải được dữ liệu Tentering.' : 'Unable to load Tentering data.') : (language === 'vi' ? 'Chưa có thông tin vận hành.' : 'No operation information yet.')}</dd> : process.name !== 'Unrolling' ? <dd className="text-slate-500">{language === 'vi' ? 'Chưa có thông tin vận hành.' : 'No operation information yet.'}</dd> : null}
                   </dl>
                 </section>
                 <section className="min-w-0 px-3 py-3">
                   <h3 className="mb-2 border-b border-line pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('production')}</h3>
                   {process.name === 'Buffing' && latestBuffingCheck && (buffingProductionLoading ? <p className="mb-2 text-xs text-slate-500">{t('loadingRecorded')}</p> : buffingProductionError ? <p role="status" className="mb-2 text-xs text-warning">{language === 'vi' ? 'Không tải được dữ liệu đơn sản xuất.' : 'Unable to load production order data.'}</p> : buffingProduction ? <div className="mb-2 grid gap-2 text-[10px] sm:grid-cols-2"><div><span className="block font-bold uppercase text-slate-500">{t('orderNumber')}</span><span className="font-mono font-bold text-industrial">{buffingProduction.pk_no}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('item')}</span><span className="font-semibold">{buffingProduction.item_name || buffingProduction.item_code || '—'}</span></div><div><span className="block font-bold uppercase text-slate-500">{t('lotNumber')}</span><span className="font-mono font-semibold">{buffingProduction.lot_no || '—'}</span></div><div><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Số cuộn' : 'Roll count'}</span><span className="font-mono font-bold">{buffingProduction.matched_rolls}</span></div><div><span className="block font-bold uppercase text-slate-500">{language === 'vi' ? 'Lỗi / tổng lượt kiểm tra' : 'Failed / total checks'}</span><span className="font-mono text-lg font-bold"><span className={buffingChecksWithError > 0 ? 'text-alarm' : 'text-success'}>{buffingChecks === null ? '—' : buffingChecksWithError}</span>{buffingChecks !== null && <><span className="text-industrial">/</span><span className="text-industrial">{buffingOrderChecks.length}</span></>}</span></div></div> : <p className="mb-2 text-xs text-slate-500">{language === 'vi' ? 'Không tìm thấy mã đơn này trong snapshot MES hiện tại.' : 'This order is not in the current MES snapshot.'}</p>)}
-                  {process.name === 'Buffing' && latestBuffingCheck && <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line pt-2 text-[10px]"><div><span className="block text-[9px] font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Kết quả kiểm tra' : 'Inspection result'}</span><span className={`mt-0.5 block text-[10px] font-bold ${buffingStatus === 'COMPLETE' ? 'text-success' : 'text-warning'}`}>{buffingStatus === 'COMPLETE' ? (language === 'vi' ? 'ĐẠT' : 'PASS') : (language === 'vi' ? 'CẢNH BÁO' : 'WARNING')}</span></div><div><span className="block text-[9px] font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}</span><span className={`mt-0.5 block text-[10px] font-bold ${latestBuffingCheck.orderProgress === 'COMPLETED' ? 'text-success' : latestBuffingCheck.orderProgress === 'IN_PROGRESS' ? 'text-info' : 'text-slate-500'}`}>{latestBuffingCheck.orderProgress === 'COMPLETED' ? (language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED') : latestBuffingCheck.orderProgress === 'IN_PROGRESS' ? (language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS') : (language === 'vi' ? 'CHƯA CẬP NHẬT' : 'NOT SET')}</span></div></div>}
-                  {process.name === 'Scouring' ? <>{scouringProductionSummary}{scouringQuickStatuses}</> : process.name === 'Unrolling' ? canViewMesOrders ? unrollingLoadFailed ? <p role="status" className="text-xs font-semibold text-warning">{language === 'vi' ? 'Không tải được dữ liệu MES.' : 'MES data could not be loaded.'}</p> : <div className="grid grid-cols-2 gap-2"><div><span className="block text-[9px] font-bold uppercase text-slate-500">{language === 'vi' ? 'ĐƠN HÔM NAY' : 'TODAY’S ORDERS'}</span><strong className="font-mono text-lg text-industrial">{unrollingReport?.summary.orders ?? '…'}</strong></div><div><span className="block text-[9px] font-bold uppercase text-slate-500">{language === 'vi' ? 'CẦN KIỂM TRA' : 'NEEDS REVIEW'}</span><strong className={`font-mono text-lg ${unrollingReport?.summary.check ? 'text-warning' : 'text-success'}`}>{unrollingReport?.summary.check ?? '…'}</strong></div></div> : <p className="text-xs text-slate-500">{language === 'vi' ? 'Supervisor xem dữ liệu đơn MES.' : 'MES order information for supervisors.'}</p> : process.name === 'Buffing' ? null : process.name !== 'Unrolling' ? <p className="text-xs text-slate-500">{language === 'vi' ? 'Nội dung riêng của máy sẽ được bổ sung sau.' : 'Machine-specific content will be added later.'}</p> : null}
+                  {process.name === 'Buffing' && latestBuffingCheck && <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line pt-2 text-[10px]"><div><span className="block text-[9px] font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Kết quả kiểm tra' : 'Inspection result'}</span><span className={`mt-0.5 block text-[10px] font-bold ${buffingStatus === 'COMPLETE' ? 'text-success' : 'text-warning'}`}>{buffingStatus === 'COMPLETE' ? (language === 'vi' ? 'ĐẠT' : 'PASS') : (language === 'vi' ? 'CẢNH BÁO' : 'WARNING')}</span></div><div><span className="block text-[9px] font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}</span><span className={`mt-0.5 block text-[10px] font-bold ${buffingOrderProgress === 'COMPLETED' ? 'text-success' : buffingOrderProgress === 'IN_PROGRESS' ? 'text-info' : 'text-slate-500'}`}>{buffingOrderProgress === 'COMPLETED' ? (language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED') : buffingOrderProgress === 'IN_PROGRESS' ? (language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS') : (language === 'vi' ? 'CHƯA CẬP NHẬT' : 'NOT SET')}</span></div></div>}
+                  {process.name === 'Scouring' ? <>{scouringProductionSummary}{scouringQuickStatuses}</> : process.name === 'Tentering' ? tenteringProductionSummary : process.name === 'Unrolling' ? canViewMesOrders ? unrollingLoadFailed ? <p role="status" className="text-xs font-semibold text-warning">{language === 'vi' ? 'Không tải được dữ liệu MES.' : 'MES data could not be loaded.'}</p> : <div className="grid grid-cols-2 gap-2"><div><span className="block text-[9px] font-bold uppercase text-slate-500">{language === 'vi' ? 'ĐƠN HÔM NAY' : 'TODAY’S ORDERS'}</span><strong className="font-mono text-lg text-industrial">{unrollingReport?.summary.orders ?? '…'}</strong></div><div><span className="block text-[9px] font-bold uppercase text-slate-500">{language === 'vi' ? 'CẦN KIỂM TRA' : 'NEEDS REVIEW'}</span><strong className={`font-mono text-lg ${unrollingReport?.summary.check ? 'text-warning' : 'text-success'}`}>{unrollingReport?.summary.check ?? '…'}</strong></div></div> : <p className="text-xs text-slate-500">{language === 'vi' ? 'Supervisor xem dữ liệu đơn MES.' : 'MES order information for supervisors.'}</p> : process.name === 'Buffing' ? null : process.name !== 'Unrolling' ? <p className="text-xs text-slate-500">{language === 'vi' ? 'Nội dung riêng của máy sẽ được bổ sung sau.' : 'Machine-specific content will be added later.'}</p> : null}
                 </section>
               </div> : <div className="grid flex-1 divide-y divide-line md:grid-cols-2 md:divide-x md:divide-y-0">
                 <section className="min-w-0 px-3 py-3">
                   <h3 className="mb-2 border-b border-line pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('operation')}</h3>
                   <dl className={`grid gap-2 text-[10px] ${process.name === 'Buffing' ? '[&>div:last-child]:hidden' : ''}`}>
                     <div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('machine')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{process.name === 'Tentering' || canManageOrders ? processMachineId(process) : user?.machineIds.filter((id) => prefix(id) === prefix(process.code)).join(' · ')}</dd></div>
+                    {process.name === 'Tentering' && latestTenteringOrder && <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestTenteringOrder.operator_name || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</dt><dd className="mt-0.5 font-mono font-semibold">{latestTenteringOrder.operator_identifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Ca' : 'Shift'}</dt><dd className="mt-0.5 font-semibold">{latestTenteringOrder.shift || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Bắt đầu đơn' : 'Order started'}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestTenteringOrder.created_at, language)}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestTenteringOrder.updated_at, language)}</dd></div></>}
                     {process.name === 'Scouring' && latestRecord && (canManageOrders || user?.machineIds.includes(latestRecord.machineId)) && <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Ca' : 'Shift'}</dt><dd className="mt-0.5 font-semibold">{latestRecord.shift || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestRecord.operatorName || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</dt><dd className="mt-0.5 font-mono font-semibold">{latestRecord.operatorIdentifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'Bắt đầu đơn' : 'Order started'}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{scouringOrderStartedAt ? formatDateTime(scouringOrderStartedAt, language) : '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestRecord.recordedAt, language)}</dd></div></>}
                     {process.name === 'Buffing' && latestBuffingCheck && (canManageOrders || user?.machineIds.includes(latestBuffingCheck.machineId)) && <><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('operator')}</dt><dd className="mt-0.5 font-semibold">{latestBuffingCheck.operatorName || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</dt><dd className="mt-0.5 font-mono font-semibold">{latestBuffingCheck.operatorIdentifier || '—'}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('lastRecorded')}</dt><dd className="mt-0.5 font-mono font-bold text-industrial">{formatDateTime(latestBuffingCheck.checkedAt)}</dd></div><div><dt className="font-bold uppercase tracking-wide text-slate-500">{t('status')}</dt><dd className={`mt-0.5 font-bold ${buffingStatus === 'COMPLETE' ? 'text-success' : 'text-warning'}`}>{buffingStatus === 'COMPLETE' ? t('complete') : t('warning')}</dd></div></>}
                     {process.name === 'Scouring' && !latestRecord && <dd className="text-slate-500">{loading ? t('loadingRecorded') : t('noScouringRecords')}</dd>}
@@ -311,7 +397,7 @@ export function WS3OverviewPage() {
                 </section>
                 <section className="min-w-0 px-3 py-3">
                   <h3 className="mb-2 border-b border-line pb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-industrial">{t('production')}</h3>
-                  {process.name === 'Scouring' ? <>{scouringProductionSummary}{scouringQuickStatuses}</> : process.name === 'Buffing' ? null : process.name !== 'Unrolling' ? <p className="text-xs text-slate-500">{language === 'vi' ? 'Nội dung riêng của máy sẽ được bổ sung sau.' : 'Machine-specific content will be added later.'}</p> : <p className="text-xs text-slate-500">{t('noData')}</p>}
+                  {process.name === 'Scouring' ? <>{scouringProductionSummary}{scouringQuickStatuses}</> : process.name === 'Tentering' ? tenteringProductionSummary : process.name === 'Buffing' ? null : process.name !== 'Unrolling' ? <p className="text-xs text-slate-500">{language === 'vi' ? 'Nội dung riêng của máy sẽ được bổ sung sau.' : 'Machine-specific content will be added later.'}</p> : <p className="text-xs text-slate-500">{t('noData')}</p>}
                 </section>
               </div>}
               <div className="mt-auto border-t border-line px-3 py-3"><Link to={processEntryPath(process)} className="inline-flex w-full"><HMIButton size="compact" variant="secondary" className="w-full">{process.name === 'Unrolling' ? (language === 'vi' ? 'XEM ĐƠN & IN PHIẾU' : 'VIEW ORDERS & PRINT SLIPS') : process.name === 'Buffing' ? t('openBuffing') : process.name === 'Scouring' ? t('openScouring') : process.name === 'Tentering' ? (language === 'vi' ? `MỞ ${activeTenteringMachine === 'TE-01' ? 'TENTER 1' : 'TENTER 2'}` : `OPEN ${activeTenteringMachine === 'TE-01' ? 'TENTER 1' : 'TENTER 2'}`) : language === 'vi' ? 'NHẬP THÔNG TIN VẬN HÀNH' : 'ENTER OPERATION INFO'}</HMIButton></Link></div>
