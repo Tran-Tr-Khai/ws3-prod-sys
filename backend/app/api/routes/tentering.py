@@ -1,4 +1,12 @@
+from datetime import date, datetime, time, timedelta, timezone
+from io import BytesIO
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -8,7 +16,7 @@ from app.models.user import User
 from app.models.ws3_production import WS3MachineWS2Record, WS3ProductionOrder, WS3WorkerRecord
 from app.schemas.tentering import TenteringOrderInput, TenteringOrderResponse
 from app.security.auth import get_current_user, role_codes
-from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code
+from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_sop_code
 from app.services.snapshot_report import build_report
 
 
@@ -52,7 +60,7 @@ def get_tentering_order_source(
     if not normalized_sop:
         return None
     try:
-        source_rows, _aliases = resolve_ws3_order_code(db, normalized_sop)
+        source_rows, _aliases = resolve_ws3_sop_code(db, normalized_sop)
     except AmbiguousWS3OrderCode as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if not source_rows:
@@ -75,9 +83,9 @@ def get_tentering_order_source(
         "item_description": _single_value([row.item_name for row in rows]),
         "customer": _single_value([row.customer for row in worker_rows]),
         "rolls": [
-            # Tentering should display the MES 7462 DATE column, not a date
-            # inferred from the date-like segment embedded in the roll ID.
-            {"roll_number": index + 1, "roll_id": roll.get("roll_id"), "weaving_date": roll.get("source_date")}
+            # The roll ID embeds the weaving date; the 7462 DATE column is not
+            # the date workers need to see on the Tentering per-roll record.
+            {"roll_number": index + 1, "roll_id": roll.get("roll_id"), "weaving_date": roll.get("weaving_date"), "length_meters": roll.get("length_meters")}
             for index, roll in enumerate(source_rolls)
         ],
         "total_rolls": len(source_rolls),
@@ -100,6 +108,183 @@ def list_tentering_orders(
     return list(db.scalars(statement).all())
 
 
+@router.get("/orders/export")
+def export_tentering_orders(
+    machine_id: str = Query(default="TE-01", max_length=20),
+    saved_date: date | None = Query(default=None),
+    q: str = Query(default="", max_length=160),
+    language: str = Query(default="vi", pattern="^(vi|en)$"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    _authorize(user, machine_id)
+    normalized_machine = machine_id.strip().upper()
+    statement = _order_query().where(TenteringOrder.machine_id == normalized_machine)
+    if saved_date is not None:
+        local_tz = ZoneInfo("Asia/Bangkok")
+        start = datetime.combine(saved_date, time.min, tzinfo=local_tz).astimezone(timezone.utc)
+        end = datetime.combine(saved_date + timedelta(days=1), time.min, tzinfo=local_tz).astimezone(timezone.utc)
+        statement = statement.where(TenteringOrder.updated_at >= start, TenteringOrder.updated_at < end)
+    orders = list(db.scalars(statement.order_by(TenteringOrder.updated_at.desc(), TenteringOrder.id.desc())).all())
+    search = q.strip().casefold()
+    if search:
+        orders = [order for order in orders if search in " ".join((
+            order.sop_no, order.customer or "", order.item_description or "",
+            *(f"{entry.roll_id or ''} {entry.note or ''}" for entry in order.entries),
+        )).casefold()]
+
+    is_vi = language == "vi"
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "Tong quan" if is_vi else "Summary"
+    summary.sheet_view.showGridLines = False
+    detail = workbook.create_sheet("Chi tiet cuon" if is_vi else "Roll details")
+    detail.sheet_view.showGridLines = False
+    dark_fill = PatternFill("solid", fgColor="385466")
+    header_fill = PatternFill("solid", fgColor="DCE6EA")
+    light_fill = PatternFill("solid", fgColor="F3F7F9")
+    border = Border(bottom=Side(style="thin", color="D5E0E5"))
+    title_text = "BÁO CÁO TENTERING" if is_vi else "TENTERING REPORT"
+    summary.merge_cells("A1:S1")
+    title = summary["A1"]
+    title.value = title_text
+    title.font = Font(name="Aptos Display", size=16, bold=True, color="FFFFFF")
+    title.fill = dark_fill
+    title.alignment = Alignment(vertical="center")
+    summary.row_dimensions[1].height = 30
+    date_text = saved_date.strftime("%d/%m/%Y") if saved_date else ("Tất cả ngày" if is_vi else "All dates")
+    summary.merge_cells("A2:S2")
+    summary["A2"] = f"Máy: {normalized_machine}  |  Ngày cập nhật đơn: {date_text}  |  Số đơn: {len(orders)}  |  Bấm mã SOP để đến nhóm cuộn" if is_vi else f"Machine: {normalized_machine}  |  Order updated date: {date_text}  |  Orders: {len(orders)}  |  Click an SOP to jump to its roll group"
+    summary["A2"].font = Font(name="Aptos", size=10, color="385466")
+    summary["A2"].fill = PatternFill("solid", fgColor="EAF0F3")
+    summary.row_dimensions[2].height = 22
+    summary_headers = [
+        "CẬP NHẬT", "MÃ SOP", "KHÁCH HÀNG", "MẶT HÀNG", "SỢI DỌC", "SỢI NGANG",
+        "MẬT ĐỘ MỘC (PICK)", "MẬT ĐỘ TP (PICK)", "CO RÚT (%)", "KHỔ MỘC (IN)", "KHỔ MỘC (CM)",
+        "KHỔ TP (IN)", "KHỔ TP (CM)", "SỐ CUỘN", "SL THEO ĐƠN", "SL THỰC TẾ",
+        "NGƯỜI VẬN HÀNH", "CA", "TIẾN ĐỘ",
+    ] if is_vi else [
+        "UPDATED", "SOP", "CUSTOMER", "ITEM", "WARP YARN", "WEFT YARN", "GREIGE DENSITY (PICK)",
+        "FINISH DENSITY (PICK)", "SHRINKAGE (%)", "GREIGE WIDTH (IN)", "GREIGE WIDTH (CM)",
+        "FINISH WIDTH (IN)", "FINISH WIDTH (CM)", "ROLLS", "PLANNED QTY", "ACTUAL QTY",
+        "OPERATOR", "SHIFT", "PROGRESS",
+    ]
+    for column, label in enumerate(summary_headers, start=1):
+        cell = summary.cell(4, column, label)
+        cell.font = Font(name="Aptos", size=9, bold=True, color="385466")
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True, shrink_to_fit=True)
+        cell.border = Border(
+            left=Side(style="thin", color="A9BBC3"),
+            right=Side(style="thin", color="A9BBC3"),
+            bottom=Side(style="medium", color="8098A3"),
+        )
+    summary.row_dimensions[4].height = 38
+
+    detail.merge_cells("A1:E1")
+    detail_title = detail["A1"]
+    detail_title.value = "CHI TIẾT CUỘN THEO SOP" if is_vi else "ROLL DETAILS BY SOP"
+    detail_title.font = Font(name="Aptos Display", size=16, bold=True, color="FFFFFF")
+    detail_title.fill = dark_fill
+    detail_title.alignment = Alignment(vertical="center")
+    detail.row_dimensions[1].height = 30
+    detail.merge_cells("A2:E2")
+    detail["A2"] = "Bấm mã SOP ở sheet Tổng quan để nhảy đến nhóm cuộn tương ứng." if is_vi else "Click an SOP in Summary to jump to its roll group."
+    detail["A2"].font = Font(name="Aptos", size=10, color="385466")
+    detail["A2"].fill = PatternFill("solid", fgColor="EAF0F3")
+    detail.row_dimensions[2].height = 22
+    roll_headers = ["MÃ ROLL", "NGÀY DỆT", "SL THEO ĐƠN", "SL THỰC TẾ", "GHI CHÚ"] if is_vi else ["ROLL ID", "WEAVING DATE", "PLANNED QTY", "ACTUAL QTY", "NOTE"]
+    for column, label in enumerate(roll_headers, start=1):
+        cell = detail.cell(4, column, label)
+        cell.font = Font(name="Aptos", size=9, bold=True, color="385466")
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        cell.border = Border(left=Side(style="thin", color="A9BBC3"), right=Side(style="thin", color="A9BBC3"), bottom=Side(style="medium", color="8098A3"))
+    detail.row_dimensions[4].height = 30
+
+    local_tz = ZoneInfo("Asia/Bangkok")
+    for row_index, order in enumerate(orders, start=5):
+        updated = order.updated_at
+        if updated.tzinfo is not None:
+            updated = updated.astimezone(local_tz).replace(tzinfo=None)
+        planned = [float(entry.planned_quantity) for entry in order.entries if entry.planned_quantity is not None]
+        actual = [float(entry.actual_quantity) for entry in order.entries if entry.actual_quantity is not None]
+        progress = ("ĐÃ HOÀN THÀNH" if order.order_progress == "COMPLETED" else "ĐANG XỬ LÝ") if is_vi else ("COMPLETED" if order.order_progress == "COMPLETED" else "IN PROGRESS")
+        greige_width = float(order.greige_width_inch) if order.greige_width_inch is not None else None
+        finish_width = float(order.finish_width_inch) if order.finish_width_inch is not None else None
+        values = [
+            updated, order.sop_no, order.customer or "—", order.item_description or "—", order.warp_yarn or "—", order.weft_yarn or "—",
+            float(order.greige_density_pick) if order.greige_density_pick is not None else None,
+            float(order.finish_density_pick) if order.finish_density_pick is not None else None,
+            float(order.shrink_percent) if order.shrink_percent is not None else None,
+            greige_width, greige_width * 2.54 if greige_width is not None else None,
+            finish_width, finish_width * 2.54 if finish_width is not None else None,
+            len(order.entries), sum(planned) if planned else None, sum(actual) if actual else None,
+            order.operator_name or "—", order.shift or "—", progress,
+        ]
+        group_row = detail.max_row + 1
+        for column in range(1, 6):
+            cell = detail.cell(group_row, column)
+            cell.fill = PatternFill("solid", fgColor="EAF0F3")
+            cell.border = Border(top=Side(style="medium", color="9FB0B8"))
+        detail.merge_cells(start_row=group_row, start_column=1, end_row=group_row, end_column=5)
+        group_heading = detail.cell(group_row, 1, f"MÃ SOP: {order.sop_no}  |  {len(order.entries)} CUỘN" if is_vi else f"SOP: {order.sop_no}  |  {len(order.entries)} ROLLS")
+        group_heading.font = Font(name="Aptos", size=10, bold=True, color="385466")
+        group_heading.fill = PatternFill("solid", fgColor="EAF0F3")
+        group_heading.hyperlink = f"#'{summary.title}'!B{row_index}"
+        group_heading.alignment = Alignment(vertical="center")
+        detail.row_dimensions[group_row].height = 23
+
+        for column, value in enumerate(values, start=1):
+            cell = summary.cell(row_index, column, value)
+            cell.font = Font(name="Aptos", size=9, color="243B4A")
+            cell.alignment = Alignment(vertical="center", wrap_text=column in (3, 4, 5, 6))
+            cell.border = border
+            if row_index % 2:
+                cell.fill = light_fill
+            if column == 1:
+                cell.number_format = "dd/mm/yyyy - hh:mm"
+            elif column in (7, 8, 9, 10, 11, 12, 13, 15, 16):
+                cell.number_format = "#,##0.###"
+            elif column == 2:
+                cell.hyperlink = f"#'{detail.title}'!A{group_row}"
+                cell.font = Font(name="Aptos", size=9, bold=True, color="0563C1", underline="single")
+            elif column == 19:
+                cell.font = Font(name="Aptos", size=9, bold=True, color="247044" if order.order_progress == "COMPLETED" else "1D4ED8")
+
+        for roll_index, entry in enumerate(order.entries):
+            detail_values = [entry.roll_id or "—", entry.weaving_date, entry.planned_quantity, entry.actual_quantity, entry.note or "—"]
+            detail_row = detail.max_row + 1
+            for column, value in enumerate(detail_values, start=1):
+                cell = detail.cell(detail_row, column, value)
+                cell.font = Font(name="Aptos", size=9, color="243B4A")
+                cell.alignment = Alignment(vertical="center", wrap_text=column in (1, 5))
+                cell.border = Border(left=Side(style="thin", color="D5E0E5"), right=Side(style="thin", color="D5E0E5"), bottom=Side(style="thin", color="D5E0E5"))
+                if roll_index % 2 == 0:
+                    cell.fill = light_fill
+                if column == 2 and value is not None:
+                    cell.number_format = "dd/mm/yyyy"
+                elif column in (3, 4):
+                    cell.number_format = "#,##0.###"
+            detail.row_dimensions[detail_row].height = 22
+
+    summary_widths = [23, 22, 22, 42, 24, 24, 19, 25, 16, 18, 18, 22, 22, 16, 18, 18, 22, 14, 19]
+    for column, width in enumerate(summary_widths, start=1):
+        summary.column_dimensions[get_column_letter(column)].width = width
+    detail_widths = [25, 18, 18, 18, 44]
+    for column, width in enumerate(detail_widths, start=1):
+        detail.column_dimensions[get_column_letter(column)].width = width
+    summary.freeze_panes = "A5"
+    summary.auto_filter.ref = f"A4:S{4 + len(orders)}"
+    detail.freeze_panes = "A5"
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    filename = f"tentering-report-{normalized_machine.lower()}-{saved_date.isoformat() if saved_date else 'all'}.xlsx"
+    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
 @router.get("/orders/{sop_no}", response_model=TenteringOrderResponse)
 def get_tentering_order(
     sop_no: str,
@@ -108,6 +293,8 @@ def get_tentering_order(
     user: User = Depends(get_current_user),
 ) -> TenteringOrder:
     _authorize(user, machine_id)
+    if is_pkp_order_code(sop_no):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Vui lòng nhập mã SOP, không nhập mã PKP.")
     order = db.scalar(_order_query().where(
         TenteringOrder.machine_id == machine_id.strip().upper(),
         func.upper(func.trim(TenteringOrder.sop_no)) == sop_no.strip().upper(),
@@ -130,6 +317,8 @@ def save_tentering_order(
     normalized_machine = machine_id.strip().upper()
     if not normalized_sop:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="SOP number is required")
+    if is_pkp_order_code(normalized_sop):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Vui lòng nhập mã SOP, không nhập mã PKP.")
 
     try:
         order = db.scalar(

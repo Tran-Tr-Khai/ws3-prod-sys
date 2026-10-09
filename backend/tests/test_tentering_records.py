@@ -1,5 +1,6 @@
 import unittest
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -10,7 +11,7 @@ from app.models.tentering import TenteringOrder, TenteringRollEntry
 from app.models.user import Role, User
 from app.models.ws3_production import WS3MachineWS2Record, WS3ProductionOrder, WS3WorkerRecord
 from app.schemas.tentering import TenteringOrderInput
-from app.api.routes.tentering import get_tentering_order_source
+from app.api.routes.tentering import get_tentering_order, get_tentering_order_source, save_tentering_order
 
 
 class TenteringRecordTests(unittest.TestCase):
@@ -21,19 +22,19 @@ class TenteringRecordTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.engine.dispose()
 
-    def test_one_sop_keeps_up_to_nine_unique_roll_slots(self) -> None:
+    def test_one_sop_supports_more_than_nine_unique_roll_slots(self) -> None:
         with Session(self.engine) as db:
             order = TenteringOrder(sop_no="PD260921-030", customer="SEDOVINAKO")
-            order.entries = [TenteringRollEntry(roll_number=roll) for roll in range(1, 10)]
+            order.entries = [TenteringRollEntry(roll_number=roll) for roll in range(1, 13)]
             db.add(order)
             db.commit()
 
             saved = db.query(TenteringOrder).filter_by(sop_no="PD260921-030").one()
-            self.assertEqual(len(saved.entries), 9)
-            self.assertEqual(saved.entries[-1].roll_number, 9)
+            self.assertEqual(len(saved.entries), 12)
+            self.assertEqual(saved.entries[-1].roll_number, 12)
             self.assertEqual(saved.order_progress, "IN_PROGRESS")
 
-            db.add(TenteringRollEntry(order_id=saved.id, roll_number=9))
+            db.add(TenteringRollEntry(order_id=saved.id, roll_number=12))
             with self.assertRaises(IntegrityError):
                 db.commit()
 
@@ -46,11 +47,12 @@ class TenteringRecordTests(unittest.TestCase):
             db.commit()
             self.assertEqual(db.query(TenteringOrder).filter_by(sop_no="PD260921-030").count(), 2)
 
-    def test_payload_rejects_duplicate_or_out_of_range_roll_numbers(self) -> None:
+    def test_payload_rejects_duplicate_or_excessive_roll_numbers(self) -> None:
         with self.assertRaises(ValidationError):
             TenteringOrderInput(entries=[{"roll_number": 1}, {"roll_number": 1}])
+        self.assertEqual(len(TenteringOrderInput(entries=[{"roll_number": roll} for roll in range(1, 13)]).entries), 12)
         with self.assertRaises(ValidationError):
-            TenteringOrderInput(entries=[{"roll_number": 10}])
+            TenteringOrderInput(entries=[{"roll_number": 501}])
 
     def test_payload_rejects_negative_actual_quantity(self) -> None:
         with self.assertRaises(ValidationError):
@@ -74,8 +76,29 @@ class TenteringRecordTests(unittest.TestCase):
 
         self.assertEqual(result["item_description"], "POLYESTER FDY")
         self.assertEqual(result["customer"], "SEDOVINAKO")
-        self.assertEqual(result["rolls"], [{"roll_number": 1, "roll_id": "PWEV024261003-1", "weaving_date": "2026-10-04"}])
+        self.assertEqual(result["rolls"], [{"roll_number": 1, "roll_id": "PWEV024261003-1", "weaving_date": "2026-10-03", "length_meters": 100.0}])
 
+    def test_tentering_source_does_not_resolve_pkp_as_operator_order_code(self) -> None:
+        with Session(self.engine) as db:
+            db.add(WS3ProductionOrder(pk_no="PKP-001", invoice_no="SOP-001", raw_data_json="{}"))
+            db.flush()
+            user = User(username="admin", full_name="Admin", password_hash="x", machine_ids=[], roles=[Role(code="ADMIN", name="Admin")])
+
+            result = get_tentering_order_source("PKP-001", "TE-01", db, user)
+
+        self.assertIsNone(result)
+
+    def test_tentering_entry_endpoints_reject_pkp_code(self) -> None:
+        with Session(self.engine) as db:
+            user = User(username="admin", full_name="Admin", password_hash="x", machine_ids=[], roles=[Role(code="ADMIN", name="Admin")])
+
+            with self.assertRaises(HTTPException) as get_error:
+                get_tentering_order("PKP261006-001", "TE-01", db, user)
+            with self.assertRaises(HTTPException) as save_error:
+                save_tentering_order("PKP261006-001", TenteringOrderInput(), "TE-01", db, user)
+
+        self.assertEqual(get_error.exception.status_code, 422)
+        self.assertEqual(save_error.exception.status_code, 422)
 
 if __name__ == "__main__":
     unittest.main()

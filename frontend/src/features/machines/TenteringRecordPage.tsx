@@ -40,7 +40,7 @@ const emptyHeader: HeaderDraft = {
   customer: '', itemDescription: '', warpYarn: '', weftYarn: '', greigeDensityPick: '',
   finishDensityPick: '', shrinkPercent: '', greigeWidthInch: '', finishWidthInch: '',
 };
-const emptyRolls = (): RollDraft[] => Array.from({ length: 9 }, (_, index) => ({
+const emptyRolls = (count = 0): RollDraft[] => Array.from({ length: count }, (_, index) => ({
   rollNumber: index + 1, rollId: '', tenterDate: '', weavingDate: '', plannedQuantity: '', actualQuantity: '', note: '',
 }));
 const numeric = (value: string) => value.trim() ? Number(value) : null;
@@ -65,7 +65,8 @@ function headerFromOrder(order: TenteringOrder): HeaderDraft {
 }
 
 function rollsFromOrder(order: TenteringOrder): RollDraft[] {
-  const result = emptyRolls();
+  const lastSavedRoll = Math.max(0, ...order.entries.map((entry) => entry.roll_number));
+  const result = emptyRolls(lastSavedRoll);
   for (const entry of order.entries) {
     result[entry.roll_number - 1] = {
       rollNumber: entry.roll_number, savedEntryId: entry.id, rollId: entry.roll_id ?? '', tenterDate: entry.tenter_date ?? '', weavingDate: entry.weaving_date ?? '',
@@ -78,6 +79,8 @@ function rollsFromOrder(order: TenteringOrder): RollDraft[] {
 
 function applySourceRolls(rolls: RollDraft[], source: Awaited<ReturnType<typeof getTenteringOrderSource>>): RollDraft[] {
   if (!source) return rolls;
+  const rollCount = Math.max(rolls.length, source.total_rolls, ...source.rolls.map((roll) => roll.roll_number));
+  const expanded = rollCount > rolls.length ? [...rolls, ...emptyRolls(rollCount).slice(rolls.length)] : rolls;
   return source.rolls.reduce((current, sourceRoll) => {
     if (sourceRoll.roll_number < 1 || sourceRoll.roll_number > current.length) return current;
     return current.map((row) => row.rollNumber === sourceRoll.roll_number ? {
@@ -85,7 +88,7 @@ function applySourceRolls(rolls: RollDraft[], source: Awaited<ReturnType<typeof 
       rollId: sourceRoll.roll_id ?? row.rollId,
       weavingDate: sourceRoll.weaving_date ?? row.weavingDate,
     } : row);
-  }, rolls);
+  }, expanded);
 }
 
 function inputFromDraft(header: HeaderDraft, rolls: RollDraft[], orderProgress: 'IN_PROGRESS' | 'COMPLETED'): TenteringOrderInput {
@@ -189,7 +192,13 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
     setSaving(true); setError(''); setSaved(false);
     try {
       const result = await saveTenteringOrder(machineId, activeSop, inputFromDraft(header, rolls, orderProgress));
-      setHeader(headerFromOrder(result)); setRolls(rollsFromOrder(result)); setSopInput(result.sop_no); setActiveSop(result.sop_no);
+      const savedRolls = rollsFromOrder(result);
+      setHeader(headerFromOrder(result));
+      setRolls((current) => current.map((row) => {
+        const savedRow = savedRolls[row.rollNumber - 1];
+        return savedRow?.savedEntryId ? { ...row, ...savedRow } : row;
+      }));
+      setSopInput(result.sop_no); setActiveSop(result.sop_no);
       setNewOrder(false); setSaved(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : tx('Không lưu được dữ liệu Tentering.', 'Unable to save Tentering data.'));
@@ -250,7 +259,7 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
                   </section>
                 </div>
               </section>
-              <section className="min-w-0 border border-line">
+              {rolls.length === 0 ? <p className="border border-info bg-sky-50 p-3 text-xs text-info">{tx('Chưa tìm thấy cuộn của SOP này trong dữ liệu MES.', 'No rolls were found for this SOP in the MES data.')}</p> : <section className="min-w-0 border border-line">
                 <div className="overflow-x-auto"><table className="w-full min-w-[1000px] border-collapse text-left text-[10px]"><thead className="bg-hmiSection text-[9px] uppercase tracking-wide text-industrialDark"><tr>{[tx('STT / CUỘN', 'NO. / ROLL'), tx('NGÀY DỆT', 'WEAVING DATE'), tx('MÃ ROLL', 'ROLL ID'), tx('SẢN LƯỢNG THEO ĐƠN', 'PLANNED QUANTITY'), tx('SẢN LƯỢNG THỰC TẾ', 'ACTUAL QUANTITY'), tx('GHI CHÚ', 'NOTE')].map((label) => <th key={label} className="border-r border-b border-line px-2 py-2">{label}</th>)}</tr></thead>
                   <tbody>{rolls.map((row, index) => <tr key={row.rollNumber} className="border-b border-line odd:bg-white even:bg-slate-50"><td className="w-16 px-2 py-1.5 text-center font-mono font-bold">{row.rollNumber}</td>
                     <td aria-label={`${tx('Ngày dệt cuộn', 'Weaving date roll')} ${row.rollNumber}`} className="whitespace-nowrap px-2 py-1 text-[10px]">{displayDate(row.weavingDate, language)}</td>
@@ -258,7 +267,7 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
                     <td className="px-1 py-1"><input aria-label={`${tx('Sản lượng theo đơn cuộn', 'Planned quantity roll')} ${row.rollNumber}`} type="number" min="0" step="any" inputMode="decimal" value={row.plannedQuantity} onChange={(event) => setRolls((current) => current.map((item, i) => i === index ? { ...item, plannedQuantity: event.target.value } : item))} className="min-h-8 w-full border border-line bg-white px-2 text-right font-mono text-xs" /></td>
                     <td className="px-1 py-1"><input aria-label={`${tx('Sản lượng thực tế cuộn', 'Actual quantity roll')} ${row.rollNumber}`} type="number" min="0" step="any" inputMode="decimal" value={row.actualQuantity} onChange={(event) => setRolls((current) => current.map((item, i) => i === index ? { ...item, actualQuantity: event.target.value } : item))} className="min-h-8 w-full border border-line bg-white px-2 text-right font-mono text-xs" /></td>
                     <td className="px-1 py-1"><input aria-label={`${tx('Ghi chú cuộn', 'Roll note')} ${row.rollNumber}`} value={row.note} onChange={(event) => setRolls((current) => current.map((item, i) => i === index ? { ...item, note: event.target.value } : item))} className="min-h-8 w-full border border-line bg-white px-2 text-xs" maxLength={1000} /></td></tr>)}</tbody></table></div>
-              </section>
+              </section>}
               <div className="flex justify-end"><HMIButton variant="primary" size="large" disabled={saving || loading} onClick={() => void save()}>{saving ? tx('ĐANG LƯU…', 'SAVING…') : tx('LƯU PHIẾU', 'SAVE SHEET')}</HMIButton></div>
             </>}
           </div>

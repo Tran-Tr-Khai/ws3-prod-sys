@@ -44,7 +44,7 @@ export type TenteringOrderInput = Omit<TenteringOrder, 'id' | 'machine_id' | 'so
 export type TenteringOrderSource = {
   item_description: string | null;
   customer: string | null;
-  rolls: Array<{ roll_number: number; roll_id: string | null; weaving_date: string | null }>;
+  rolls: Array<{ roll_number: number; roll_id: string | null; weaving_date: string | null; length_meters: number | null }>;
   total_rolls: number;
 };
 
@@ -60,6 +60,15 @@ export async function getTenteringOrders(machineId: string, query = ''): Promise
   const response = await fetch(`${apiBaseUrl}/api/tentering/orders?${params}`, { credentials: 'include' });
   if (!response.ok) throw new Error(await readError(response));
   return await response.json() as TenteringOrder[];
+}
+
+export async function downloadTenteringReport(filters: { machineId: string; savedDate?: string; query?: string; language: 'vi' | 'en' }): Promise<Blob> {
+  const params = new URLSearchParams({ machine_id: filters.machineId, language: filters.language });
+  if (filters.savedDate) params.set('saved_date', filters.savedDate);
+  if (filters.query?.trim()) params.set('q', filters.query.trim());
+  const response = await fetch(`${apiBaseUrl}/api/tentering/orders/export?${params.toString()}`, { credentials: 'include' });
+  if (!response.ok) throw new Error(await readError(response));
+  return response.blob();
 }
 
 export async function getTenteringOrder(machineId: string, sopNo: string): Promise<TenteringOrder | null> {

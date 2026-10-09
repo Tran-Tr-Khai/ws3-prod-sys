@@ -13,7 +13,7 @@ def _finite_nonnegative(value: float | None) -> float | None:
 class TenteringRollEntryInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    roll_number: int = Field(ge=1, le=9)
+    roll_number: int = Field(ge=1, le=500)
     roll_id: str | None = Field(default=None, max_length=160)
     tenter_date: date | None = None
     weaving_date: date | None = None
@@ -42,7 +42,7 @@ class TenteringOrderInput(BaseModel):
     greige_width_inch: float | None = Field(default=None, ge=0)
     finish_width_inch: float | None = Field(default=None, ge=0)
     fabric_received_date: date | None = None
-    entries: list[TenteringRollEntryInput] = Field(default_factory=list, max_length=9)
+    entries: list[TenteringRollEntryInput] = Field(default_factory=list, max_length=500)
 
     @field_validator("greige_density_pick", "finish_density_pick", "shrink_percent", "greige_width_inch", "finish_width_inch")
     @classmethod

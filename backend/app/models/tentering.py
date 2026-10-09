@@ -36,7 +36,7 @@ class TenteringRollEntry(TimestampMixin, Base):
     __tablename__ = "tentering_roll_entries"
     __table_args__ = (
         UniqueConstraint("order_id", "roll_number", name="uq_tentering_roll_order_number"),
-        CheckConstraint("roll_number BETWEEN 1 AND 9", name="ck_tentering_roll_number_1_9"),
+        CheckConstraint("roll_number >= 1", name="ck_tentering_roll_number_positive"),
         CheckConstraint("planned_quantity IS NULL OR planned_quantity >= 0", name="ck_tentering_planned_qty_nonnegative"),
         CheckConstraint("actual_quantity IS NULL OR actual_quantity >= 0", name="ck_tentering_actual_qty_nonnegative"),
     )
