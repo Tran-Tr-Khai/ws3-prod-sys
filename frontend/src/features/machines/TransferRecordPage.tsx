@@ -5,7 +5,6 @@ import { HMIButton } from '../../components/hmi/HMIButton';
 import { MachineNavigation } from '../../components/hmi/MachineNavigation';
 import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
-import { SupportChatWidget } from '../support/SupportChatWidget';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { createTransferRecord, downloadTransferReport, listTransferRecords, type TransferRecord } from './transferApi';
 
@@ -106,10 +105,10 @@ export function TransferRecordPage() {
     <WS3Shell title="WS3 / H/T Transfer" subtitle={vi ? 'Nhập báo cáo hằng ngày · Máy ép' : 'Daily report entry · Heat transfer'} machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'H/T Transfer'} status="info" showGlobalNavigation={false} showMachineNavigation={false} showSupportWidget={!isOperator}>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
         <MachineNavigation machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'H/T Transfer'} basePath="/machine/HT-01" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{vi ? 'TRANG CHỦ' : 'HOME'}</HMIButton>} />
-        <div className="min-h-0 flex-1 overflow-auto p-2">
-          <div className="mx-auto grid w-full max-w-[1440px] gap-2 xl:grid-cols-[minmax(260px,0.8fr)_minmax(0,2.2fr)]">
-            <aside className="h-fit border-2 border-industrialDark bg-white">
-              <header className="border-b-2 border-industrialDark bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-industrialDark">{vi ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION DETAILS'}</header>
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-2 lg:flex-row lg:overflow-hidden">
+            <aside className="flex min-h-0 min-w-0 flex-col border-2 border-industrialDark bg-white lg:w-[320px] lg:shrink-0">
+              <header className="flex min-h-10 items-center border-b-2 border-industrialDark bg-industrialDark px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white">{vi ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION INFORMATION'}</header>
+              <div className="grid content-start">
               <OperationInfoFields
                 orderNumber={orderNumber}
                 onOrderNumberChange={(value) => { setOrderNumber(value.toUpperCase()); setOrderProgress('IN_PROGRESS'); }}
@@ -128,15 +127,18 @@ export function TransferRecordPage() {
                   </label>
                 )}
               />
+              </div>
             </aside>
-            <section className="min-w-0 border-2 border-industrialDark bg-white">
-              <header className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-industrialDark bg-industrialDark px-3 py-2 text-xs font-bold uppercase tracking-wider text-white">
-                <span>H/T TRANSFER DAILY REPORT · HT-01</span>
+            <section className="flex min-h-[70dvh] min-w-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-white lg:min-h-0">
+              <header className="sticky top-0 z-10 flex min-h-10 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-white">
+                <h1 className="text-[10px] font-bold uppercase tracking-wider">{vi ? 'THÔNG SỐ VẬN HÀNH · H/T TRANSFER' : 'OPERATION PARAMETERS · H/T TRANSFER'}</h1>
                 <label className="flex items-center gap-2 text-[10px]">{vi ? 'Ngày sản xuất' : 'Production date'}
                   <input type="date" value={productionDate} onChange={(event) => setProductionDate(event.target.value)} className="min-h-8 border border-line bg-white px-2 text-xs font-semibold text-industrialDark" />
                 </label>
               </header>
-              <div className="grid gap-3 p-3 sm:grid-cols-2 2xl:grid-cols-3">
+              <section className="shrink-0 border-b border-line">
+                <header className="border-b border-line bg-hmiSection px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-industrialDark">{vi ? 'H/T TRANSFER DAILY REPORT' : 'H/T TRANSFER DAILY REPORT'}</header>
+                <div className="grid gap-x-3 gap-y-2 p-3 sm:grid-cols-2 2xl:grid-cols-3">
                 <label className={labelClass}>{vi ? 'Loại vải' : 'Item'}<input className={fieldClass} value={entry.item} onChange={(event) => updateEntry('item', event.target.value)} maxLength={300} /></label>
                 <label className={labelClass}>{vi ? 'Người mua' : 'Buyer'}<input className={fieldClass} value={entry.buyer} onChange={(event) => updateEntry('buyer', event.target.value)} maxLength={160} /></label>
                 <label className={labelClass}>{vi ? 'Thiết kế' : 'Design'}<input className={fieldClass} value={entry.design} onChange={(event) => updateEntry('design', event.target.value)} maxLength={160} /></label>
@@ -144,26 +146,29 @@ export function TransferRecordPage() {
                 <label className={labelClass}>{vi ? 'Tốc độ (m/min)' : 'Speed (m/min)'}<input className={fieldClass} type="number" min="0" step="0.1" inputMode="decimal" value={entry.speed} onChange={(event) => updateEntry('speed', event.target.value)} /></label>
                 <label className={labelClass}>{vi ? 'Sản lượng (m)' : "Q'ty (m)"}<input className={fieldClass} type="number" min="0" step="0.001" inputMode="decimal" value={entry.quantityMeters} onChange={(event) => updateEntry('quantityMeters', event.target.value)} /></label>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-hmiSection px-3 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-hmiConsole px-3 py-2">
                 <span className="text-[10px] font-semibold text-slate-500">{vi ? 'SOP và ca lấy từ Thông tin vận hành.' : 'SOP and shift come from Operation Details.'}</span>
                 <HMIButton variant="primary" disabled={!canSave} onClick={() => void saveRecord()}>{saving ? (vi ? 'ĐANG LƯU…' : 'SAVING…') : (vi ? 'LƯU DÒNG BÁO CÁO' : 'SAVE REPORT ROW')}</HMIButton>
               </div>
-              {(message || error) && <p role={error ? 'alert' : 'status'} className={`mx-3 my-2 border p-2 text-xs font-semibold ${error ? 'border-alarm bg-hmiAlarm text-alarm' : 'border-success bg-hmiNormal text-success'}`}>{error ?? message}</p>}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t-2 border-industrialDark px-3 py-2">
-                <h2 className="text-[11px] font-bold uppercase tracking-wider text-industrialDark">{vi ? `BÁO CÁO TRONG NGÀY · ${records.length} DÒNG` : `DAILY REPORT · ${records.length} ROWS`}</h2>
+              </section>
+              {(message || error) && <p role={error ? 'alert' : 'status'} className={`mx-3 mt-2 border p-2 text-xs font-semibold ${error ? 'border-alarm bg-hmiAlarm text-alarm' : 'border-success bg-hmiNormal text-success'}`}>{error ?? message}</p>}
+              <section className="flex min-h-0 flex-1 flex-col">
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-white px-3 py-2">
+                <h2 className="text-[10px] font-bold uppercase tracking-wider text-industrialDark">{vi ? `BÁO CÁO TRONG NGÀY · ${records.length} DÒNG` : `DAILY REPORT · ${records.length} ROWS`}</h2>
                 <HMIButton variant="secondary" size="compact" disabled={exporting} onClick={() => void exportReport()}>{exporting ? (vi ? 'ĐANG XUẤT…' : 'EXPORTING…') : 'EXCEL'}</HMIButton>
               </div>
-              {loading ? <p className="p-6 text-center text-xs text-slate-500">{vi ? 'Đang tải báo cáo…' : 'Loading report…'}</p> : records.length === 0 ? <p className="p-6 text-center text-xs text-slate-500">{vi ? 'Chưa có dòng báo cáo trong ngày này.' : 'No report rows for this date.'}</p> : (
+              <div className="min-h-0 flex-1 overflow-auto">
+              {loading ? <p className="flex min-h-48 h-full items-center justify-center p-6 text-center text-xs text-slate-500">{vi ? 'Đang tải báo cáo…' : 'Loading report…'}</p> : records.length === 0 ? <div className="flex min-h-48 h-full flex-col items-center justify-center gap-2 p-6 text-center"><span className="text-2xl text-slate-300">—</span><p className="text-xs text-slate-500">{vi ? 'Chưa có dòng báo cáo trong ngày này.' : 'No report rows for this date.'}</p></div> : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1050px] border-collapse text-left text-[10px]">
-                    <thead className="bg-industrial text-white"><tr>{(vi ? ['Giờ', 'Loại vải', 'Người mua', 'Thiết kế', 'Nhiệt độ °C', 'Tốc độ m/min', 'Sản lượng m', 'SOP#', 'Ca', 'Người vận hành'] : ['Time', 'Item', 'Buyer', 'Design', 'Temp °C', 'Speed m/min', "Q'ty m", 'SOP#', 'Shift', 'Operator']).map((heading) => <th key={heading} className="px-2 py-2 font-bold uppercase">{heading}</th>)}</tr></thead>
+                  <table className="w-full min-w-[1100px] border-collapse text-left text-[11px]">
+                    <thead className="sticky top-0 bg-hmiSection text-[9px] uppercase tracking-wide text-industrialDark"><tr>{(vi ? ['Giờ', 'Loại vải', 'Người mua', 'Thiết kế', 'Nhiệt độ °C', 'Tốc độ m/min', 'Sản lượng m', 'SOP#', 'Ca', 'Người vận hành'] : ['Time', 'Item', 'Buyer', 'Design', 'Temp °C', 'Speed m/min', "Q'ty m", 'SOP#', 'Shift', 'Operator']).map((heading) => <th key={heading} className="border-b border-r border-line px-2 py-2 font-bold">{heading}</th>)}</tr></thead>
                     <tbody>{records.map((record) => <tr key={record.id} className="border-b border-line odd:bg-white even:bg-slate-50"><td className="whitespace-nowrap px-2 py-2 font-mono">{new Intl.DateTimeFormat(vi ? 'vi-VN' : 'en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(record.recorded_at))}</td><td className="px-2 py-2">{record.item}</td><td className="px-2 py-2">{record.buyer}</td><td className="px-2 py-2">{record.design}</td><td className="px-2 py-2 text-right font-mono">{record.temperature}</td><td className="px-2 py-2 text-right font-mono">{record.speed}</td><td className="px-2 py-2 text-right font-mono">{record.quantity_meters}</td><td className="px-2 py-2 font-mono font-bold">{record.order_number}</td><td className="px-2 py-2">{record.shift}</td><td className="px-2 py-2">{record.operator_name} · {record.operator_identifier}</td></tr>)}</tbody>
                   </table>
                 </div>
               )}
+              </div>
+              </section>
             </section>
-          </div>
-          {isOperator && <div className="mx-auto mt-2 w-full max-w-[1440px]"><SupportChatWidget embedded /></div>}
         </div>
       </div>
     </WS3Shell>
