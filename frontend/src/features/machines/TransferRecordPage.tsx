@@ -7,6 +7,7 @@ import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { createTransferRecord, getTransferOrderSource } from './transferApi';
+import { getMachineOrderProgress, saveMachineOrderProgress } from './scouringApi';
 
 type EntryValues = { item: string; buyer: string; design: string; temperature: string; speed: string; quantityMeters: string };
 const emptyEntry: EntryValues = { item: '', buyer: '', design: '', temperature: '', speed: '', quantityMeters: '' };
@@ -34,6 +35,9 @@ export function TransferRecordPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [sopLoading, setSopLoading] = useState(false);
+  const [knownOrder, setKnownOrder] = useState(false);
+  const [progressSaving, setProgressSaving] = useState(false);
+  const [progressError, setProgressError] = useState('');
   const isOperator = user?.role === 'OPERATOR';
 
   useEffect(() => {
@@ -43,8 +47,16 @@ export function TransferRecordPage() {
     setSopLoading(true);
     const timer = window.setTimeout(async () => {
       try {
-        const source = await getTransferOrderSource(normalized);
+        const [sourceResult, progressResult] = await Promise.allSettled([
+          getTransferOrderSource(normalized),
+          getMachineOrderProgress('HT-01', normalized),
+        ]);
+        if (sourceResult.status === 'rejected') throw sourceResult.reason;
         if (!active) return;
+        const source = sourceResult.value;
+        setKnownOrder(Boolean(source));
+        setOrderProgress(progressResult.status === 'fulfilled' ? progressResult.value?.orderProgress ?? 'IN_PROGRESS' : 'IN_PROGRESS');
+        setProgressError(progressResult.status === 'rejected' ? (progressResult.reason instanceof Error ? progressResult.reason.message : (vi ? 'Không tải được tiến độ đơn.' : 'Unable to load order progress.')) : '');
         if (source) {
           setEntry((current) => ({
             ...current,
@@ -60,6 +72,7 @@ export function TransferRecordPage() {
         }
       } catch (lookupError) {
         if (active) {
+          setKnownOrder(false);
           setMessage(null);
           setError(lookupError instanceof Error ? lookupError.message : (vi ? 'Không tải được thông tin SOP.' : 'Unable to load SOP details.'));
         }
@@ -67,6 +80,20 @@ export function TransferRecordPage() {
     }, 350);
     return () => { active = false; window.clearTimeout(timer); };
   }, [orderNumber, vi]);
+
+  const changeOrderProgress = async (nextProgress: 'IN_PROGRESS' | 'COMPLETED') => {
+    if (!knownOrder || sopLoading || progressSaving || !orderNumber.trim()) return;
+    const previousProgress = orderProgress;
+    setOrderProgress(nextProgress);
+    setProgressSaving(true);
+    setProgressError('');
+    try {
+      await saveMachineOrderProgress('HT-01', orderNumber.trim().toUpperCase(), nextProgress);
+    } catch (reason) {
+      setOrderProgress(previousProgress);
+      setProgressError(reason instanceof Error ? reason.message : (vi ? 'Không lưu được tiến độ đơn.' : 'Unable to save order progress.'));
+    } finally { setProgressSaving(false); }
+  };
 
   const updateEntry = (key: keyof EntryValues, value: string) => setEntry((current) => ({ ...current, [key]: value }));
   const canSave = Boolean(!saving && productionDate && orderNumber.trim() && operatorName.trim() && employeeId.trim() && shift
@@ -108,7 +135,7 @@ export function TransferRecordPage() {
               <div className="grid content-start">
               <OperationInfoFields
                 orderNumber={orderNumber}
-                onOrderNumberChange={(value) => { setOrderNumber(value.toUpperCase()); setEntry(emptyEntry); setOrderProgress('IN_PROGRESS'); setMessage(null); setError(null); }}
+                onOrderNumberChange={(value) => { setOrderNumber(value.toUpperCase()); setEntry(emptyEntry); setOrderProgress('IN_PROGRESS'); setKnownOrder(false); setProgressError(''); setMessage(null); setError(null); }}
                 operatorName={operatorName}
                 onOperatorNameChange={setOperatorName}
                 employeeId={employeeId}
@@ -117,10 +144,13 @@ export function TransferRecordPage() {
                 onShiftChange={setShift}
                 orderStatus={(
                   <label className={labelClass}>{vi ? 'Tiến độ đơn' : 'Order progress'}
-                    <select className={fieldClass} value={orderProgress} onChange={(event) => setOrderProgress(event.target.value as 'IN_PROGRESS' | 'COMPLETED')}>
+                    <select className={`${fieldClass} disabled:bg-hmiSection disabled:text-slate-400`} value={orderProgress} disabled={!knownOrder || sopLoading || progressSaving} onChange={(event) => void changeOrderProgress(event.target.value as 'IN_PROGRESS' | 'COMPLETED')}>
                       <option value="IN_PROGRESS">{vi ? 'ĐANG XỬ LÝ' : 'IN PROGRESS'}</option>
                       <option value="COMPLETED">{vi ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED'}</option>
                     </select>
+                    {sopLoading && <span className="text-[9px] normal-case text-info">{vi ? 'Đang tra đơn…' : 'Looking up order…'}</span>}
+                    {progressSaving && <span className="text-[9px] normal-case text-info">{vi ? 'Đang lưu…' : 'Saving…'}</span>}
+                    {progressError && <span role="alert" className="text-[9px] normal-case text-alarm">{progressError}</span>}
                   </label>
                 )}
               />

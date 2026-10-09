@@ -444,7 +444,7 @@ function fromMachineOrderProgress(response: MachineOrderProgressApiResponse): Ma
 
 const machineOrderProgressPath = `${apiBaseUrl}/api/machine-orders/progress`;
 
-export type OrderProgressMachineId = 'BU-01' | 'SC-01' | 'TE-01' | 'TE-02';
+export type OrderProgressMachineId = 'BU-01' | 'SC-01' | 'TE-01' | 'TE-02' | 'HT-01';
 
 export async function getMachineOrderProgress(machineId: OrderProgressMachineId, orderNumber: string, options: RequestOptions = {}): Promise<MachineOrderProgress | null> {
   const query = `?machine_id=${encodeURIComponent(machineId)}&order_number=${encodeURIComponent(orderNumber.trim())}`;
