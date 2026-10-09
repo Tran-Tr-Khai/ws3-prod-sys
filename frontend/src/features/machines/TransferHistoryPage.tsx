@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { MachineNavigation } from '../../components/hmi/MachineNavigation';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { downloadTransferReport, listTransferRecords, type TransferRecord } from './transferApi';
-
-const dateForRecord = (record: TransferRecord) => record.production_date;
 
 export function TransferHistoryPage() {
   const navigate = useNavigate();
@@ -21,13 +19,13 @@ export function TransferHistoryPage() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    void listTransferRecords().then((rows) => { if (active) setRecords(rows); })
+    void listTransferRecords(date || undefined).then((rows) => { if (active) setRecords(rows); })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : (vi ? 'Không tải được lịch sử máy ép.' : 'Unable to load transfer history.')); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [vi]);
+  }, [date, vi]);
 
-  const filtered = useMemo(() => records.filter((record) => !date || dateForRecord(record) === date), [records, date]);
+  const filtered = records;
   const exportExcel = async () => {
     setExporting(true);
     setError('');
