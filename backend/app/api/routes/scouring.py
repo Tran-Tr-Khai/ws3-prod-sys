@@ -16,7 +16,7 @@ from app.models.scouring_inspection import ScouringPhInspection
 from app.api.routes.machine_orders import set_order_progress
 from app.schemas.scouring import ScouringPhInspectionCreate, ScouringPhInspectionResponse, ScouringRecordCreate, ScouringRecordResponse
 from app.security.auth import get_current_user
-from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code
+from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_order_code, resolve_ws3_sop_code
 
 router = APIRouter(prefix="/scouring/records", tags=["scouring"])
 inspection_router = APIRouter(prefix="/scouring/inspections", tags=["scouring-inspections"])
@@ -37,6 +37,15 @@ def create_scouring_record(
     payload: ScouringRecordCreate,
     db: Session = Depends(get_db),
 ) -> ScouringRecord:
+    if is_pkp_order_code(payload.order_number):
+        raise HTTPException(status_code=422, detail="Vui lòng nhập mã SOP, không nhập mã PKP.")
+    if payload.order_number and payload.order_number.strip():
+        try:
+            order_rows, _aliases = resolve_ws3_sop_code(db, payload.order_number)
+        except AmbiguousWS3OrderCode as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if not order_rows:
+            raise HTTPException(status_code=422, detail="Không tìm thấy mã SOP trong dữ liệu MES.")
     record = ScouringRecord(**payload.model_dump())
     if payload.order_number and payload.order_progress:
         set_order_progress(db, payload.machine_id, payload.order_number, payload.order_progress)
@@ -135,6 +144,13 @@ def export_scouring_records(
         .where(ScouringPhInspection.scouring_record_id.in_(record_ids))
         .order_by(ScouringPhInspection.inspected_at, ScouringPhInspection.id)
     ).all()) if record_ids else []
+    record_order = {record.id: index for index, record in enumerate(records)}
+    inspections = sorted(inspections, key=lambda item: (record_order.get(item.scouring_record_id, len(records)), item.inspected_at, item.id))
+    ph_row_by_record: dict[int, int] = {}
+    ph_count_by_record: dict[int, int] = {}
+    for excel_row, inspection in enumerate(inspections, start=2):
+        ph_row_by_record.setdefault(inspection.scouring_record_id, excel_row)
+        ph_count_by_record[inspection.scouring_record_id] = ph_count_by_record.get(inspection.scouring_record_id, 0) + 1
 
     workbook = Workbook()
     sheet = workbook.active
@@ -142,9 +158,9 @@ def export_scouring_records(
     sheet.sheet_view.showGridLines = False
     is_vi = language == "vi"
     headers = (
-        ["TIẾN ĐỘ ĐƠN", "THỜI GIAN", "MÁY", "SỐ ORDER", "MẶT HÀNG", "LOT SỢI", "SỐ LOT", "NGƯỜI VẬN HÀNH", "ID NHÂN VIÊN", "CA", "NaOH (L)", "Soap (L)", "Desizer (L)", "H2O2 (L)", "Chelate (L)", "TỐC ĐỘ (m/min)", "NHIỆT ĐỘ (°C)", "NHIỆT ĐỘ LÔ GIA (°C)", "MÉT ĐẦU VÀO", "MÉT ĐẦU RA", "HAO HỤT", "KẾT QUẢ"]
+        ["TEST pH", "THỜI GIAN GHI", "MÃ SOP", "MẶT HÀNG", "LOT SỢI", "SỐ LOT", "NGƯỜI VẬN HÀNH", "ID NHÂN VIÊN", "CA", "NaOH (L)", "Soap (L)", "Desizer (L)", "H2O2 (L)", "Chelate (L)", "TỐC ĐỘ (m/min)", "NHIỆT ĐỘ (°C)", "NHIỆT ĐỘ LÔ GIA (°C)", "MÉT ĐẦU VÀO", "MÉT ĐẦU RA", "HAO HỤT", "KẾT QUẢ", "TIẾN ĐỘ ĐƠN"]
         if is_vi else
-        ["ORDER PROGRESS", "DATE & TIME", "MACHINE", "ORDER", "ITEM", "YARN LOT", "LOT", "OPERATOR", "EMPLOYEE ID", "SHIFT", "NaOH (L)", "Soap (L)", "Desizer (L)", "H2O2 (L)", "Chelate (L)", "SPEED (m/min)", "TEMPERATURE (°C)", "CYLINDER TEMP. (°C)", "INPUT (m)", "OUTPUT (m)", "LOSS (m)", "RESULT"]
+        ["pH TEST", "RECORDED DATE - TIME", "SOP", "ITEM", "YARN LOT", "LOT", "OPERATOR", "EMPLOYEE ID", "SHIFT", "NaOH (L)", "Soap (L)", "Desizer (L)", "H2O2 (L)", "Chelate (L)", "SPEED (m/min)", "TEMPERATURE (°C)", "CYLINDER TEMP. (°C)", "INPUT (m)", "OUTPUT (m)", "LOSS (m)", "RESULT", "ORDER PROGRESS"]
     )
     last_col = len(headers)
     sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_col)
@@ -159,74 +175,68 @@ def export_scouring_records(
     sheet.cell(2, 1).font = Font(name="Aptos", size=10, color="385466")
     sheet.cell(2, 1).fill = PatternFill("solid", fgColor="EAF0F3")
     sheet.cell(2, 1).alignment = Alignment(vertical="center")
-    sheet.merge_cells(start_row=4, start_column=1, end_row=5, end_column=1)
-    progress_header = sheet.cell(4, 1, "TIẾN ĐỘ ĐƠN" if is_vi else "ORDER PROGRESS")
-    progress_header.font = Font(name="Aptos", size=9, bold=True, color="FFFFFF")
-    progress_header.fill = PatternFill("solid", fgColor="385466")
-    progress_header.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     group_border = Side(style="medium", color="385466")
     column_border = Side(style="thin", color="9FB0B8")
-    progress_header.border = Border(left=group_border, right=group_border, bottom=group_border)
-    group_ranges = [(2, 10, "THÔNG TIN CHUNG" if is_vi else "GENERAL INFORMATION"), (11, 15, "HÓA CHẤT" if is_vi else "CHEMICALS"), (16, 18, "ĐIỀU KIỆN QUY TRÌNH" if is_vi else "PROCESS CONDITIONS"), (19, 21, "SẢN XUẤT" if is_vi else "PRODUCTION")]
+    standalone_headers = (1, 21, 22)
+    for column in standalone_headers:
+        cell = sheet.cell(4, column)
+        cell.fill = PatternFill("solid", fgColor="DCE6EA")
+        cell.border = Border(left=group_border, right=group_border, bottom=Side(style="thin", color="A9BBC3"))
+    group_ranges = [(2, 9, "THÔNG TIN CHUNG" if is_vi else "GENERAL INFORMATION"), (10, 14, "HÓA CHẤT" if is_vi else "CHEMICALS"), (15, 17, "ĐIỀU KIỆN QUY TRÌNH" if is_vi else "PROCESS CONDITIONS"), (18, 20, "SẢN XUẤT" if is_vi else "PRODUCTION")]
     for start_col, end_col, label in group_ranges:
         # Style the full merged range before merging so Excel retains the group
         # edges, with softer separators between columns inside the group.
         for column in range(start_col, end_col + 1):
             cell = sheet.cell(4, column)
-            cell.fill = PatternFill("solid", fgColor="385466")
+            cell.fill = PatternFill("solid", fgColor="DCE6EA")
             cell.border = Border(
-                left=group_border if column == start_col else Side(style=None),
-                right=group_border if column == end_col else Side(style=None),
-                bottom=group_border,
+                left=group_border if column == start_col else Side(style="thin", color="A9BBC3"),
+                right=group_border if column == end_col else Side(style="thin", color="A9BBC3"),
+                bottom=Side(style="thin", color="A9BBC3"),
             )
         sheet.merge_cells(start_row=4, start_column=start_col, end_row=4, end_column=end_col)
         cell = sheet.cell(4, start_col, label)
-        cell.font = Font(name="Aptos", size=9, bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="385466")
+        cell.font = Font(name="Aptos", size=9, bold=True, color="385466")
+        cell.fill = PatternFill("solid", fgColor="DCE6EA")
         cell.alignment = Alignment(horizontal="center", vertical="center")
-    sheet.merge_cells(start_row=4, start_column=22, end_row=5, end_column=22)
-    result_group = sheet.cell(4, 22, "KẾT QUẢ" if is_vi else "RESULT")
-    result_group.font = Font(name="Aptos", size=9, bold=True, color="FFFFFF")
-    result_group.fill = PatternFill("solid", fgColor="385466")
-    result_group.alignment = Alignment(horizontal="center", vertical="center")
-    result_group.border = Border(left=group_border, right=group_border, bottom=group_border)
-    thin_border = Border(bottom=Side(style="thin", color="D5E0E5"))
     group_starts = {start for start, _end, _label in group_ranges}
     group_ends = {end for _start, end, _label in group_ranges}
+    group_starts.update(standalone_headers)
+    group_ends.update(standalone_headers)
     for column, value in enumerate(headers, start=1):
-        # The result header is already vertically merged across rows 4-5.
-        if column in (1, 22):
-            continue
         cell = sheet.cell(5, column, value)
-        cell.font = Font(name="Aptos", size=9, bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="476271")
+        cell.font = Font(name="Aptos", size=9, bold=True, color="385466")
+        cell.fill = PatternFill("solid", fgColor="EAF0F3")
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = Border(
-            left=group_border if column in group_starts else Side(style=None),
+            left=group_border if column in group_starts else column_border,
             right=group_border if column in group_ends else column_border,
-            bottom=Side(style="medium", color="243B4A"),
+            bottom=Side(style="medium", color="8098A3"),
         )
+    sheet.row_dimensions[4].height = 22
     sheet.row_dimensions[5].height = 34
     for row_index, record in enumerate(records, start=6):
         timestamp = record.recorded_at
         if timestamp.tzinfo is not None:
             timestamp = timestamp.astimezone(timezone_local).replace(tzinfo=None)
         progress = "ĐANG XỬ LÝ" if record.order_progress == "IN_PROGRESS" else "ĐÃ HOÀN THÀNH" if record.order_progress == "COMPLETED" else ("CHƯA CẬP NHẬT" if is_vi else "NOT SET")
-        values = [progress if is_vi else ("IN PROGRESS" if record.order_progress == "IN_PROGRESS" else "COMPLETED" if record.order_progress == "COMPLETED" else "NOT SET"), timestamp, record.machine_id, record.order_number or "—", record.item or "—", record.lot_yarn or "—", record.lot_number or "—", record.operator_name or "—", record.operator_identifier or "—", record.shift or "—", record.naoh, record.soap, record.desizer, record.h2o2, record.chelate, record.speed, record.temperature, record.cylinder_temperature, record.input_fabric_meters, record.output_fabric_meters, record.loss_meters, ("CẢNH BÁO" if is_vi else "WARNING") if record_result(record) == "WARNING" else ("ĐẠT" if is_vi else "PASS")]
+        inspection_count = ph_count_by_record.get(record.id, 0)
+        ph_link_label = (f"XEM ({inspection_count})" if is_vi else f"VIEW ({inspection_count})") if inspection_count else "—"
+        values = [ph_link_label, timestamp, record.order_number or "—", record.item or "—", record.lot_yarn or "—", record.lot_number or "—", record.operator_name or "—", record.operator_identifier or "—", record.shift or "—", record.naoh, record.soap, record.desizer, record.h2o2, record.chelate, record.speed, record.temperature, record.cylinder_temperature, record.input_fabric_meters, record.output_fabric_meters, record.loss_meters, ("CẢNH BÁO" if is_vi else "WARNING") if record_result(record) == "WARNING" else ("ĐẠT" if is_vi else "PASS"), progress if is_vi else ("IN PROGRESS" if record.order_progress == "IN_PROGRESS" else "COMPLETED" if record.order_progress == "COMPLETED" else "NOT SET")]
         for column, value in enumerate(values, start=1):
             cell = sheet.cell(row_index, column, value)
             cell.font = Font(name="Aptos", size=9, color="243B4A")
-            cell.alignment = Alignment(vertical="center", wrap_text=column in (4, 7))
+            cell.alignment = Alignment(vertical="center", wrap_text=column in (4, 6))
             # Group emphasis belongs to the header only; body rows use a
             # uniform, subtle grid so the dataset stays visually calm.
             cell.border = Border(right=column_border, bottom=Side(style="thin", color="D5E0E5"))
             if row_index % 2:
                 cell.fill = PatternFill("solid", fgColor="F3F7F9")
             if column == 2:
-                cell.number_format = "dd/mm/yy hh:mm"
-            if 11 <= column <= 21:
+                cell.number_format = "dd/mm/yyyy - hh:mm"
+            if 10 <= column <= 20:
                 cell.number_format = "#,##0.###"
-            if column == 1:
+            if column == 22:
                 progress_colors = {
                     "IN_PROGRESS": ("1D4ED8", "DBEAFE"),
                     "COMPLETED": ("15803D", "DCFCE7"),
@@ -235,12 +245,15 @@ def export_scouring_records(
                 font_color, fill_color = progress_colors.get(record.order_progress, progress_colors[None])
                 cell.font = Font(name="Aptos", size=9, bold=True, color=font_color)
                 cell.fill = PatternFill("solid", fgColor=fill_color)
-            if column == 22:
+            if column == 21:
                 warning = record_result(record) == "WARNING"
                 cell.font = Font(name="Aptos", size=9, bold=True, color="B42318" if warning else "247044")
                 cell.fill = PatternFill("solid", fgColor="FDECEC" if warning else "E7F4EC")
+            if column == 1 and inspection_count:
+                cell.hyperlink = f"#'{('pH inspections' if is_vi else 'pH Inspections')}'!A{ph_row_by_record[record.id]}"
+                cell.font = Font(name="Aptos", size=9, bold=True, color="0563C1", underline="single")
         sheet.row_dimensions[row_index].height = 22
-    widths = [19, 18, 12, 20, 34, 15, 15, 22, 16, 12, 13, 13, 13, 13, 13, 15, 15, 18, 15, 15, 14, 14]
+    widths = [16, 23, 20, 34, 15, 15, 22, 16, 12, 13, 13, 13, 13, 13, 15, 15, 18, 15, 15, 14, 14, 19]
     for column, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(column)].width = width
     sheet.freeze_panes = "C6"
@@ -253,7 +266,7 @@ def export_scouring_records(
 
     ph_sheet = workbook.create_sheet("pH inspections" if is_vi else "pH Inspections")
     ph_sheet.sheet_view.showGridLines = False
-    ph_headers = ["THỜI GIAN", "SỐ ORDER", "NGƯỜI KIỂM TRA", *[f"TANK {index}" for index in range(8)], "GHI CHÚ"] if is_vi else ["DATE & TIME", "ORDER", "INSPECTOR", *[f"TANK {index}" for index in range(8)], "NOTE"]
+    ph_headers = ["MÃ BẢN GHI SCOURING", "THỜI GIAN TEST", "SỐ ORDER", "NGƯỜI KIỂM TRA", *[f"TANK {index}" for index in range(8)], "GHI CHÚ"] if is_vi else ["SCOURING RECORD ID", "TEST DATE & TIME", "ORDER", "INSPECTOR", *[f"TANK {index}" for index in range(8)], "NOTE"]
     ph_sheet.append(ph_headers)
     for cell in ph_sheet[1]:
         cell.font = Font(name="Aptos", size=9, bold=True, color="FFFFFF")
@@ -265,16 +278,18 @@ def export_scouring_records(
         if inspected_at.tzinfo is not None:
             inspected_at = inspected_at.astimezone(timezone_local).replace(tzinfo=None)
         tank_values = [getattr(inspection, f"tank_{index}_ph") for index in range(8)]
-        ph_sheet.append([inspected_at, record_by_id[inspection.scouring_record_id].order_number or "—", inspection.operator_name or "—", *tank_values, inspection.note or "—"])
+        ph_sheet.append([inspection.scouring_record_id, inspected_at, record_by_id[inspection.scouring_record_id].order_number or "—", inspection.operator_name or "—", *tank_values, inspection.note or "—"])
         row = ph_sheet.max_row
-        ph_sheet.cell(row, 1).number_format = "dd/mm/yy hh:mm"
+        ph_sheet.cell(row, 2).number_format = "dd/mm/yy hh:mm"
+        is_group_start = row == ph_row_by_record[inspection.scouring_record_id]
+        group_top_border = Side(style="medium", color="385466") if is_group_start else Side(style="thin", color="D5E0E5")
         for cell in ph_sheet[row]:
-            cell.border = thin_border
-            cell.alignment = Alignment(vertical="center", wrap_text=cell.column == 12)
-    for column, width in enumerate([18, 20, 22, *([12] * 8), 44], start=1):
+            cell.border = Border(top=group_top_border, bottom=Side(style="thin", color="D5E0E5"))
+            cell.alignment = Alignment(vertical="center", wrap_text=cell.column == 13)
+    for column, width in enumerate([18, 18, 20, 22, *([12] * 8), 44], start=1):
         ph_sheet.column_dimensions[get_column_letter(column)].width = width
     ph_sheet.freeze_panes = "A2"
-    ph_sheet.auto_filter.ref = f"A1:L{ph_sheet.max_row}"
+    ph_sheet.auto_filter.ref = f"A1:M{ph_sheet.max_row}"
 
     output = BytesIO()
     workbook.save(output)
