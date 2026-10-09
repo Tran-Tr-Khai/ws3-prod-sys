@@ -159,7 +159,6 @@ export function TransferRecordPage() {
             <section className="flex min-h-[70dvh] min-w-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-white lg:min-h-0">
               <header className="sticky top-0 z-10 flex min-h-10 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-white">
                 <h1 className="text-[10px] font-bold uppercase tracking-wider">{vi ? 'THÔNG SỐ VẬN HÀNH' : 'OPERATION PARAMETERS'}</h1>
-                <span className="text-[10px] font-semibold">{vi ? 'NGÀY SẢN XUẤT' : 'PRODUCTION DATE'} · {new Date(`${productionDate}T00:00:00`).toLocaleDateString(vi ? 'vi-VN' : 'en-GB')}</span>
               </header>
               <section className="shrink-0 border-b border-line">
                 <header className="border-b border-line bg-hmiSection px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-industrialDark">{vi ? 'THÔNG TIN SẢN XUẤT' : 'PRODUCTION DETAILS'}</header>
