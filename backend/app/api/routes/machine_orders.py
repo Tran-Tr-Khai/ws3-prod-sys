@@ -12,7 +12,7 @@ from app.models.scouring import ScouringRecord
 from app.models.tentering import TenteringOrder
 from app.models.user import User
 from app.security.auth import get_current_user, role_codes
-from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code
+from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_order_code, resolve_ws3_sop_code
 
 
 router = APIRouter(prefix="/machine-orders", tags=["machine-orders"])
@@ -111,6 +111,14 @@ def update_order_progress(
     normalized = payload.order_number.strip().upper()
     if not normalized:
         raise HTTPException(status_code=422, detail="Order number is required")
+    if is_pkp_order_code(normalized):
+        raise HTTPException(status_code=422, detail="Vui lòng nhập mã SOP, không nhập mã PKP.")
+    try:
+        order_rows, _aliases = resolve_ws3_sop_code(db, normalized)
+    except AmbiguousWS3OrderCode as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not order_rows:
+        raise HTTPException(status_code=422, detail="Không tìm thấy mã SOP trong dữ liệu MES.")
 
     try:
         state = set_order_progress(db, payload.machine_id, normalized, payload.order_progress)

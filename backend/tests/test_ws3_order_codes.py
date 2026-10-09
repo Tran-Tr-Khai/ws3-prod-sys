@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.models.ws3_production import WS3ProductionOrder
-from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code
+from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code, resolve_ws3_sop_code
 
 
 def test_sop_resolves_to_all_rows_of_linked_pkp_and_returns_legacy_aliases() -> None:
@@ -38,3 +38,16 @@ def test_sop_mapped_to_multiple_pkps_is_rejected() -> None:
             pass
         else:
             raise AssertionError("Ambiguous SOP must not silently resolve to an arbitrary order")
+
+
+def test_operator_sop_resolver_does_not_accept_pkp_code() -> None:
+    engine = create_engine("sqlite://")
+    WS3ProductionOrder.__table__.create(engine)
+    with Session(engine) as db:
+        db.add(WS3ProductionOrder(pk_no="PKP-001", invoice_no="SOP-001", raw_data_json="{}"))
+        db.flush()
+
+        rows, aliases = resolve_ws3_sop_code(db, "PKP-001")
+
+    assert rows == []
+    assert aliases == set()

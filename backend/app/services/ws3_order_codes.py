@@ -44,3 +44,36 @@ def resolve_ws3_order_code(db: Session, code: str) -> tuple[list[WS3ProductionOr
     aliases = {pk_no.upper()}
     aliases.update(row.invoice_no.strip().upper() for row in rows if row.invoice_no and row.invoice_no.strip())
     return rows, aliases
+
+
+def resolve_ws3_sop_code(db: Session, code: str) -> tuple[list[WS3ProductionOrder], set[str]]:
+    """Resolve only an operator-facing SOP (ORDEROFWS3 invoice number).
+
+    PKP remains the internal grouping key for reports and historical aliases,
+    but it is deliberately not accepted as an operator-entered order code.
+    """
+    normalized = code.strip().upper()
+    if not normalized:
+        return [], set()
+
+    sop_rows = db.scalars(
+        select(WS3ProductionOrder).where(func.upper(func.trim(WS3ProductionOrder.invoice_no)) == normalized)
+    ).all()
+    linked_pk = {row.pk_no.strip() for row in sop_rows if row.pk_no and row.pk_no.strip()}
+    if not linked_pk:
+        return [], set()
+    if len(linked_pk) > 1:
+        raise AmbiguousWS3OrderCode(f"SOP '{code.strip()}' is linked to multiple PKP orders")
+
+    pk_no = next(iter(linked_pk))
+    rows = db.scalars(
+        select(WS3ProductionOrder).where(func.upper(func.trim(WS3ProductionOrder.pk_no)) == pk_no.upper())
+    ).all()
+    aliases = {pk_no.upper()}
+    aliases.update(row.invoice_no.strip().upper() for row in rows if row.invoice_no and row.invoice_no.strip())
+    return rows, aliases
+
+
+def is_pkp_order_code(code: str | None) -> bool:
+    """Identify an explicitly PKP-prefixed code at operator input boundaries."""
+    return bool(code and code.strip().upper().startswith("PKP"))

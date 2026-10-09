@@ -19,7 +19,7 @@ from app.config.settings import get_settings
 from app.db.session import get_db
 from app.models.buffing import BuffingCheck, BuffingCheckImage
 from app.api.routes.machine_orders import set_order_progress
-from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code
+from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code, resolve_ws3_sop_code
 from app.schemas.buffing import BuffingCheckCreate, BuffingCheckResponse, BuffingImageResponse
 from app.security.auth import get_current_user
 
@@ -73,7 +73,7 @@ def check_response(check: BuffingCheck) -> BuffingCheckResponse:
 def create_buffing_check(payload: BuffingCheckCreate, db: Session = Depends(get_db)) -> BuffingCheckResponse:
     normalized_order = payload.order_number.strip()
     try:
-        _order_rows, _aliases = resolve_ws3_order_code(db, normalized_order)
+        _order_rows, _aliases = resolve_ws3_sop_code(db, normalized_order)
     except AmbiguousWS3OrderCode as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not _order_rows:
