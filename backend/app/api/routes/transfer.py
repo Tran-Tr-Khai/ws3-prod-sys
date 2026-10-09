@@ -1,22 +1,23 @@
 from datetime import date, datetime, timezone
 from io import BytesIO
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
-from sqlalchemy import desc, select, update
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.routes.machine_orders import set_order_progress
 from app.db.session import get_db
 from app.models.transfer import TransferRecord
 from app.models.user import User
+from app.models.ws3_production import WS3WorkerRecord
 from app.schemas.transfer import TransferRecordCreate, TransferRecordResponse
 from app.security.auth import get_current_user, role_codes
+from app.services.snapshot_report import raw_value
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_sop_code
-
-
 router = APIRouter(prefix="/transfer/records", tags=["H/T Transfer"])
 MANAGER_ROLES = {"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}
 MACHINE_ID = "HT-01"
@@ -30,6 +31,49 @@ def _authorize(user: User) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"{MACHINE_ID} access is required")
 
 
+def _single_value(values: list[str | None]) -> str | None:
+    distinct = {value.strip().casefold(): value.strip() for value in values if value and value.strip()}
+    return next(iter(distinct.values())) if len(distinct) == 1 else None
+
+
+@router.get("/orders/{sop_no}/source")
+def get_transfer_order_source(
+    sop_no: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[str, str | None] | None:
+    """Return unambiguous production fields for the operator-entered SOP."""
+    _authorize(user)
+    normalized_sop = sop_no.strip().upper()
+    if not normalized_sop:
+        return None
+    if is_pkp_order_code(normalized_sop):
+        raise HTTPException(status_code=422, detail="Vui lòng nhập mã SOP, không nhập mã PKP.")
+    try:
+        rows, _aliases = resolve_ws3_sop_code(db, normalized_sop)
+    except AmbiguousWS3OrderCode as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not rows:
+        return None
+    exact_rows = [row for row in rows if (row.invoice_no or "").strip().upper() == normalized_sop]
+    rows = exact_rows or rows
+    workers = db.scalars(
+        select(WS3WorkerRecord).where(func.upper(func.trim(WS3WorkerRecord.sop_no)) == normalized_sop)
+    ).all()
+    design_values: list[str | None] = []
+    for row in rows:
+        for column in ("DESIGN", "DESIGN NO", "DESIGN#", "PATTERN", "PATTERN NO"):
+            value = raw_value(row, column)
+            if value:
+                design_values.append(value)
+                break
+    return {
+        "item": _single_value([row.item_name for row in rows]),
+        "buyer": _single_value([worker.customer for worker in workers]),
+        "design": _single_value(design_values),
+    }
+
+
 @router.post("", response_model=TransferRecordResponse, status_code=status.HTTP_201_CREATED)
 def create_transfer_record(
     payload: TransferRecordCreate,
@@ -37,6 +81,9 @@ def create_transfer_record(
     user: User = Depends(get_current_user),
 ) -> TransferRecord:
     _authorize(user)
+    today = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+    if payload.production_date != today:
+        raise HTTPException(status_code=422, detail="Chỉ được nhập báo cáo cho ngày sản xuất hiện tại.")
     sop_no = payload.order_number.strip().upper()
     if is_pkp_order_code(sop_no):
         raise HTTPException(status_code=422, detail="Vui lòng nhập mã SOP, không nhập mã PKP.")

@@ -11,6 +11,7 @@ import { MachineOperationEntryPage } from '../features/machines/MachineOperation
 import { TenteringRecordPage } from '../features/machines/TenteringRecordPage';
 import { TenteringHistoryPage } from '../features/machines/TenteringHistoryPage';
 import { TransferRecordPage } from '../features/machines/TransferRecordPage';
+import { TransferHistoryPage } from '../features/machines/TransferHistoryPage';
 import { UnrollingOrdersPage } from '../features/orders/UnrollingOrdersPage';
 import { ProductionOverviewPage } from '../features/production/ProductionOverviewPage';
 import { WS3OverviewPage } from '../features/production/WS3OverviewPage';
@@ -59,7 +60,7 @@ export default function App() {
       <Route path="/machine/TE-01/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/TE-01/record" replace /> : <TenteringHistoryPage key="TE-01" machineId="TE-01" />} />
       <Route path="/machine/TE-02/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/TE-02/record" replace /> : <TenteringHistoryPage key="TE-02" machineId="TE-02" />} />
       <Route path="/machine/HT-01/record" element={<TransferRecordPage />} />
-      <Route path="/machine/HT-01/history" element={<TransferRecordPage />} />
+      <Route path="/machine/HT-01/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/HT-01/record" replace /> : <TransferHistoryPage />} />
       <Route path="/machine/:machineId/record" element={<MachineOperationEntryPage />} />
       <Route path="/machine/tenter" element={<Navigate to="/machine/tenter/record" replace />} />
       <Route path="/machine/unrolling/record" element={<UnrollingOrdersPage />} />

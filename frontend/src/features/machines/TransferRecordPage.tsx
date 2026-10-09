@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { HMIButton } from '../../components/hmi/HMIButton';
@@ -6,7 +6,7 @@ import { MachineNavigation } from '../../components/hmi/MachineNavigation';
 import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { createTransferRecord, downloadTransferReport, listTransferRecords, type TransferRecord } from './transferApi';
+import { createTransferRecord, getTransferOrderSource } from './transferApi';
 
 type EntryValues = { item: string; buyer: string; design: string; temperature: string; speed: string; quantityMeters: string };
 const emptyEntry: EntryValues = { item: '', buyer: '', design: '', temperature: '', speed: '', quantityMeters: '' };
@@ -23,34 +23,50 @@ export function TransferRecordPage() {
   const { user } = useAuth();
   const { language } = useLanguage();
   const vi = language === 'vi';
-  const [productionDate, setProductionDate] = useState(factoryToday);
+  const [productionDate] = useState(factoryToday);
   const [orderNumber, setOrderNumber] = useState('');
   const [operatorName, setOperatorName] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [shift, setShift] = useState('');
   const [orderProgress, setOrderProgress] = useState<'IN_PROGRESS' | 'COMPLETED'>('IN_PROGRESS');
   const [entry, setEntry] = useState<EntryValues>(emptyEntry);
-  const [records, setRecords] = useState<TransferRecord[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [sopLoading, setSopLoading] = useState(false);
   const isOperator = user?.role === 'OPERATOR';
 
-  const loadRecords = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setRecords(await listTransferRecords(productionDate));
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : (vi ? 'Không tải được báo cáo máy ép.' : 'Unable to load the transfer report.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [productionDate, vi]);
-
-  useEffect(() => { void loadRecords(); }, [loadRecords]);
+  useEffect(() => {
+    const normalized = orderNumber.trim().toUpperCase();
+    if (!normalized) { setSopLoading(false); return; }
+    let active = true;
+    setSopLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const source = await getTransferOrderSource(normalized);
+        if (!active) return;
+        if (source) {
+          setEntry((current) => ({
+            ...current,
+            item: source.item ?? current.item,
+            buyer: source.buyer ?? current.buyer,
+            design: source.design ?? current.design,
+          }));
+          setMessage(vi ? 'ĐÃ TẢI THÔNG TIN ĐƠN TỪ SOP.' : 'ORDER DETAILS LOADED FROM SOP.');
+          setError(null);
+        } else {
+          setMessage(null);
+          setError(vi ? 'Không tìm thấy SOP trong dữ liệu MES.' : 'SOP was not found in MES data.');
+        }
+      } catch (lookupError) {
+        if (active) {
+          setMessage(null);
+          setError(lookupError instanceof Error ? lookupError.message : (vi ? 'Không tải được thông tin SOP.' : 'Unable to load SOP details.'));
+        }
+      } finally { if (active) setSopLoading(false); }
+    }, 350);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [orderNumber, vi]);
 
   const updateEntry = (key: keyof EntryValues, value: string) => setEntry((current) => ({ ...current, [key]: value }));
   const canSave = Boolean(!saving && productionDate && orderNumber.trim() && operatorName.trim() && employeeId.trim() && shift
@@ -73,31 +89,12 @@ export function TransferRecordPage() {
         order_progress: orderProgress, item: entry.item.trim(), buyer: entry.buyer.trim(), design: entry.design.trim(),
         temperature: numericValue(entry.temperature), speed: numericValue(entry.speed), quantity_meters: numericValue(entry.quantityMeters),
       });
-      setEntry(emptyEntry);
-      await loadRecords();
-      setMessage(vi ? 'ĐÃ LƯU DÒNG BÁO CÁO H/T TRANSFER.' : 'H/T TRANSFER REPORT ROW SAVED.');
+      setEntry((current) => ({ ...current, temperature: '', speed: '', quantityMeters: '' }));
+      setMessage(vi ? 'ĐÃ LƯU BẢN GHI H/T TRANSFER.' : 'H/T TRANSFER RECORD SAVED.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : (vi ? 'Không lưu được báo cáo máy ép.' : 'Unable to save the transfer report.'));
     } finally {
       setSaving(false);
-    }
-  };
-
-  const exportReport = async () => {
-    setExporting(true);
-    setError(null);
-    try {
-      const blob = await downloadTransferReport(productionDate, language);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `ht-transfer-daily-report-${productionDate}.xlsx`;
-      anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : (vi ? 'Không xuất được Excel.' : 'Unable to export Excel.'));
-    } finally {
-      setExporting(false);
     }
   };
 
@@ -111,7 +108,7 @@ export function TransferRecordPage() {
               <div className="grid content-start">
               <OperationInfoFields
                 orderNumber={orderNumber}
-                onOrderNumberChange={(value) => { setOrderNumber(value.toUpperCase()); setOrderProgress('IN_PROGRESS'); }}
+                onOrderNumberChange={(value) => { setOrderNumber(value.toUpperCase()); setEntry(emptyEntry); setOrderProgress('IN_PROGRESS'); setMessage(null); setError(null); }}
                 operatorName={operatorName}
                 onOperatorNameChange={setOperatorName}
                 employeeId={employeeId}
@@ -132,9 +129,7 @@ export function TransferRecordPage() {
             <section className="flex min-h-[70dvh] min-w-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-white lg:min-h-0">
               <header className="sticky top-0 z-10 flex min-h-10 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-white">
                 <h1 className="text-[10px] font-bold uppercase tracking-wider">{vi ? 'THÔNG SỐ VẬN HÀNH · H/T TRANSFER' : 'OPERATION PARAMETERS · H/T TRANSFER'}</h1>
-                <label className="flex items-center gap-2 text-[10px]">{vi ? 'Ngày sản xuất' : 'Production date'}
-                  <input type="date" value={productionDate} onChange={(event) => setProductionDate(event.target.value)} className="min-h-8 border border-line bg-white px-2 text-xs font-semibold text-industrialDark" />
-                </label>
+                <span className="text-[10px] font-semibold">{vi ? 'NGÀY SẢN XUẤT' : 'PRODUCTION DATE'} · {new Date(`${productionDate}T00:00:00`).toLocaleDateString(vi ? 'vi-VN' : 'en-GB')}</span>
               </header>
               <section className="shrink-0 border-b border-line">
                 <header className="border-b border-line bg-hmiSection px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-industrialDark">{vi ? 'H/T TRANSFER DAILY REPORT' : 'H/T TRANSFER DAILY REPORT'}</header>
@@ -147,27 +142,11 @@ export function TransferRecordPage() {
                 <label className={labelClass}>{vi ? 'Sản lượng (m)' : "Q'ty (m)"}<input className={fieldClass} type="number" min="0" step="0.001" inputMode="decimal" value={entry.quantityMeters} onChange={(event) => updateEntry('quantityMeters', event.target.value)} /></label>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-hmiConsole px-3 py-2">
-                <span className="text-[10px] font-semibold text-slate-500">{vi ? 'SOP và ca lấy từ Thông tin vận hành.' : 'SOP and shift come from Operation Details.'}</span>
+                <span className="text-[10px] font-semibold text-slate-500">{sopLoading ? (vi ? 'ĐANG TẢI THÔNG TIN SOP…' : 'LOADING SOP DETAILS…') : (vi ? 'Thông tin đơn tự tải khi nhập SOP.' : 'Order details load when an SOP is entered.')}</span>
                 <HMIButton variant="primary" disabled={!canSave} onClick={() => void saveRecord()}>{saving ? (vi ? 'ĐANG LƯU…' : 'SAVING…') : (vi ? 'LƯU DÒNG BÁO CÁO' : 'SAVE REPORT ROW')}</HMIButton>
               </div>
               </section>
               {(message || error) && <p role={error ? 'alert' : 'status'} className={`mx-3 mt-2 border p-2 text-xs font-semibold ${error ? 'border-alarm bg-hmiAlarm text-alarm' : 'border-success bg-hmiNormal text-success'}`}>{error ?? message}</p>}
-              <section className="flex min-h-0 flex-1 flex-col">
-              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-white px-3 py-2">
-                <h2 className="text-[10px] font-bold uppercase tracking-wider text-industrialDark">{vi ? `BÁO CÁO TRONG NGÀY · ${records.length} DÒNG` : `DAILY REPORT · ${records.length} ROWS`}</h2>
-                <HMIButton variant="secondary" size="compact" disabled={exporting} onClick={() => void exportReport()}>{exporting ? (vi ? 'ĐANG XUẤT…' : 'EXPORTING…') : 'EXCEL'}</HMIButton>
-              </div>
-              <div className="min-h-0 flex-1 overflow-auto">
-              {loading ? <p className="flex min-h-48 h-full items-center justify-center p-6 text-center text-xs text-slate-500">{vi ? 'Đang tải báo cáo…' : 'Loading report…'}</p> : records.length === 0 ? <div className="flex min-h-48 h-full flex-col items-center justify-center gap-2 p-6 text-center"><span className="text-2xl text-slate-300">—</span><p className="text-xs text-slate-500">{vi ? 'Chưa có dòng báo cáo trong ngày này.' : 'No report rows for this date.'}</p></div> : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1100px] border-collapse text-left text-[11px]">
-                    <thead className="sticky top-0 bg-hmiSection text-[9px] uppercase tracking-wide text-industrialDark"><tr>{(vi ? ['Giờ', 'Loại vải', 'Người mua', 'Thiết kế', 'Nhiệt độ °C', 'Tốc độ m/min', 'Sản lượng m', 'SOP#', 'Ca', 'Người vận hành'] : ['Time', 'Item', 'Buyer', 'Design', 'Temp °C', 'Speed m/min', "Q'ty m", 'SOP#', 'Shift', 'Operator']).map((heading) => <th key={heading} className="border-b border-r border-line px-2 py-2 font-bold">{heading}</th>)}</tr></thead>
-                    <tbody>{records.map((record) => <tr key={record.id} className="border-b border-line odd:bg-white even:bg-slate-50"><td className="whitespace-nowrap px-2 py-2 font-mono">{new Intl.DateTimeFormat(vi ? 'vi-VN' : 'en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(record.recorded_at))}</td><td className="px-2 py-2">{record.item}</td><td className="px-2 py-2">{record.buyer}</td><td className="px-2 py-2">{record.design}</td><td className="px-2 py-2 text-right font-mono">{record.temperature}</td><td className="px-2 py-2 text-right font-mono">{record.speed}</td><td className="px-2 py-2 text-right font-mono">{record.quantity_meters}</td><td className="px-2 py-2 font-mono font-bold">{record.order_number}</td><td className="px-2 py-2">{record.shift}</td><td className="px-2 py-2">{record.operator_name} · {record.operator_identifier}</td></tr>)}</tbody>
-                  </table>
-                </div>
-              )}
-              </div>
-              </section>
             </section>
         </div>
       </div>

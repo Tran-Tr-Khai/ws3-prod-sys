@@ -25,7 +25,9 @@ export function MachineNavigation({ machineId, machineLabel, basePath: pathOverr
     ? tabs.filter((tab) => tab.key !== 'overview' && (user?.role !== 'OPERATOR' || tab.key !== 'history'))
     : machineKey === 'buffing'
       ? tabs.filter((tab) => tab.key === 'recordEntry' || (tab.key === 'history' && user?.role !== 'OPERATOR'))
-    : machineKey === 'tenter' || machineKey === 'unrolling'
+      : machineId.toUpperCase() === 'HT-01'
+        ? tabs.filter((tab) => tab.key === 'recordEntry' || (tab.key === 'history' && user?.role !== 'OPERATOR'))
+      : machineKey === 'tenter' || machineKey === 'unrolling'
         ? tabs.filter((tab) => tab.key === 'recordEntry')
       : tabs;
 
