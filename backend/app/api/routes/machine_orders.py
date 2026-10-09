@@ -10,6 +10,7 @@ from app.models.buffing import BuffingCheck
 from app.models.machine_order_state import MachineOrderState
 from app.models.scouring import ScouringRecord
 from app.models.tentering import TenteringOrder
+from app.models.transfer import TransferRecord
 from app.models.user import User
 from app.security.auth import get_current_user, role_codes
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_order_code, resolve_ws3_sop_code
@@ -17,13 +18,13 @@ from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_cod
 
 router = APIRouter(prefix="/machine-orders", tags=["machine-orders"])
 MANAGER_ROLES = {"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}
-MACHINES = {"BU-01", "SC-01", "TE-01", "TE-02"}
+MACHINES = {"BU-01", "SC-01", "TE-01", "TE-02", "HT-01"}
 
 
 class OrderProgressUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    machine_id: Literal["BU-01", "SC-01", "TE-01", "TE-02"]
+    machine_id: Literal["BU-01", "SC-01", "TE-01", "TE-02", "HT-01"]
     order_number: str = Field(min_length=1, max_length=160)
     order_progress: Literal["IN_PROGRESS", "COMPLETED"]
 
@@ -144,13 +145,19 @@ def update_order_progress(
                 .where(ScouringRecord.machine_id == payload.machine_id, func.upper(func.trim(ScouringRecord.order_number)).in_(aliases or {normalized}))
                 .values(order_progress=payload.order_progress)
             )
-        else:
+        elif payload.machine_id in {"TE-01", "TE-02"}:
             db.execute(
                 update(TenteringOrder)
                 .where(
                     TenteringOrder.machine_id == payload.machine_id,
                     func.upper(func.trim(TenteringOrder.sop_no)).in_(aliases or {normalized}),
                 )
+                .values(order_progress=payload.order_progress)
+            )
+        else:
+            db.execute(
+                update(TransferRecord)
+                .where(TransferRecord.machine_id == payload.machine_id, TransferRecord.order_number.in_(aliases or {normalized}))
                 .values(order_progress=payload.order_progress)
             )
         db.commit()

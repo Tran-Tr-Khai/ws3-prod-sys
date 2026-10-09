@@ -68,6 +68,17 @@ class MockMachineSimulator:
                 operator="Pham Thi Dung",
                 start_time=now - timedelta(hours=4, minutes=5),
             ),
+            MachineDefinition(
+                machine_id="HT-01",
+                process="H/T TRANSFER",
+                status="RUNNING",
+                batch="B-HT-260916-01",
+                base_speed=18.0,
+                base_temperature=185.0,
+                base_production_today=320.0,
+                operator="Nguyen Van An",
+                start_time=now - timedelta(hours=1, minutes=10),
+            ),
         )
 
     def get_machines(self) -> tuple[MachineSnapshot, ...]:

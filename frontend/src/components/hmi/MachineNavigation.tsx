@@ -6,6 +6,7 @@ import { HMINavigation } from './HMINavigation';
 type MachineNavigationProps = {
   machineId: string;
   machineLabel: string;
+  basePath?: string;
   trailing?: ReactNode;
 };
 
@@ -15,10 +16,10 @@ const tabs = [
   { key: 'overview', suffix: '' },
 ] as const;
 
-export function MachineNavigation({ machineId, machineLabel, trailing }: MachineNavigationProps) {
+export function MachineNavigation({ machineId, machineLabel, basePath: pathOverride, trailing }: MachineNavigationProps) {
   const { t } = useLanguage();
   const { user } = useAuth();
-  const basePath = `/machine/${machineLabel.toLowerCase()}`;
+  const basePath = pathOverride ?? `/machine/${machineLabel.toLowerCase()}`;
   const machineKey = machineLabel.toLowerCase();
   const visibleTabs = machineKey === 'scouring'
     ? tabs.filter((tab) => tab.key !== 'overview' && (user?.role !== 'OPERATOR' || tab.key !== 'history'))

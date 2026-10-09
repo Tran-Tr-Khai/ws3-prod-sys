@@ -10,6 +10,7 @@ import { BuffingHistoryPage } from '../features/machines/BuffingHistoryPage';
 import { MachineOperationEntryPage } from '../features/machines/MachineOperationEntryPage';
 import { TenteringRecordPage } from '../features/machines/TenteringRecordPage';
 import { TenteringHistoryPage } from '../features/machines/TenteringHistoryPage';
+import { TransferRecordPage } from '../features/machines/TransferRecordPage';
 import { UnrollingOrdersPage } from '../features/orders/UnrollingOrdersPage';
 import { ProductionOverviewPage } from '../features/production/ProductionOverviewPage';
 import { WS3OverviewPage } from '../features/production/WS3OverviewPage';
@@ -25,7 +26,8 @@ export default function App() {
   if (!user) return <Routes><Route path="/login" element={<LoginPage />} /><Route path="*" element={<Navigate to="/login" replace />} /></Routes>;
   const genericRecordMachine = location.pathname.match(/^\/machine\/([^/]+)\/record$/)?.[1]?.toUpperCase() ?? null;
   const tenteringMachine = location.pathname.match(/^\/machine\/(TE-01|TE-02)\/(record|history)$/i);
-  const restrictedMachine = location.pathname.startsWith('/machine/scouring') ? 'SC-01' : location.pathname.startsWith('/machine/buffing') ? 'BU-01' : tenteringMachine?.[1].toUpperCase() ?? genericRecordMachine;
+  const transferMachine = location.pathname.match(/^\/machine\/(HT-01)\/(record|history)$/i)?.[1].toUpperCase() ?? null;
+  const restrictedMachine = location.pathname.startsWith('/machine/scouring') ? 'SC-01' : location.pathname.startsWith('/machine/buffing') ? 'BU-01' : tenteringMachine?.[1].toUpperCase() ?? transferMachine ?? genericRecordMachine;
   if (location.pathname.startsWith('/machine/unrolling') && !['ADMIN', 'SUPERVISOR', 'PRODUCTION_MANAGER'].includes(user.role)) return <Navigate to="/ws3" replace />;
   if (user.role === 'OPERATOR' && restrictedMachine && !user.machineIds.includes(restrictedMachine)) return <Navigate to="/ws3" replace />;
   return (
@@ -56,6 +58,8 @@ export default function App() {
       <Route path="/machine/TE-02/record" element={<TenteringRecordPage key="TE-02" machineId="TE-02" />} />
       <Route path="/machine/TE-01/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/TE-01/record" replace /> : <TenteringHistoryPage key="TE-01" machineId="TE-01" />} />
       <Route path="/machine/TE-02/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/TE-02/record" replace /> : <TenteringHistoryPage key="TE-02" machineId="TE-02" />} />
+      <Route path="/machine/HT-01/record" element={<TransferRecordPage />} />
+      <Route path="/machine/HT-01/history" element={<TransferRecordPage />} />
       <Route path="/machine/:machineId/record" element={<MachineOperationEntryPage />} />
       <Route path="/machine/tenter" element={<Navigate to="/machine/tenter/record" replace />} />
       <Route path="/machine/unrolling/record" element={<UnrollingOrdersPage />} />
