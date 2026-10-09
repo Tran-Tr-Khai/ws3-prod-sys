@@ -23,6 +23,7 @@ export function MachineOperationEntryPage() {
   const [operatorName, setOperatorName] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [shift, setShift] = useState('');
+  const [orderProgress, setOrderProgress] = useState<'IN_PROGRESS' | 'COMPLETED'>('IN_PROGRESS');
   const prefix = machineId.split('-')[0].toUpperCase();
   const machineName = machineNames[prefix]?.[language] ?? prefix;
 
@@ -33,7 +34,29 @@ export function MachineOperationEntryPage() {
         <div className="mx-auto grid min-h-full w-full max-w-[1440px] gap-2 lg:grid-cols-[minmax(260px,1fr)_minmax(0,2fr)]">
           <aside className="h-fit border-2 border-industrialDark bg-white">
             <header className="border-b-2 border-industrialDark bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-industrialDark">{language === 'vi' ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION DETAILS'}</header>
-            <OperationInfoFields orderNumber={orderNumber} onOrderNumberChange={setOrderNumber} operatorName={operatorName} onOperatorNameChange={setOperatorName} employeeId={employeeId} onEmployeeIdChange={setEmployeeId} shift={shift} onShiftChange={setShift} />
+            <OperationInfoFields
+              orderNumber={orderNumber}
+              onOrderNumberChange={setOrderNumber}
+              operatorName={operatorName}
+              onOperatorNameChange={setOperatorName}
+              employeeId={employeeId}
+              onEmployeeIdChange={setEmployeeId}
+              shift={shift}
+              onShiftChange={setShift}
+              orderStatus={(
+                <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                  {language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}
+                  <select
+                    className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark"
+                    value={orderProgress}
+                    onChange={(event) => setOrderProgress(event.target.value as 'IN_PROGRESS' | 'COMPLETED')}
+                  >
+                    <option value="IN_PROGRESS">{language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS'}</option>
+                    <option value="COMPLETED">{language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED'}</option>
+                  </select>
+                </label>
+              )}
+            />
           </aside>
           <section className="min-h-56 border-2 border-industrialDark bg-white">
             <header className="border-b-2 border-industrialDark bg-industrialDark px-3 py-2 text-xs font-bold uppercase tracking-wider text-white">{machineName} · {machineId}</header>
