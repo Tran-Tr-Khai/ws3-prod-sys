@@ -42,7 +42,12 @@ export function TransferRecordPage() {
   const [todayLoading, setTodayLoading] = useState(true);
   const [todayError, setTodayError] = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [todayPage, setTodayPage] = useState(1);
   const isOperator = user?.role === 'OPERATOR';
+  const pageSize = 20;
+  const totalPages = Math.max(1, Math.ceil(todayRecords.length / pageSize));
+  const currentPage = Math.min(todayPage, totalPages);
+  const pageRecords = todayRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const loadTodayRecords = useCallback(async () => {
     setTodayLoading(true);
@@ -131,6 +136,7 @@ export function TransferRecordPage() {
         order_progress: orderProgress, item: entry.item.trim(), buyer: entry.buyer.trim(), design: entry.design.trim(),
         temperature: numericValue(entry.temperature), speed: numericValue(entry.speed), quantity_meters: numericValue(entry.quantityMeters),
       });
+      setTodayPage(1);
       setEntry((current) => ({ ...current, temperature: '', speed: '', quantityMeters: '' }));
       await loadTodayRecords();
       setMessage(vi ? 'ĐÃ LƯU BẢN GHI.' : 'RECORD SAVED.');
@@ -205,16 +211,18 @@ export function TransferRecordPage() {
               </section>
               {(message || error) && <p role={error ? 'alert' : 'status'} className={`mx-3 mt-2 border p-2 text-xs font-semibold ${error ? 'border-alarm bg-hmiAlarm text-alarm' : 'border-success bg-hmiNormal text-success'}`}>{error ?? message}</p>}
               <section className="flex min-h-0 flex-1 flex-col bg-white">
-                <header className="flex shrink-0 items-center border-b border-line bg-industrial px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-white">
+                <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-industrial px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-white">
                   <h2>{vi ? 'HÔM NAY' : 'TODAY'}</h2>
+                  <span className="text-right text-[9px] tracking-normal">{pageRecords.length} / {todayRecords.length} · {vi ? 'ĐƠN TRONG TRANG NÀY / TỔNG ĐƠN TRONG NGÀY' : 'ORDERS ON THIS PAGE / TOTAL TODAY'}</span>
                 </header>
-                <div className="min-h-0 flex-1 overflow-auto bg-white p-2">
+                <div className="flex min-h-0 flex-1 flex-col bg-white p-2">
+                  <div className="min-h-0 flex-1 overflow-auto">
                   {todayError ? <p role="alert" className="p-4 text-center text-xs font-semibold text-alarm">{todayError}</p> : todayLoading ? <p className="p-4 text-center text-xs text-slate-500">{vi ? 'Đang tải bản ghi…' : 'Loading records…'}</p> : todayRecords.length === 0 ? <p className="flex min-h-32 items-center justify-center p-4 text-center text-xs font-semibold uppercase text-slate-500">{vi ? 'Chưa có bản ghi trong ngày hôm nay.' : 'No records for today yet.'}</p> :
                     <table className="w-full min-w-[1240px] border-collapse text-left text-[10px]">
                       <thead className="sticky top-0 z-10 border-b border-line bg-white text-[9px] uppercase tracking-wider text-industrialDark">
                         <tr>{(vi ? ['Thời gian', 'SOP', 'Loại vải', 'Người mua', 'Thiết kế', 'Nhiệt độ °C', 'Tốc độ m/min', 'Sản lượng m', 'Người vận hành', 'ID nhân viên', 'Ca', ''] : ['Time', 'SOP', 'Item', 'Buyer', 'Design', 'Temp °C', 'Speed m/min', "Q'ty m", 'Operator', 'Employee ID', 'Shift', '']).map((heading, index) => <th key={`${heading}-${index}`} className={`px-3 py-2 font-bold ${index === 11 ? 'w-12 text-center' : ''}`}>{heading}</th>)}</tr>
                       </thead>
-                      <tbody>{todayRecords.map((record) => <tr key={record.id} className="border-b border-line hover:bg-hmiHover">
+                      <tbody>{pageRecords.map((record) => <tr key={record.id} className="border-b border-line hover:bg-hmiHover">
                         <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-industrial">{new Intl.DateTimeFormat(vi ? 'vi-VN' : 'en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(record.recorded_at))}</td>
                         <td className="px-3 py-2 font-mono font-semibold text-industrialDark">{record.order_number}</td><td className="px-3 py-2">{record.item}</td><td className="px-3 py-2">{record.buyer}</td><td className="px-3 py-2">{record.design}</td>
                         <td className="px-3 py-2 text-right font-mono">{record.temperature}</td><td className="px-3 py-2 text-right font-mono">{record.speed}</td><td className="px-3 py-2 text-right font-mono">{record.quantity_meters}</td>
@@ -224,6 +232,12 @@ export function TransferRecordPage() {
                         </button></td>
                       </tr>)}</tbody>
                     </table>}
+                  </div>
+                  {totalPages > 1 && <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-line bg-white px-2 py-2">
+                    <span className="mr-2 text-[10px] font-semibold text-slate-500">{vi ? `TRANG ${currentPage} / ${totalPages}` : `PAGE ${currentPage} / ${totalPages}`}</span>
+                    <HMIButton size="compact" disabled={currentPage <= 1} onClick={() => setTodayPage((page) => Math.max(1, page - 1))}>{vi ? 'TRƯỚC' : 'PREVIOUS'}</HMIButton>
+                    <HMIButton size="compact" disabled={currentPage >= totalPages} onClick={() => setTodayPage((page) => Math.min(totalPages, page + 1))}>{vi ? 'SAU' : 'NEXT'}</HMIButton>
+                  </footer>}
                 </div>
               </section>
             </section>
