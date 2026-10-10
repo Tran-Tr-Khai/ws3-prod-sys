@@ -187,7 +187,7 @@ export function TransferRecordPage() {
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-hmiConsole px-3 py-2">
                 <span className="text-[10px] font-semibold text-slate-500">{sopLoading ? (vi ? 'ĐANG TẢI THÔNG TIN SOP…' : 'LOADING SOP DETAILS…') : (vi ? 'Thông tin đơn tự tải khi nhập SOP.' : 'Order details load when an SOP is entered.')}</span>
-                <HMIButton variant="primary" disabled={!canSave} onClick={() => void saveRecord()}>{saving ? (vi ? 'ĐANG LƯU…' : 'SAVING…') : (vi ? 'LƯU DÒNG BÁO CÁO' : 'SAVE REPORT ROW')}</HMIButton>
+                <HMIButton variant="primary" disabled={!canSave} onClick={() => void saveRecord()}>{saving ? (vi ? 'ĐANG LƯU…' : 'SAVING…') : (vi ? 'LƯU BẢN GHI' : 'SAVE RECORD')}</HMIButton>
               </div>
               </section>
               {(message || error) && <p role={error ? 'alert' : 'status'} className={`mx-3 mt-2 border p-2 text-xs font-semibold ${error ? 'border-alarm bg-hmiAlarm text-alarm' : 'border-success bg-hmiNormal text-success'}`}>{error ?? message}</p>}
