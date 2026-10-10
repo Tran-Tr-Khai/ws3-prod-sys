@@ -21,6 +21,11 @@ function localDateKey(timestamp: string): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+function todayDateKey(): string {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 function orderProgressLabel(progress: OrderProgress, language: string): string {
   if (progress === 'IN_PROGRESS') return language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS';
   if (progress === 'COMPLETED') return language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED';
@@ -66,7 +71,7 @@ export function ScouringHistoryPage() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(todayDateKey);
   const [status, setStatus] = useState<RecordStatus | ''>('');
   const [orderProgress, setOrderProgress] = useState<OrderProgress | ''>('');
   const [operatorSearch, setOperatorSearch] = useState('');
@@ -108,7 +113,7 @@ export function ScouringHistoryPage() {
   useEffect(() => {
     if (selectedRecordId) void getScouringPhInspections(selectedRecordId).then(setPhInspections).catch(() => setPhInspections([]));
   }, [selectedRecordId]);
-  const clearFilters = () => { setDate(''); setStatus(''); setOrderProgress(''); setOperatorSearch(''); };
+  const clearFilters = () => { setDate(todayDateKey()); setStatus(''); setOrderProgress(''); setOperatorSearch(''); };
 
   const exportExcel = async () => {
     if (loading || exporting || filteredRecords.length === 0) return;
