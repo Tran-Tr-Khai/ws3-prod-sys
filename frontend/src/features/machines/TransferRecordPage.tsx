@@ -204,7 +204,7 @@ export function TransferRecordPage() {
               </div>
               </section>
               {(message || error) && <p role={error ? 'alert' : 'status'} className={`mx-3 mt-2 border p-2 text-xs font-semibold ${error ? 'border-alarm bg-hmiAlarm text-alarm' : 'border-success bg-hmiNormal text-success'}`}>{error ?? message}</p>}
-              <section className="flex min-h-0 flex-1 flex-col bg-white">
+              <section className="flex min-h-0 flex-1 flex-col bg-white p-2">
                 <header className="flex shrink-0 items-center justify-between bg-industrial px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-white">
                   <h2>{vi ? `HÔM NAY · ${todayRecords.length} DÒNG` : `TODAY · ${todayRecords.length} RECORDS`}</h2>
                   <span>{vi ? 'Mới nhất trước' : 'Newest first'}</span>
