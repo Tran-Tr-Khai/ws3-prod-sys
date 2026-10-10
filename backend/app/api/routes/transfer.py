@@ -3,7 +3,7 @@ from io import BytesIO
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy import desc, func, select, update
@@ -122,6 +122,29 @@ def list_transfer_records(
         statement = statement.where(TransferRecord.production_date == production_date)
     statement = statement.order_by(desc(TransferRecord.recorded_at), desc(TransferRecord.id)).limit(limit)
     return list(db.scalars(statement).all())
+
+
+@router.delete("/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_transfer_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    _authorize(user)
+    record = db.scalar(
+        select(TransferRecord).where(
+            TransferRecord.id == record_id,
+            TransferRecord.machine_id == MACHINE_ID,
+        )
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="Transfer record not found")
+    today = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+    if record.production_date != today:
+        raise HTTPException(status_code=422, detail="Chỉ được xóa bản ghi của ngày sản xuất hiện tại.")
+    db.delete(record)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/export")

@@ -52,6 +52,11 @@ export async function createTransferRecord(payload: TransferRecordInput): Promis
   return await response.json() as TransferRecord;
 }
 
+export async function deleteTransferRecord(recordId: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/transfer/records/${recordId}`, { method: 'DELETE', credentials: 'include' });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
 export async function downloadTransferReport(productionDate: string | undefined, language: 'vi' | 'en'): Promise<Blob> {
   const params = new URLSearchParams({ language });
   if (productionDate) params.set('production_date', productionDate);

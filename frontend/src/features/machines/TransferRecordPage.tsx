@@ -6,7 +6,7 @@ import { MachineNavigation } from '../../components/hmi/MachineNavigation';
 import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { createTransferRecord, getTransferOrderSource, listTransferRecords, type TransferRecord } from './transferApi';
+import { createTransferRecord, deleteTransferRecord, getTransferOrderSource, listTransferRecords, type TransferRecord } from './transferApi';
 import { getMachineOrderProgress, saveMachineOrderProgress } from './scouringApi';
 
 type EntryValues = { item: string; buyer: string; design: string; temperature: string; speed: string; quantityMeters: string };
@@ -41,6 +41,7 @@ export function TransferRecordPage() {
   const [todayRecords, setTodayRecords] = useState<TransferRecord[]>([]);
   const [todayLoading, setTodayLoading] = useState(true);
   const [todayError, setTodayError] = useState('');
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const isOperator = user?.role === 'OPERATOR';
 
   const loadTodayRecords = useCallback(async () => {
@@ -140,6 +141,19 @@ export function TransferRecordPage() {
     }
   };
 
+  const removeTodayRecord = async (record: TransferRecord) => {
+    const prompt = vi ? `Xóa bản ghi SOP ${record.order_number} đã lưu lúc ${new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(record.recorded_at))}?` : `Delete the record for SOP ${record.order_number}?`;
+    if (!window.confirm(prompt)) return;
+    setDeletingId(record.id);
+    setTodayError('');
+    try {
+      await deleteTransferRecord(record.id);
+      setTodayRecords((current) => current.filter((row) => row.id !== record.id));
+    } catch (reason) {
+      setTodayError(reason instanceof Error ? reason.message : (vi ? 'Không xóa được bản ghi.' : 'Unable to delete the record.'));
+    } finally { setDeletingId(null); }
+  };
+
   return (
     <WS3Shell title="WS3 / Transfer" subtitle={vi ? 'Nhập báo cáo hằng ngày · Máy ép' : 'Daily report entry · Transfer'} machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} status="info" showGlobalNavigation={false} showMachineNavigation={false} showSupportWidget={!isOperator}>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
@@ -175,8 +189,7 @@ export function TransferRecordPage() {
               <header className="sticky top-0 z-10 flex min-h-10 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-white">
                 <h1 className="text-[10px] font-bold uppercase tracking-wider">{vi ? 'THÔNG SỐ VẬN HÀNH' : 'OPERATION PARAMETERS'}</h1>
               </header>
-              <section className="shrink-0 border-b border-line">
-                <header className="border-b border-line bg-hmiSection px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-industrialDark">{vi ? 'THÔNG TIN SẢN XUẤT' : 'PRODUCTION DETAILS'}</header>
+              <section className="shrink-0 bg-white">
                 <div className="grid gap-x-3 gap-y-2 p-3 sm:grid-cols-2 2xl:grid-cols-3">
                 <label className={labelClass}>{vi ? 'Loại vải' : 'Item'}<input className={fieldClass} value={entry.item} onChange={(event) => updateEntry('item', event.target.value)} maxLength={300} /></label>
                 <label className={labelClass}>{vi ? 'Người mua' : 'Buyer'}<input className={fieldClass} value={entry.buyer} onChange={(event) => updateEntry('buyer', event.target.value)} maxLength={160} /></label>
@@ -185,19 +198,19 @@ export function TransferRecordPage() {
                 <label className={labelClass}>{vi ? 'Tốc độ (m/min)' : 'Speed (m/min)'}<input className={fieldClass} type="number" min="0" step="0.1" inputMode="decimal" value={entry.speed} onChange={(event) => updateEntry('speed', event.target.value)} /></label>
                 <label className={labelClass}>{vi ? 'Sản lượng (m)' : "Q'ty (m)"}<input className={fieldClass} type="number" min="0" step="0.001" inputMode="decimal" value={entry.quantityMeters} onChange={(event) => updateEntry('quantityMeters', event.target.value)} /></label>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-hmiConsole px-3 py-2">
-                <span className="text-[10px] font-semibold text-slate-500">{sopLoading ? (vi ? 'ĐANG TẢI THÔNG TIN SOP…' : 'LOADING SOP DETAILS…') : (vi ? 'Thông tin đơn tự tải khi nhập SOP.' : 'Order details load when an SOP is entered.')}</span>
+              <div className="flex min-h-12 items-center justify-end bg-white px-3 py-2">
+                {sopLoading && <span className="mr-auto text-[10px] font-semibold text-slate-500">{vi ? 'ĐANG TẢI THÔNG TIN SOP…' : 'LOADING SOP DETAILS…'}</span>}
                 <HMIButton variant="primary" disabled={!canSave} onClick={() => void saveRecord()}>{saving ? (vi ? 'ĐANG LƯU…' : 'SAVING…') : (vi ? 'LƯU BẢN GHI' : 'SAVE RECORD')}</HMIButton>
               </div>
               </section>
               {(message || error) && <p role={error ? 'alert' : 'status'} className={`mx-3 mt-2 border p-2 text-xs font-semibold ${error ? 'border-alarm bg-hmiAlarm text-alarm' : 'border-success bg-hmiNormal text-success'}`}>{error ?? message}</p>}
-              <section className="flex min-h-0 flex-1 flex-col border-t-2 border-industrialDark">
+              <section className="flex min-h-0 flex-1 flex-col bg-white">
                 <header className="flex shrink-0 items-center justify-between bg-industrial px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-white">
                   <h2>{vi ? `HÔM NAY · ${todayRecords.length} DÒNG` : `TODAY · ${todayRecords.length} RECORDS`}</h2>
                   <span>{vi ? 'Mới nhất trước' : 'Newest first'}</span>
                 </header>
                 {todayError ? <p role="alert" className="p-4 text-center text-xs font-semibold text-alarm">{todayError}</p> : todayLoading ? <p className="p-4 text-center text-xs text-slate-500">{vi ? 'Đang tải bản ghi…' : 'Loading records…'}</p> : todayRecords.length === 0 ? <p className="flex min-h-32 flex-1 items-center justify-center p-4 text-center text-xs font-semibold uppercase text-slate-500">{vi ? 'Chưa có bản ghi trong ngày hôm nay.' : 'No records for today yet.'}</p> :
-                  <div className="min-h-0 flex-1 overflow-auto"><table className="w-full min-w-[1180px] border-collapse text-left text-[10px]"><thead><tr>{(vi ? ['Thời gian', 'SOP', 'Loại vải', 'Người mua', 'Thiết kế', 'Nhiệt độ °C', 'Tốc độ m/min', 'Sản lượng m', 'Người vận hành', 'ID nhân viên', 'Ca'] : ['Time', 'SOP', 'Item', 'Buyer', 'Design', 'Temp °C', 'Speed m/min', "Q'ty m", 'Operator', 'Employee ID', 'Shift']).map((heading) => <th key={heading} className="sticky top-0 z-10 border-r border-b border-line bg-hmiSection px-2 py-2 text-[9px] font-bold uppercase">{heading}</th>)}</tr></thead><tbody>{todayRecords.map((record) => <tr key={record.id} className="border-b border-line odd:bg-white even:bg-slate-50"><td className="whitespace-nowrap px-2 py-2 font-mono">{new Intl.DateTimeFormat(vi ? 'vi-VN' : 'en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(record.recorded_at))}</td><td className="px-2 py-2 font-mono font-bold">{record.order_number}</td><td className="px-2 py-2">{record.item}</td><td className="px-2 py-2">{record.buyer}</td><td className="px-2 py-2">{record.design}</td><td className="px-2 py-2 text-right font-mono">{record.temperature}</td><td className="px-2 py-2 text-right font-mono">{record.speed}</td><td className="px-2 py-2 text-right font-mono">{record.quantity_meters}</td><td className="px-2 py-2">{record.operator_name}</td><td className="px-2 py-2 font-mono">{record.operator_identifier}</td><td className="px-2 py-2">{record.shift}</td></tr>)}</tbody></table></div>}
+                  <div className="min-h-0 flex-1 overflow-auto"><table className="w-full min-w-[1240px] border-collapse text-left text-[10px]"><thead><tr>{(vi ? ['Thời gian', 'SOP', 'Loại vải', 'Người mua', 'Thiết kế', 'Nhiệt độ °C', 'Tốc độ m/min', 'Sản lượng m', 'Người vận hành', 'ID nhân viên', 'Ca', ''] : ['Time', 'SOP', 'Item', 'Buyer', 'Design', 'Temp °C', 'Speed m/min', "Q'ty m", 'Operator', 'Employee ID', 'Shift', '']).map((heading, index) => <th key={`${heading}-${index}`} className={`sticky top-0 z-10 border-b border-line bg-white px-2 py-2 text-[9px] font-bold uppercase ${index === 0 ? 'text-left' : ''}`}>{heading}</th>)}</tr></thead><tbody>{todayRecords.map((record) => <tr key={record.id} className="border-b border-line hover:bg-hmiHover"><td className="whitespace-nowrap px-2 py-2 font-mono">{new Intl.DateTimeFormat(vi ? 'vi-VN' : 'en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(record.recorded_at))}</td><td className="px-2 py-2 font-mono font-bold">{record.order_number}</td><td className="px-2 py-2">{record.item}</td><td className="px-2 py-2">{record.buyer}</td><td className="px-2 py-2">{record.design}</td><td className="px-2 py-2 text-right font-mono">{record.temperature}</td><td className="px-2 py-2 text-right font-mono">{record.speed}</td><td className="px-2 py-2 text-right font-mono">{record.quantity_meters}</td><td className="px-2 py-2">{record.operator_name}</td><td className="px-2 py-2 font-mono">{record.operator_identifier}</td><td className="px-2 py-2">{record.shift}</td><td className="px-2 py-2 text-right"><button type="button" className="font-bold text-alarm hover:underline disabled:opacity-50" disabled={deletingId === record.id} onClick={() => void removeTodayRecord(record)}>{deletingId === record.id ? (vi ? 'ĐANG XÓA…' : 'DELETING…') : (vi ? 'XÓA' : 'DELETE')}</button></td></tr>)}</tbody></table></div>}
               </section>
             </section>
         </div>
