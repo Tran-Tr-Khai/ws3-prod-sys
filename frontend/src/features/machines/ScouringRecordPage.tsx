@@ -238,6 +238,7 @@ export function ScouringRecordPage() {
   const [orderRecordsError, setOrderRecordsError] = useState(false);
   const [orderLookupRetry, setOrderLookupRetry] = useState(0);
   const [recordEntryMode, setRecordEntryMode] = useState<'new' | 'edit' | null>(null);
+  const [showNewShiftNotice, setShowNewShiftNotice] = useState(false);
   const [todayRecords, setTodayRecords] = useState<ScouringRecord[]>([]);
   const [todayPhInspections, setTodayPhInspections] = useState<ScouringPhInspection[]>([]);
   const [todayLoading, setTodayLoading] = useState(true);
@@ -332,6 +333,18 @@ export function ScouringRecordPage() {
   }, [values.orderNumber]);
 
   const normalizedOrderNumber = values.orderNumber.trim().toLocaleLowerCase();
+  const hasNewShiftNotice = !orderRecordsLoading && !orderRecordsError && savedOrderRecords.length > 0 && recordEntryMode === 'new' && Boolean(values.shift);
+
+  useEffect(() => {
+    if (!hasNewShiftNotice) {
+      setShowNewShiftNotice(false);
+      return;
+    }
+    setShowNewShiftNotice(true);
+    const timer = window.setTimeout(() => setShowNewShiftNotice(false), TRANSIENT_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [hasNewShiftNotice, normalizedOrderNumber, values.shift]);
+
   const selectedOrderRecord = recordEntryMode === 'edit'
     ? savedOrderRecords.find((record) => record.id === editingRecordId && factoryDateKey(record.recordedAt) === factoryDateKey(new Date()) && normalizeShift(record.shift) === normalizeShift(values.shift)) ?? null
     : recordEntryMode === 'new' && saveSuccess
@@ -611,7 +624,7 @@ export function ScouringRecordPage() {
               <nav className="flex h-12 min-h-12 shrink-0 border-b-2 border-line bg-white" aria-label={language === 'vi' ? 'Loại ghi nhận Scouring' : 'Scouring entry type'}>{(['operation', 'ph'] as const).map((mode) => <button key={mode} type="button" aria-pressed={entryMode === mode} onClick={() => setEntryMode(mode)} className={`h-full min-h-10 flex-1 border-b-2 px-3 text-[10px] font-bold uppercase tracking-wide ${entryMode === mode ? 'border-industrialDark bg-industrialDark text-white' : 'border-transparent text-slate-500'}`}>{mode === 'operation' ? (language === 'vi' ? 'Thông số vận hành' : 'Operation parameters') : (language === 'vi' ? 'Checklist pH' : 'pH checklist')}</button>)}</nav>
               {normalizedOrderNumber && orderRecordsLoading && <p role="status" className="shrink-0 border-b border-line bg-hmiSection px-3 py-2 text-[10px] font-semibold text-slate-600">{language === 'vi' ? 'Đang kiểm tra các bản ghi đã lưu của SOP này…' : 'Checking saved records for this SOP…'}</p>}
               {normalizedOrderNumber && orderRecordsError && <div role="alert" className="flex shrink-0 items-center justify-between gap-2 border-b border-alarm bg-hmiAlarm px-3 py-2 text-[10px] font-semibold text-alarm"><span>{language === 'vi' ? 'Không kiểm tra được bản ghi SOP. Hãy thử lại trước khi lưu để tránh tạo trùng ngoài ý muốn.' : 'Unable to check existing SOP records. Retry before saving to avoid an unintended duplicate.'}</span><button type="button" className="shrink-0 border border-alarm bg-white px-2 py-1 font-bold uppercase" onClick={() => setOrderLookupRetry((value) => value + 1)}>{language === 'vi' ? 'Thử lại' : 'Retry'}</button></div>}
-              {!orderRecordsLoading && !orderRecordsError && savedOrderRecords.length > 0 && <p role="status" className={`shrink-0 border-b px-3 py-2 text-[10px] font-semibold ${recordEntryMode === 'new' ? 'border-info bg-hmiSection text-industrialDark' : recordEntryMode === 'edit' ? 'border-success bg-hmiNormal text-success' : 'border-line bg-hmiSection text-slate-600'}`}>
+              {!orderRecordsLoading && !orderRecordsError && savedOrderRecords.length > 0 && (recordEntryMode !== 'new' || showNewShiftNotice) && <p role="status" className={`shrink-0 border-b px-3 py-2 text-[10px] font-semibold ${recordEntryMode === 'new' ? 'border-info bg-hmiSection text-industrialDark' : recordEntryMode === 'edit' ? 'border-success bg-hmiNormal text-success' : 'border-line bg-hmiSection text-slate-600'}`}>
                 {recordEntryMode === 'edit' && selectedOrderRecord
                   ? (language === 'vi' ? `SOP này đã có bản ghi ca ${localizedShift(selectedOrderRecord.shift, language)} hôm nay (${new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(selectedOrderRecord.recordedAt))}). Hệ thống đã nạp để cập nhật; checklist pH được giữ nguyên.` : `A record for this SOP and shift already exists today (${new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(selectedOrderRecord.recordedAt))}). Loaded for update; pH checklists will be kept.`)
                   : recordEntryMode === 'new' && values.shift
