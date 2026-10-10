@@ -48,7 +48,7 @@ export function TransferHistoryPage() {
         <section className="mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden border-2 border-industrialDark bg-white">
           <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-xs font-bold uppercase tracking-wide text-white">
             <h1>{vi ? 'LỊCH SỬ SẢN XUẤT' : 'PRODUCTION HISTORY'}</h1>
-            <div className="flex items-center gap-2"><span className="hidden sm:inline">{vi ? 'Mới nhất trước' : 'Newest first'}</span><HMIButton size="compact" variant="secondary" disabled={loading || exporting || filtered.length === 0} onClick={() => void exportExcel()}>{exporting ? (vi ? 'ĐANG XUẤT…' : 'EXPORTING…') : 'EXCEL'}</HMIButton></div>
+            <div className="flex items-center gap-2"><HMIButton size="compact" variant="secondary" disabled={loading || exporting || filtered.length === 0} onClick={() => void exportExcel()}>{exporting ? (vi ? 'ĐANG XUẤT…' : 'EXPORTING…') : 'EXCEL'}</HMIButton></div>
           </header>
           <section className="shrink-0 border-b-2 border-industrialDark bg-hmiSection p-2">
             <div className="grid grid-cols-[minmax(0,360px)_40px] items-end gap-2">
