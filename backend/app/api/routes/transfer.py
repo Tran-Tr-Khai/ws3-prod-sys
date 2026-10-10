@@ -106,6 +106,43 @@ def create_transfer_record(
     return record
 
 
+@router.put("/{record_id}", response_model=TransferRecordResponse)
+def update_transfer_record(
+    record_id: int,
+    payload: TransferRecordCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> TransferRecord:
+    _authorize(user)
+    record = db.scalar(select(TransferRecord).where(
+        TransferRecord.id == record_id,
+        TransferRecord.machine_id == MACHINE_ID,
+    ))
+    if record is None:
+        raise HTTPException(status_code=404, detail="Transfer record not found")
+    today = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+    if record.production_date != today or payload.production_date != today:
+        raise HTTPException(status_code=422, detail="Chỉ được cập nhật bản ghi của ngày sản xuất hiện tại.")
+    sop_no = payload.order_number.strip().upper()
+    if sop_no != record.order_number.strip().upper():
+        raise HTTPException(status_code=409, detail="Không thể chuyển bản ghi sang SOP khác.")
+    try:
+        order_rows, aliases = resolve_ws3_sop_code(db, sop_no)
+    except AmbiguousWS3OrderCode as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not order_rows:
+        raise HTTPException(status_code=422, detail="Không tìm thấy mã SOP trong dữ liệu MES.")
+    progress = "IN_PROGRESS" if "OPERATOR" in role_codes(user) else payload.order_progress
+    values = payload.model_dump(exclude={"machine_id", "production_date", "recorded_at", "order_number"})
+    values["order_progress"] = progress
+    for field, value in values.items():
+        setattr(record, field, value)
+    activate_machine_order(db, MACHINE_ID, sop_no, aliases, progress)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
 @router.get("", response_model=list[TransferRecordResponse])
 def list_transfer_records(
     production_date: date | None = Query(default=None),

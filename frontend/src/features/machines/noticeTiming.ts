@@ -1,0 +1,1 @@
+export const MACHINE_NOTICE_DURATION_MS = 15_000;

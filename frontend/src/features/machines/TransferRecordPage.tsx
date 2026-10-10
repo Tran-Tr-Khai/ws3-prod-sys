@@ -7,7 +7,9 @@ import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
 import { MachineOrderProgressField } from '../../components/hmi/MachineOrderProgressField';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { createTransferRecord, deleteTransferRecord, getTransferOrderSource, listTransferRecords, type TransferRecord } from './transferApi';
+import { useExistingMachineRecord } from './useExistingMachineRecord';
+import { MACHINE_NOTICE_DURATION_MS } from './noticeTiming';
+import { createTransferRecord, deleteTransferRecord, getTransferOrderSource, listTransferRecords, updateTransferRecord, type TransferRecord, type TransferRecordInput } from './transferApi';
 import { getMachineOrderProgress, saveMachineOrderProgress } from './scouringApi';
 
 type EntryValues = { item: string; buyer: string; design: string; temperature: string; speed: string; quantityMeters: string };
@@ -37,6 +39,7 @@ export function TransferRecordPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [sopLoading, setSopLoading] = useState(false);
   const [knownOrder, setKnownOrder] = useState(false);
+  const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
   const [progressSaving, setProgressSaving] = useState(false);
   const [progressError, setProgressError] = useState('');
   const [todayRecords, setTodayRecords] = useState<TransferRecord[]>([]);
@@ -49,6 +52,16 @@ export function TransferRecordPage() {
   const totalPages = Math.max(1, Math.ceil(todayRecords.length / pageSize));
   const currentPage = Math.min(todayPage, totalPages);
   const pageRecords = todayRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(null), MACHINE_NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+  const findTodayRecord = useCallback(async (normalizedSop: string) =>
+    todayRecords.find((record) => record.order_number.trim().toUpperCase() === normalizedSop) ?? null,
+  [todayRecords]);
+  const existingLookup = useExistingMachineRecord(orderNumber, findTodayRecord, 300, !todayLoading);
 
   const loadTodayRecords = useCallback(async () => {
     setTodayLoading(true);
@@ -64,28 +77,40 @@ export function TransferRecordPage() {
   useEffect(() => {
     const normalized = orderNumber.trim().toUpperCase();
     if (!normalized) { setSopLoading(false); return; }
+    if (existingLookup.loading) { setSopLoading(true); return; }
     let active = true;
     setSopLoading(true);
-    const timer = window.setTimeout(async () => {
+    void (async () => {
       try {
+        const existingRecord = existingLookup.record;
         const [sourceResult, progressResult] = await Promise.allSettled([
           getTransferOrderSource(normalized),
           getMachineOrderProgress('HT-01', normalized),
         ]);
-        if (sourceResult.status === 'rejected') throw sourceResult.reason;
         if (!active) return;
-        const source = sourceResult.value;
-        setKnownOrder(Boolean(source));
+        if (sourceResult.status === 'rejected' && !existingRecord) throw sourceResult.reason;
+        const source = sourceResult.status === 'fulfilled' ? sourceResult.value : null;
+        setKnownOrder(Boolean(source || existingRecord));
+        setEditingRecordId(existingRecord?.id ?? null);
         setOrderProgress(progressResult.status === 'fulfilled' ? progressResult.value?.orderProgress ?? 'IN_PROGRESS' : 'IN_PROGRESS');
         setProgressError(progressResult.status === 'rejected' ? (progressResult.reason instanceof Error ? progressResult.reason.message : (vi ? 'Không tải được tiến độ đơn.' : 'Unable to load order progress.')) : '');
-        if (source) {
-          setEntry((current) => ({
-            ...current,
-            item: source.item ?? current.item,
-            buyer: source.buyer ?? current.buyer,
-            design: source.design ?? current.design,
-          }));
-          setMessage(vi ? 'ĐÃ TẢI THÔNG TIN ĐƠN TỪ SOP.' : 'ORDER DETAILS LOADED FROM SOP.');
+        if (source || existingRecord) {
+          setEntry(existingRecord ? {
+            item: existingRecord.item,
+            buyer: existingRecord.buyer,
+            design: existingRecord.design,
+            temperature: String(existingRecord.temperature),
+            speed: String(existingRecord.speed),
+            quantityMeters: String(existingRecord.quantity_meters),
+          } : (current) => ({ ...current, item: source?.item ?? current.item, buyer: source?.buyer ?? current.buyer, design: source?.design ?? current.design }));
+          if (existingRecord) {
+            setOperatorName(existingRecord.operator_name);
+            setEmployeeId(existingRecord.operator_identifier);
+            setShift(existingRecord.shift);
+          }
+          setMessage(existingRecord
+            ? (vi ? `ĐÃ NẠP BẢN GHI HÔM NAY (${new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(existingRecord.recorded_at))}) ĐỂ CẬP NHẬT.` : `TODAY'S RECORD LOADED FOR UPDATE (${new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(existingRecord.recorded_at))}).`)
+            : (vi ? 'ĐÃ TẢI THÔNG TIN ĐƠN TỪ SOP.' : 'ORDER DETAILS LOADED FROM SOP.'));
           setError(null);
         } else {
           setMessage(null);
@@ -98,9 +123,9 @@ export function TransferRecordPage() {
           setError(lookupError instanceof Error ? lookupError.message : (vi ? 'Không tải được thông tin SOP.' : 'Unable to load SOP details.'));
         }
       } finally { if (active) setSopLoading(false); }
-    }, 350);
-    return () => { active = false; window.clearTimeout(timer); };
-  }, [orderNumber, vi]);
+    })();
+    return () => { active = false; };
+  }, [orderNumber, vi, existingLookup.loading, existingLookup.record]);
 
   const changeOrderProgress = async (nextProgress: 'IN_PROGRESS' | 'COMPLETED') => {
     if (!knownOrder || sopLoading || progressSaving || !orderNumber.trim()) return;
@@ -131,17 +156,19 @@ export function TransferRecordPage() {
     setError(null);
     setMessage(null);
     try {
-      const saved = await createTransferRecord({
+      const payload: TransferRecordInput = {
         machine_id: 'HT-01', production_date: productionDate, order_number: orderNumber.trim().toUpperCase(),
         operator_name: operatorName.trim(), operator_identifier: employeeId.trim(), shift,
         order_progress: orderProgress, item: entry.item.trim(), buyer: entry.buyer.trim(), design: entry.design.trim(),
         temperature: numericValue(entry.temperature), speed: numericValue(entry.speed), quantity_meters: numericValue(entry.quantityMeters),
-      });
+      };
+      const saved = editingRecordId === null
+        ? await createTransferRecord(payload)
+        : await updateTransferRecord(editingRecordId, payload);
       setOrderProgress(saved.order_progress);
       setTodayPage(1);
-      setEntry((current) => ({ ...current, temperature: '', speed: '', quantityMeters: '' }));
       await loadTodayRecords();
-      setMessage(vi ? 'ĐÃ LƯU BẢN GHI.' : 'RECORD SAVED.');
+      setMessage(editingRecordId === null ? (vi ? 'ĐÃ LƯU BẢN GHI.' : 'RECORD SAVED.') : (vi ? 'ĐÃ CẬP NHẬT BẢN GHI.' : 'RECORD UPDATED.'));
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : (vi ? 'Không lưu được báo cáo máy ép.' : 'Unable to save the transfer report.'));
     } finally {
@@ -172,7 +199,7 @@ export function TransferRecordPage() {
               <div className="grid content-start">
               <OperationInfoFields
                 orderNumber={orderNumber}
-                onOrderNumberChange={(value) => { setOrderNumber(value.toUpperCase()); setEntry(emptyEntry); setOrderProgress('IN_PROGRESS'); setKnownOrder(false); setProgressError(''); setMessage(null); setError(null); }}
+                onOrderNumberChange={(value) => { setOrderNumber(value.toUpperCase()); setEntry(emptyEntry); setEditingRecordId(null); setOrderProgress('IN_PROGRESS'); setKnownOrder(false); setProgressError(''); setMessage(null); setError(null); }}
                 operatorName={operatorName}
                 onOperatorNameChange={setOperatorName}
                 employeeId={employeeId}
@@ -198,7 +225,7 @@ export function TransferRecordPage() {
               </div>
               <div className="flex min-h-12 items-center justify-end bg-white px-3 py-2">
                 {sopLoading && <span className="mr-auto text-[10px] font-semibold text-slate-500">{vi ? 'ĐANG TẢI THÔNG TIN SOP…' : 'LOADING SOP DETAILS…'}</span>}
-                <HMIButton variant="primary" disabled={!canSave} onClick={() => void saveRecord()}>{saving ? (vi ? 'ĐANG LƯU…' : 'SAVING…') : (vi ? 'LƯU BẢN GHI' : 'SAVE RECORD')}</HMIButton>
+                <HMIButton variant="primary" disabled={!canSave} onClick={() => void saveRecord()}>{saving ? (vi ? 'ĐANG LƯU…' : 'SAVING…') : editingRecordId === null ? (vi ? 'LƯU BẢN GHI' : 'SAVE RECORD') : (vi ? 'CẬP NHẬT BẢN GHI' : 'UPDATE RECORD')}</HMIButton>
               </div>
               </section>
               {(message || error) && <p role={error ? 'alert' : 'status'} className={`mx-3 mt-2 border p-2 text-xs font-semibold ${error ? 'border-alarm bg-hmiAlarm text-alarm' : 'border-success bg-hmiNormal text-success'}`}>{error ?? message}</p>}

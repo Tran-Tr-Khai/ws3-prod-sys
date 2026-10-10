@@ -52,6 +52,17 @@ export async function createTransferRecord(payload: TransferRecordInput): Promis
   return await response.json() as TransferRecord;
 }
 
+export async function updateTransferRecord(recordId: number, payload: TransferRecordInput): Promise<TransferRecord> {
+  const response = await fetch(`${apiBaseUrl}/api/transfer/records/${recordId}`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return await response.json() as TransferRecord;
+}
+
 export async function deleteTransferRecord(recordId: number): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/api/transfer/records/${recordId}`, { method: 'DELETE', credentials: 'include' });
   if (!response.ok) throw new Error(await readError(response));

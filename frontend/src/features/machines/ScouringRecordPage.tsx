@@ -10,6 +10,8 @@ import { SupportChatWidget } from '../support/SupportChatWidget';
 import { createScouringPhInspection, createScouringRecord, updateScouringRecord, deleteScouringRecord, getScouringRecords, getScouringRecordsForOrder, getScouringPhInspections, getMachineOrderProgress, saveMachineOrderProgress, ScouringApiError, type ScouringPhInspection, type ScouringRecord } from './scouringApi';
 import { getWS3ProductionOrderContext, type WS3ProductionOrderReport } from '../orders/ws3OrderApi';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { useExistingMachineRecord } from './useExistingMachineRecord';
+import { MACHINE_NOTICE_DURATION_MS } from './noticeTiming';
 
 type RecordFieldKey =
   | 'naoh'
@@ -43,7 +45,6 @@ type FieldDefinition = {
   range?: [number, number];
 };
 
-const TRANSIENT_NOTICE_MS = 15_000;
 
 const initialValues: RecordValues = {
   orderNumber: '',
@@ -239,12 +240,14 @@ export function ScouringRecordPage() {
   const [orderLookupRetry, setOrderLookupRetry] = useState(0);
   const [recordEntryMode, setRecordEntryMode] = useState<'new' | 'edit' | null>(null);
   const [showNewShiftNotice, setShowNewShiftNotice] = useState(false);
+  const [showEditRecordNotice, setShowEditRecordNotice] = useState(false);
   const [todayRecords, setTodayRecords] = useState<ScouringRecord[]>([]);
   const [todayPhInspections, setTodayPhInspections] = useState<ScouringPhInspection[]>([]);
   const [todayLoading, setTodayLoading] = useState(true);
   const [todayRefreshKey, setTodayRefreshKey] = useState(0);
   const [deletingRecordId, setDeletingRecordId] = useState<number | null>(null);
   const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
+  const [hasSavedEdit, setHasSavedEdit] = useState(false);
   const [progressSaving, setProgressSaving] = useState(false);
   const [progressError, setProgressError] = useState<string | null>(null);
   const [phValues, setPhValues] = useState<Record<number, string>>({});
@@ -252,40 +255,42 @@ export function ScouringRecordPage() {
   const [phError, setPhError] = useState<string | null>(null);
   const [phSaving, setPhSaving] = useState(false);
   const [showPhSaved, setShowPhSaved] = useState(false);
+  const findScouringRecords = useCallback((orderNumber: string) => getScouringRecordsForOrder(orderNumber), [orderLookupRetry]);
+  const existingScouringLookup = useExistingMachineRecord(values.orderNumber, findScouringRecords, 250);
 
   useEffect(() => {
     if (!saveError) return;
-    const timer = window.setTimeout(() => setSaveError(null), TRANSIENT_NOTICE_MS);
+    const timer = window.setTimeout(() => setSaveError(null), MACHINE_NOTICE_DURATION_MS);
     return () => window.clearTimeout(timer);
   }, [saveError]);
 
   useEffect(() => {
     if (!progressError) return;
-    const timer = window.setTimeout(() => setProgressError(null), TRANSIENT_NOTICE_MS);
+    const timer = window.setTimeout(() => setProgressError(null), MACHINE_NOTICE_DURATION_MS);
     return () => window.clearTimeout(timer);
   }, [progressError]);
 
   useEffect(() => {
     if (!phError) return;
-    const timer = window.setTimeout(() => setPhError(null), TRANSIENT_NOTICE_MS);
+    const timer = window.setTimeout(() => setPhError(null), MACHINE_NOTICE_DURATION_MS);
     return () => window.clearTimeout(timer);
   }, [phError]);
 
   useEffect(() => {
     if (!showSaveSuccess) return;
-    const timer = window.setTimeout(() => setShowSaveSuccess(false), TRANSIENT_NOTICE_MS);
+    const timer = window.setTimeout(() => setShowSaveSuccess(false), MACHINE_NOTICE_DURATION_MS);
     return () => window.clearTimeout(timer);
   }, [showSaveSuccess]);
 
   useEffect(() => {
     if (!showProcessWarning) return;
-    const timer = window.setTimeout(() => setShowProcessWarning(false), TRANSIENT_NOTICE_MS);
+    const timer = window.setTimeout(() => setShowProcessWarning(false), MACHINE_NOTICE_DURATION_MS);
     return () => window.clearTimeout(timer);
   }, [showProcessWarning]);
 
   useEffect(() => {
     if (!showPhSaved) return;
-    const timer = window.setTimeout(() => setShowPhSaved(false), TRANSIENT_NOTICE_MS);
+    const timer = window.setTimeout(() => setShowPhSaved(false), MACHINE_NOTICE_DURATION_MS);
     return () => window.clearTimeout(timer);
   }, [showPhSaved]);
 
@@ -341,9 +346,15 @@ export function ScouringRecordPage() {
       return;
     }
     setShowNewShiftNotice(true);
-    const timer = window.setTimeout(() => setShowNewShiftNotice(false), TRANSIENT_NOTICE_MS);
+    const timer = window.setTimeout(() => setShowNewShiftNotice(false), MACHINE_NOTICE_DURATION_MS);
     return () => window.clearTimeout(timer);
   }, [hasNewShiftNotice, normalizedOrderNumber, values.shift]);
+
+  useEffect(() => {
+    if (!showEditRecordNotice) return;
+    const timer = window.setTimeout(() => setShowEditRecordNotice(false), MACHINE_NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [showEditRecordNotice, editingRecordId]);
 
   const selectedOrderRecord = recordEntryMode === 'edit'
     ? savedOrderRecords.find((record) => record.id === editingRecordId && factoryDateKey(record.recordedAt) === factoryDateKey(new Date()) && normalizeShift(record.shift) === normalizeShift(values.shift)) ?? null
@@ -354,16 +365,21 @@ export function ScouringRecordPage() {
   useEffect(() => {
     const orderNumber = values.orderNumber.trim();
     if (!orderNumber) { setSavedOrderRecords([]); setOrderRecordsLoading(false); setOrderRecordsError(false); setRecordEntryMode(null); return; }
+    if (existingScouringLookup.loading) { setOrderRecordsLoading(true); return; }
     let active = true;
-    setOrderRecordsLoading(true);
     setOrderRecordsError(false);
-    const timer = window.setTimeout(() => {
-      Promise.all([
-        getScouringRecordsForOrder(orderNumber),
-        getMachineOrderProgress('SC-01', orderNumber).catch(() => null),
-      ])
-        .then(([records, savedProgress]) => {
+    if (existingScouringLookup.error) {
+      setSavedOrderRecords([]);
+      setOrderRecordsError(true);
+      setOrderRecordsLoading(false);
+      setRecordEntryMode(null);
+      return;
+    }
+    setOrderRecordsLoading(true);
+    getMachineOrderProgress('SC-01', orderNumber).catch(() => null)
+        .then((savedProgress) => {
           if (!active) return;
+          const records = existingScouringLookup.record ?? [];
           setSavedOrderRecords(records);
           setRecordEntryMode(records.length > 0 ? null : 'new');
           setEditingRecordId(null);
@@ -375,9 +391,8 @@ export function ScouringRecordPage() {
         })
         .catch(() => { if (active) { setSavedOrderRecords([]); setOrderRecordsError(true); setRecordEntryMode(null); } })
         .finally(() => { if (active) setOrderRecordsLoading(false); });
-    }, 250);
-    return () => { active = false; window.clearTimeout(timer); };
-  }, [values.orderNumber, orderLookupRetry]);
+    return () => { active = false; };
+  }, [values.orderNumber, existingScouringLookup.loading, existingScouringLookup.error, existingScouringLookup.record]);
 
   const changeOrderProgress = async (orderProgress: 'IN_PROGRESS' | 'COMPLETED') => {
     const orderNumber = values.orderNumber.trim();
@@ -405,6 +420,8 @@ export function ScouringRecordPage() {
   };
 
   const selectRecordForEditing = useCallback((record: ScouringRecord) => {
+    setHasSavedEdit(false);
+    setShowEditRecordNotice(true);
     setRecordEntryMode('edit');
     setEditingRecordId(record.id);
     setSaveAttempted(false);
@@ -456,6 +473,7 @@ export function ScouringRecordPage() {
     }
     if (editingRecordId !== null) {
       setEditingRecordId(null);
+      setHasSavedEdit(false);
       setRecordEntryMode('new');
       setSaveAttempted(false);
       setSaveError(null);
@@ -483,6 +501,8 @@ export function ScouringRecordPage() {
 
   const cancelEditing = () => {
     setEditingRecordId(null);
+    setHasSavedEdit(false);
+    setShowEditRecordNotice(false);
     setRecordEntryMode(savedOrderRecords.length > 0 ? null : 'new');
     setSaveAttempted(false);
     setSaveError(null);
@@ -581,6 +601,7 @@ export function ScouringRecordPage() {
       if (editingRecordId === null) setValues((current) => ({ ...current, orderProgress: saved.orderProgress ?? 'IN_PROGRESS' }));
       setTodayRefreshKey((key) => key + 1);
       setSaveSuccess(true);
+      if (editingRecordId !== null) setHasSavedEdit(true);
       setShowSaveSuccess(true);
     } catch (error) {
       setSaveError(localizedRequestError(error, language, 'record'));
@@ -617,14 +638,14 @@ export function ScouringRecordPage() {
               <header className="flex h-12 min-h-12 items-center border-b-2 border-industrialDark bg-white px-3 text-[11px] font-bold uppercase tracking-wider text-industrialDark">
                 <h2 className="whitespace-nowrap">{language === 'vi' ? 'Thông tin vận hành' : 'Operation details'}</h2>
               </header>
-              <OperationInfoFields orderNumber={values.orderNumber} orderNumberDisabled={editingRecordId !== null} onOrderNumberChange={(orderNumber) => { setProduction(null); setSavedOrderRecords([]); setOrderRecordsLoading(Boolean(orderNumber.trim())); setOrderRecordsError(false); setRecordEntryMode(null); setEditingRecordId(null); setSaveAttempted(false); setSaveError(null); setSaveSuccess(false); setShowSaveSuccess(false); setShowPhSaved(false); setPhValues({}); setPhNote(''); setPhError(null); setProgressError(null); setValues((current) => ({ ...current, orderNumber, operatorName: '', operatorIdentifier: '', shift: '', orderProgress: 'IN_PROGRESS', inputFabricMeters: '', outputFabricMeters: '', lossMeters: '' })); }} operatorName={values.operatorName} onOperatorNameChange={(operatorName) => setValues((current) => ({ ...current, operatorName }))} employeeId={values.operatorIdentifier} onEmployeeIdChange={(operatorIdentifier) => setValues((current) => ({ ...current, operatorIdentifier }))} shift={values.shift} onShiftChange={(shift) => setValues((current) => ({ ...current, shift }))} orderStatus={orderStatusField} />
+              <OperationInfoFields orderNumber={values.orderNumber} orderNumberDisabled={editingRecordId !== null && !hasSavedEdit} onOrderNumberChange={(orderNumber) => { setProduction(null); setSavedOrderRecords([]); setOrderRecordsLoading(Boolean(orderNumber.trim())); setOrderRecordsError(false); setRecordEntryMode(null); setEditingRecordId(null); setHasSavedEdit(false); setShowEditRecordNotice(false); setSaveAttempted(false); setSaveError(null); setSaveSuccess(false); setShowSaveSuccess(false); setShowPhSaved(false); setPhValues({}); setPhNote(''); setPhError(null); setProgressError(null); setValues((current) => ({ ...current, orderNumber, operatorName: '', operatorIdentifier: '', shift: '', orderProgress: 'IN_PROGRESS', inputFabricMeters: '', outputFabricMeters: '', lossMeters: '' })); }} operatorName={values.operatorName} onOperatorNameChange={(operatorName) => setValues((current) => ({ ...current, operatorName }))} employeeId={values.operatorIdentifier} onEmployeeIdChange={(operatorIdentifier) => setValues((current) => ({ ...current, operatorIdentifier }))} shift={values.shift} onShiftChange={(shift) => setValues((current) => ({ ...current, shift }))} orderStatus={orderStatusField} />
             </aside>
 
-            <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-2 border-industrialDark bg-white">
+            <section onChangeCapture={() => { if (editingRecordId !== null && saveSuccess) { setSaveSuccess(false); setShowSaveSuccess(false); } }} className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-2 border-industrialDark bg-white">
               <nav className="flex h-12 min-h-12 shrink-0 border-b-2 border-line bg-white" aria-label={language === 'vi' ? 'Loại ghi nhận Scouring' : 'Scouring entry type'}>{(['operation', 'ph'] as const).map((mode) => <button key={mode} type="button" aria-pressed={entryMode === mode} onClick={() => setEntryMode(mode)} className={`h-full min-h-10 flex-1 border-b-2 px-3 text-[10px] font-bold uppercase tracking-wide ${entryMode === mode ? 'border-industrialDark bg-industrialDark text-white' : 'border-transparent text-slate-500'}`}>{mode === 'operation' ? (language === 'vi' ? 'Thông số vận hành' : 'Operation parameters') : (language === 'vi' ? 'Checklist pH' : 'pH checklist')}</button>)}</nav>
               {normalizedOrderNumber && orderRecordsLoading && <p role="status" className="shrink-0 border-b border-line bg-hmiSection px-3 py-2 text-[10px] font-semibold text-slate-600">{language === 'vi' ? 'Đang kiểm tra các bản ghi đã lưu của SOP này…' : 'Checking saved records for this SOP…'}</p>}
               {normalizedOrderNumber && orderRecordsError && <div role="alert" className="flex shrink-0 items-center justify-between gap-2 border-b border-alarm bg-hmiAlarm px-3 py-2 text-[10px] font-semibold text-alarm"><span>{language === 'vi' ? 'Không kiểm tra được bản ghi SOP. Hãy thử lại trước khi lưu để tránh tạo trùng ngoài ý muốn.' : 'Unable to check existing SOP records. Retry before saving to avoid an unintended duplicate.'}</span><button type="button" className="shrink-0 border border-alarm bg-white px-2 py-1 font-bold uppercase" onClick={() => setOrderLookupRetry((value) => value + 1)}>{language === 'vi' ? 'Thử lại' : 'Retry'}</button></div>}
-              {!orderRecordsLoading && !orderRecordsError && savedOrderRecords.length > 0 && (recordEntryMode !== 'new' || showNewShiftNotice) && <p role="status" className={`shrink-0 border-b px-3 py-2 text-[10px] font-semibold ${recordEntryMode === 'new' ? 'border-info bg-hmiSection text-industrialDark' : recordEntryMode === 'edit' ? 'border-success bg-hmiNormal text-success' : 'border-line bg-hmiSection text-slate-600'}`}>
+              {!orderRecordsLoading && !orderRecordsError && savedOrderRecords.length > 0 && ((recordEntryMode === 'new' && showNewShiftNotice) || (recordEntryMode === 'edit' && showEditRecordNotice) || recordEntryMode === null) && <p role="status" className={`shrink-0 border-b px-3 py-2 text-[10px] font-semibold ${recordEntryMode === 'new' ? 'border-info bg-hmiSection text-industrialDark' : recordEntryMode === 'edit' ? 'border-success bg-hmiNormal text-success' : 'border-line bg-hmiSection text-slate-600'}`}>
                 {recordEntryMode === 'edit' && selectedOrderRecord
                   ? (language === 'vi' ? `SOP này đã có bản ghi ca ${localizedShift(selectedOrderRecord.shift, language)} hôm nay (${new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(selectedOrderRecord.recordedAt))}). Hệ thống đã nạp để cập nhật; checklist pH được giữ nguyên.` : `A record for this SOP and shift already exists today (${new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(selectedOrderRecord.recordedAt))}). Loaded for update; pH checklists will be kept.`)
                   : recordEntryMode === 'new' && values.shift
@@ -648,7 +669,7 @@ export function ScouringRecordPage() {
                     <section className="min-w-0">
                       <h3 className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase tracking-wide text-slate-600">{t('production')}</h3>
                       <FieldGrid fields={productionFields} values={values} showValidation={saveAttempted} onChange={updateValue} columns={2} />
-                      {!values.inputFabricMeters && <p className="px-2 pb-1 text-[9px] font-semibold uppercase text-warning">{language === 'vi' ? 'MES chưa có đủ mét cuộn để tự điền vải đầu vào.' : 'MES does not have all roll lengths needed to fill fabric input.'}</p>}
+
                     </section>
                   </div>
                 </section>

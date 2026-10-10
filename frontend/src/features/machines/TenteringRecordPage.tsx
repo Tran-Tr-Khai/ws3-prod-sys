@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
@@ -9,6 +9,8 @@ import { SupportChatWidget } from '../support/SupportChatWidget';
 import { TENTERING_MACHINES, TenteringMachineSelect, TenteringNavigation } from './TenteringNavigation';
 import { getTenteringOrder, getTenteringOrderSource, saveTenteringOrder, type TenteringOrder, type TenteringOrderInput } from './tenteringApi';
 import { getMachineOrderProgress, saveMachineOrderProgress } from './scouringApi';
+import { useExistingMachineRecord } from './useExistingMachineRecord';
+import { MACHINE_NOTICE_DURATION_MS } from './noticeTiming';
 
 type RollDraft = {
   rollNumber: number;
@@ -130,16 +132,27 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
   const [progressError, setProgressError] = useState('');
   const isOperator = user?.role === 'OPERATOR';
   const tx = (vietnamese: string, english: string) => vi ? vietnamese : english;
+  const findExistingOrder = useCallback((normalizedSop: string) => getTenteringOrder(machineId, normalizedSop), [machineId]);
+  const existingLookup = useExistingMachineRecord(sopInput, findExistingOrder, 300);
+
+  useEffect(() => {
+    if (!saved) return;
+    const timer = window.setTimeout(() => setSaved(false), MACHINE_NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [saved]);
 
   useEffect(() => {
     const normalized = sopInput.trim().toUpperCase();
-    if (!normalized || normalized === activeSop) return;
+    if (!normalized) { setLoading(false); return; }
+    if (normalized === activeSop) { setLoading(false); return; }
+    if (existingLookup.loading) { setLoading(true); return; }
     let active = true;
     setLoading(true);
     setError('');
-    const timer = window.setTimeout(async () => {
+    void (async () => {
       try {
-        const result = await getTenteringOrder(machineId, normalized);
+        if (existingLookup.error) throw new Error(existingLookup.error);
+        const result = existingLookup.record;
         const [sourceResult, progressResult] = await Promise.allSettled([
           getTenteringOrderSource(machineId, normalized),
           getMachineOrderProgress(machineId as 'TE-01' | 'TE-02', normalized),
@@ -159,9 +172,9 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
       } finally {
         if (active) setLoading(false);
       }
-    }, 300);
-    return () => { active = false; window.clearTimeout(timer); };
-  }, [sopInput, activeSop, machineId, vi]);
+    })();
+    return () => { active = false; };
+  }, [sopInput, activeSop, machineId, vi, existingLookup.loading, existingLookup.error, existingLookup.record]);
 
   const changeOrderProgress = async (nextProgress: 'IN_PROGRESS' | 'COMPLETED') => {
     if (!activeSop || !knownOrder || progressSaving || loading) return;
