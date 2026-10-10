@@ -23,8 +23,7 @@ type RecordFieldKey =
   | 'temperature'
   | 'cylinderTemperature'
   | 'inputFabricMeters'
-  | 'outputFabricMeters'
-  | 'lossMeters';
+  | 'outputFabricMeters';
 
 type RecordValues = Record<RecordFieldKey, string> & {
   orderNumber: string;
@@ -65,7 +64,6 @@ const initialValues: RecordValues = {
   cylinderTemperature: '',
   inputFabricMeters: '',
   outputFabricMeters: '',
-  lossMeters: '',
 };
 
 const chemicalFields: FieldDefinition[] = [
@@ -85,7 +83,6 @@ const processFields: FieldDefinition[] = [
 const productionFields: FieldDefinition[] = [
   { key: 'inputFabricMeters', label: 'Fabric Input · MES', unit: 'm' },
   { key: 'outputFabricMeters', label: 'Fabric Output', unit: 'm' },
-  { key: 'lossMeters', label: 'Loss', unit: 'm' },
 ];
 
 function fieldMessage(value: string, field: FieldDefinition): 'missing' | 'warning' | null {
@@ -94,18 +91,6 @@ function fieldMessage(value: string, field: FieldDefinition): 'missing' | 'warni
   if (!Number.isFinite(numericValue)) return 'missing';
   if (field.range && (numericValue < field.range[0] || numericValue > field.range[1])) return 'warning';
   return null;
-}
-
-function completedFields(fields: FieldDefinition[], values: RecordValues): number {
-  return fields.filter((field) => values[field.key].trim() !== '' && fieldMessage(values[field.key], field) !== 'missing').length;
-}
-
-function calculateLoss(input: string, output: string): string {
-  if (!input.trim() || !output.trim()) return '';
-  const inputMeters = Number(input);
-  const outputMeters = Number(output);
-  if (!Number.isFinite(inputMeters) || !Number.isFinite(outputMeters)) return '';
-  return String(Number(Math.max(0, inputMeters - outputMeters).toFixed(3)));
 }
 
 function localizedRequestError(error: unknown, language: string, action: 'record' | 'ph' | 'progress'): string {
@@ -153,11 +138,10 @@ function RecordField({
   onChange: (value: string) => void;
 }) {
   const { t, language } = useLanguage();
-  const label = field.key === 'naoh' ? 'NaOH' : field.key === 'soap' ? (language === 'vi' ? 'XÀ PHÒNG' : 'SOAP') : field.key === 'desizer' ? (language === 'vi' ? 'CHẤT GIŨ HỒ' : 'DESIZER') : field.key === 'h2o2' ? 'H2O2' : field.key === 'chelate' ? (language === 'vi' ? 'CHẤT TẠO PHỨC' : 'CHELATE') : field.key === 'speed' ? t('speed') : field.key === 'temperature' ? t('temperature') : field.key === 'cylinderTemperature' ? t('cylinderTemperature') : field.key === 'inputFabricMeters' ? (language === 'vi' ? 'VẢI ĐẦU VÀO (THEO ĐƠN)' : 'FABRIC INPUT · ORDER') : field.key === 'outputFabricMeters' ? t('fabricOutput') : field.key === 'lossMeters' ? (language === 'vi' ? 'HAO HỤT' : 'LOSS') : field.label;
+  const label = field.key === 'naoh' ? 'NaOH' : field.key === 'soap' ? (language === 'vi' ? 'XÀ PHÒNG' : 'SOAP') : field.key === 'desizer' ? (language === 'vi' ? 'CHẤT GIŨ HỒ' : 'DESIZER') : field.key === 'h2o2' ? 'H2O2' : field.key === 'chelate' ? (language === 'vi' ? 'CHẤT TẠO PHỨC' : 'CHELATE') : field.key === 'speed' ? t('speed') : field.key === 'temperature' ? t('temperature') : field.key === 'cylinderTemperature' ? t('cylinderTemperature') : field.key === 'inputFabricMeters' ? (language === 'vi' ? 'VẢI ĐẦU VÀO (THEO ĐƠN)' : 'FABRIC INPUT · ORDER') : field.key === 'outputFabricMeters' ? t('fabricOutput') : field.label;
   const message = showValidation ? fieldMessage(value, field) : null;
   const isError = message === 'missing';
   const isWarning = message === 'warning';
-  const isLoss = field.key === 'lossMeters';
 
   return (
     <label className="scouring-record-field flex min-w-0 w-full flex-col bg-transparent px-1 py-1">
@@ -173,9 +157,9 @@ function RecordField({
           step="any"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          readOnly={field.key === 'inputFabricMeters' || isLoss}
-          aria-readonly={field.key === 'inputFabricMeters' || isLoss}
-          className={`scouring-record-input min-w-0 flex-1 appearance-none border-0 px-2 text-center font-mono text-[18px] font-bold leading-none tabular-nums outline-none focus:ring-2 focus:ring-info/60 ${field.key === 'inputFabricMeters' || isLoss ? 'bg-hmiSection' : 'bg-white focus:bg-white'} ${isError ? 'text-alarm' : isWarning ? 'text-warning' : isLoss ? (Number(value) > 0 ? 'text-alarm' : 'text-success') : field.key === 'outputFabricMeters' ? 'text-success' : field.key === 'inputFabricMeters' ? 'text-slate-500' : 'text-industrial'}`}
+          readOnly={field.key === 'inputFabricMeters'}
+          aria-readonly={field.key === 'inputFabricMeters'}
+          className={`scouring-record-input min-w-0 flex-1 appearance-none border-0 px-2 text-center font-mono text-[18px] font-bold leading-none tabular-nums outline-none focus:ring-2 focus:ring-info/60 ${field.key === 'inputFabricMeters' ? 'bg-hmiSection' : 'bg-white focus:bg-white'} ${isError ? 'text-alarm' : isWarning ? 'text-warning' : field.key === 'outputFabricMeters' ? 'text-success' : field.key === 'inputFabricMeters' ? 'text-slate-500' : 'text-industrial'}`}
         />
         <span className="scouring-record-unit flex min-w-14 items-center justify-center border-l-2 border-line bg-surfaceMuted px-2 font-mono text-[13px] font-bold text-slate-600">{field.unit}</span>
       </span>
@@ -328,7 +312,7 @@ export function ScouringRecordPage() {
           const hasMeters = Boolean(report?.rolls.length && report.rolls.every((roll) => roll.length_meters !== null && Number.isFinite(roll.length_meters)));
           const inputMeters = hasMeters ? report!.rolls.reduce((total, roll) => total + (roll.length_meters ?? 0), 0) : null;
           setValues((current) => current.orderNumber.trim().toLocaleLowerCase() === orderNumber.trim().toLocaleLowerCase()
-            ? { ...current, inputFabricMeters: inputMeters === null ? '' : String(inputMeters), lossMeters: calculateLoss(inputMeters === null ? '' : String(inputMeters), current.outputFabricMeters) }
+            ? { ...current, inputFabricMeters: inputMeters === null ? '' : String(inputMeters) }
             : current);
         })
         .catch(() => { if (active) { setProduction(null); setProductionError(true); } })
@@ -412,11 +396,7 @@ export function ScouringRecordPage() {
   };
 
   const updateValue = (key: RecordFieldKey, value: string) => {
-    setValues((current) => {
-      const next = { ...current, [key]: value };
-      if (key === 'outputFabricMeters') next.lossMeters = calculateLoss(current.inputFabricMeters, value);
-      return next;
-    });
+    setValues((current) => ({ ...current, [key]: value }));
   };
 
   const selectRecordForEditing = useCallback((record: ScouringRecord) => {
@@ -446,7 +426,6 @@ export function ScouringRecordPage() {
       temperature: String(record.temperature), cylinderTemperature: String(record.cylinderTemperature),
       inputFabricMeters: record.inputFabricMeters == null ? '' : String(record.inputFabricMeters),
       outputFabricMeters: record.outputFabricMeters == null ? '' : String(record.outputFabricMeters),
-      lossMeters: record.lossMeters == null ? '' : String(record.lossMeters),
     }));
   }, []);
 
@@ -590,7 +569,6 @@ export function ScouringRecordPage() {
         inputFabricMeters: values.inputFabricMeters.trim() ? Number(values.inputFabricMeters) : null,
         outputFabricMeters: values.outputFabricMeters.trim() ? Number(values.outputFabricMeters) : null,
         productionQuantityMeters: values.outputFabricMeters.trim() ? Number(values.outputFabricMeters) : null,
-        lossMeters: calculateLoss(values.inputFabricMeters, values.outputFabricMeters) ? Number(calculateLoss(values.inputFabricMeters, values.outputFabricMeters)) : null,
       };
       const saved = editingRecordId === null
         ? await createScouringRecord(payload)
@@ -638,7 +616,7 @@ export function ScouringRecordPage() {
               <header className="flex h-12 min-h-12 items-center border-b-2 border-industrialDark bg-white px-3 text-[11px] font-bold uppercase tracking-wider text-industrialDark">
                 <h2 className="whitespace-nowrap">{language === 'vi' ? 'Thông tin vận hành' : 'Operation details'}</h2>
               </header>
-              <OperationInfoFields orderNumber={values.orderNumber} orderNumberDisabled={editingRecordId !== null && !hasSavedEdit} onOrderNumberChange={(orderNumber) => { setProduction(null); setSavedOrderRecords([]); setOrderRecordsLoading(Boolean(orderNumber.trim())); setOrderRecordsError(false); setRecordEntryMode(null); setEditingRecordId(null); setHasSavedEdit(false); setShowEditRecordNotice(false); setSaveAttempted(false); setSaveError(null); setSaveSuccess(false); setShowSaveSuccess(false); setShowPhSaved(false); setPhValues({}); setPhNote(''); setPhError(null); setProgressError(null); setValues((current) => ({ ...current, orderNumber, operatorName: '', operatorIdentifier: '', shift: '', orderProgress: 'IN_PROGRESS', inputFabricMeters: '', outputFabricMeters: '', lossMeters: '' })); }} operatorName={values.operatorName} onOperatorNameChange={(operatorName) => setValues((current) => ({ ...current, operatorName }))} employeeId={values.operatorIdentifier} onEmployeeIdChange={(operatorIdentifier) => setValues((current) => ({ ...current, operatorIdentifier }))} shift={values.shift} onShiftChange={(shift) => setValues((current) => ({ ...current, shift }))} orderStatus={orderStatusField} />
+              <OperationInfoFields orderNumber={values.orderNumber} orderNumberDisabled={editingRecordId !== null && !hasSavedEdit} onOrderNumberChange={(orderNumber) => { setProduction(null); setSavedOrderRecords([]); setOrderRecordsLoading(Boolean(orderNumber.trim())); setOrderRecordsError(false); setRecordEntryMode(null); setEditingRecordId(null); setHasSavedEdit(false); setShowEditRecordNotice(false); setSaveAttempted(false); setSaveError(null); setSaveSuccess(false); setShowSaveSuccess(false); setShowPhSaved(false); setPhValues({}); setPhNote(''); setPhError(null); setProgressError(null); setValues((current) => ({ ...current, orderNumber, operatorName: '', operatorIdentifier: '', shift: '', orderProgress: 'IN_PROGRESS', inputFabricMeters: '', outputFabricMeters: '' })); }} operatorName={values.operatorName} onOperatorNameChange={(operatorName) => setValues((current) => ({ ...current, operatorName }))} employeeId={values.operatorIdentifier} onEmployeeIdChange={(operatorIdentifier) => setValues((current) => ({ ...current, operatorIdentifier }))} shift={values.shift} onShiftChange={(shift) => setValues((current) => ({ ...current, shift }))} orderStatus={orderStatusField} />
             </aside>
 
             <section onChangeCapture={() => { if (editingRecordId !== null && saveSuccess) { setSaveSuccess(false); setShowSaveSuccess(false); } }} className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-2 border-industrialDark bg-white">

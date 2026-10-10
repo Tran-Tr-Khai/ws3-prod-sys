@@ -180,9 +180,9 @@ def export_scouring_records(
     sheet.sheet_view.showGridLines = False
     is_vi = language == "vi"
     headers = (
-        ["TEST pH", "THỜI GIAN GHI", "MÃ SOP", "MẶT HÀNG", "LOT SỢI", "SỐ LOT", "NGƯỜI VẬN HÀNH", "ID NHÂN VIÊN", "CA", "NaOH (L)", "Soap (L)", "Desizer (L)", "H2O2 (L)", "Chelate (L)", "TỐC ĐỘ (m/min)", "NHIỆT ĐỘ (°C)", "NHIỆT ĐỘ LÔ GIA (°C)", "MÉT ĐẦU VÀO", "MÉT ĐẦU RA", "HAO HỤT", "KẾT QUẢ", "TIẾN ĐỘ ĐƠN"]
+        ["TEST pH", "THỜI GIAN GHI", "MÃ SOP", "MẶT HÀNG", "LOT SỢI", "SỐ LOT", "NGƯỜI VẬN HÀNH", "ID NHÂN VIÊN", "CA", "NaOH (L)", "Soap (L)", "Desizer (L)", "H2O2 (L)", "Chelate (L)", "TỐC ĐỘ (m/min)", "NHIỆT ĐỘ (°C)", "NHIỆT ĐỘ LÔ GIA (°C)", "MÉT ĐẦU VÀO", "MÉT ĐẦU RA", "KẾT QUẢ", "TIẾN ĐỘ ĐƠN"]
         if is_vi else
-        ["pH TEST", "RECORDED DATE - TIME", "SOP", "ITEM", "YARN LOT", "LOT", "OPERATOR", "EMPLOYEE ID", "SHIFT", "NaOH (L)", "Soap (L)", "Desizer (L)", "H2O2 (L)", "Chelate (L)", "SPEED (m/min)", "TEMPERATURE (°C)", "CYLINDER TEMP. (°C)", "INPUT (m)", "OUTPUT (m)", "LOSS (m)", "RESULT", "ORDER PROGRESS"]
+        ["pH TEST", "RECORDED DATE - TIME", "SOP", "ITEM", "YARN LOT", "LOT", "OPERATOR", "EMPLOYEE ID", "SHIFT", "NaOH (L)", "Soap (L)", "Desizer (L)", "H2O2 (L)", "Chelate (L)", "SPEED (m/min)", "TEMPERATURE (°C)", "CYLINDER TEMP. (°C)", "INPUT (m)", "OUTPUT (m)", "RESULT", "ORDER PROGRESS"]
     )
     last_col = len(headers)
     sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_col)
@@ -199,12 +199,12 @@ def export_scouring_records(
     sheet.cell(2, 1).alignment = Alignment(vertical="center")
     group_border = Side(style="medium", color="385466")
     column_border = Side(style="thin", color="9FB0B8")
-    standalone_headers = (1, 21, 22)
+    standalone_headers = (1, 20, 21)
     for column in standalone_headers:
         cell = sheet.cell(4, column)
         cell.fill = PatternFill("solid", fgColor="DCE6EA")
         cell.border = Border(left=group_border, right=group_border, bottom=Side(style="thin", color="A9BBC3"))
-    group_ranges = [(2, 9, "THÔNG TIN CHUNG" if is_vi else "GENERAL INFORMATION"), (10, 14, "HÓA CHẤT" if is_vi else "CHEMICALS"), (15, 17, "ĐIỀU KIỆN QUY TRÌNH" if is_vi else "PROCESS CONDITIONS"), (18, 20, "SẢN XUẤT" if is_vi else "PRODUCTION")]
+    group_ranges = [(2, 9, "THÔNG TIN CHUNG" if is_vi else "GENERAL INFORMATION"), (10, 14, "HÓA CHẤT" if is_vi else "CHEMICALS"), (15, 17, "ĐIỀU KIỆN QUY TRÌNH" if is_vi else "PROCESS CONDITIONS"), (18, 19, "SẢN XUẤT" if is_vi else "PRODUCTION")]
     for start_col, end_col, label in group_ranges:
         # Style the full merged range before merging so Excel retains the group
         # edges, with softer separators between columns inside the group.
@@ -221,6 +221,16 @@ def export_scouring_records(
         cell.font = Font(name="Aptos", size=9, bold=True, color="385466")
         cell.fill = PatternFill("solid", fgColor="DCE6EA")
         cell.alignment = Alignment(horizontal="center", vertical="center")
+        # Keep the merged heading's outer border when OpenPyXL serializes it.
+        cell.border = Border(
+            left=group_border,
+            right=group_border,
+            bottom=Side(style="thin", color="A9BBC3"),
+        )
+        sheet.cell(4, end_col).border = Border(
+            right=group_border,
+            bottom=Side(style="thin", color="A9BBC3"),
+        )
     group_starts = {start for start, _end, _label in group_ranges}
     group_ends = {end for _start, end, _label in group_ranges}
     group_starts.update(standalone_headers)
@@ -244,7 +254,7 @@ def export_scouring_records(
         progress = "ĐANG XỬ LÝ" if record.order_progress == "IN_PROGRESS" else "ĐÃ HOÀN THÀNH" if record.order_progress == "COMPLETED" else ("CHƯA CẬP NHẬT" if is_vi else "NOT SET")
         inspection_count = ph_count_by_record.get(record.id, 0)
         ph_link_label = (f"XEM ({inspection_count})" if is_vi else f"VIEW ({inspection_count})") if inspection_count else "—"
-        values = [ph_link_label, timestamp, record.order_number or "—", record.item or "—", record.lot_yarn or "—", record.lot_number or "—", record.operator_name or "—", record.operator_identifier or "—", record.shift or "—", record.naoh, record.soap, record.desizer, record.h2o2, record.chelate, record.speed, record.temperature, record.cylinder_temperature, record.input_fabric_meters, record.output_fabric_meters, record.loss_meters, ("CẢNH BÁO" if is_vi else "WARNING") if record_result(record) == "WARNING" else ("ĐẠT" if is_vi else "PASS"), progress if is_vi else ("IN PROGRESS" if record.order_progress == "IN_PROGRESS" else "COMPLETED" if record.order_progress == "COMPLETED" else "NOT SET")]
+        values = [ph_link_label, timestamp, record.order_number or "—", record.item or "—", record.lot_yarn or "—", record.lot_number or "—", record.operator_name or "—", record.operator_identifier or "—", record.shift or "—", record.naoh, record.soap, record.desizer, record.h2o2, record.chelate, record.speed, record.temperature, record.cylinder_temperature, record.input_fabric_meters, record.output_fabric_meters, ("CẢNH BÁO" if is_vi else "WARNING") if record_result(record) == "WARNING" else ("ĐẠT" if is_vi else "PASS"), progress if is_vi else ("IN PROGRESS" if record.order_progress == "IN_PROGRESS" else "COMPLETED" if record.order_progress == "COMPLETED" else "NOT SET")]
         for column, value in enumerate(values, start=1):
             cell = sheet.cell(row_index, column, value)
             cell.font = Font(name="Aptos", size=9, color="243B4A")
@@ -256,9 +266,9 @@ def export_scouring_records(
                 cell.fill = PatternFill("solid", fgColor="F3F7F9")
             if column == 2:
                 cell.number_format = "dd/mm/yyyy - hh:mm"
-            if 10 <= column <= 20:
+            if 10 <= column <= 19:
                 cell.number_format = "#,##0.###"
-            if column == 22:
+            if column == 21:
                 progress_colors = {
                     "IN_PROGRESS": ("1D4ED8", "DBEAFE"),
                     "COMPLETED": ("15803D", "DCFCE7"),
@@ -267,7 +277,7 @@ def export_scouring_records(
                 font_color, fill_color = progress_colors.get(record.order_progress, progress_colors[None])
                 cell.font = Font(name="Aptos", size=9, bold=True, color=font_color)
                 cell.fill = PatternFill("solid", fgColor=fill_color)
-            if column == 21:
+            if column == 20:
                 warning = record_result(record) == "WARNING"
                 cell.font = Font(name="Aptos", size=9, bold=True, color="B42318" if warning else "247044")
                 cell.fill = PatternFill("solid", fgColor="FDECEC" if warning else "E7F4EC")
@@ -275,11 +285,11 @@ def export_scouring_records(
                 cell.hyperlink = f"#'{('pH inspections' if is_vi else 'pH Inspections')}'!A{ph_row_by_record[record.id]}"
                 cell.font = Font(name="Aptos", size=9, bold=True, color="0563C1", underline="single")
         sheet.row_dimensions[row_index].height = 22
-    widths = [16, 23, 20, 34, 15, 15, 22, 16, 12, 13, 13, 13, 13, 13, 15, 15, 18, 15, 15, 14, 14, 19]
+    widths = [16, 23, 20, 34, 15, 15, 22, 16, 12, 13, 13, 13, 13, 13, 15, 15, 18, 15, 15, 14, 19]
     for column, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(column)].width = width
     sheet.freeze_panes = "C6"
-    sheet.auto_filter.ref = f"A5:V{5 + len(records)}"
+    sheet.auto_filter.ref = f"A5:U{5 + len(records)}"
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1

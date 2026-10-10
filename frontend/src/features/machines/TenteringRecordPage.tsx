@@ -90,6 +90,7 @@ function applySourceRolls(rolls: RollDraft[], source: Awaited<ReturnType<typeof 
       ...row,
       rollId: sourceRoll.roll_id ?? row.rollId,
       weavingDate: sourceRoll.weaving_date ?? row.weavingDate,
+      plannedQuantity: sourceRoll.length_meters?.toString() ?? '',
     } : row);
   }, expanded);
 }
@@ -279,7 +280,7 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
                   <tbody>{rolls.map((row, index) => <tr key={row.rollNumber} className="border-b border-line odd:bg-white even:bg-slate-50"><td className="w-16 px-2 py-1.5 text-center font-mono font-bold">{row.rollNumber}</td>
                     <td aria-label={`${tx('Ngày dệt cuộn', 'Weaving date roll')} ${row.rollNumber}`} className="whitespace-nowrap px-2 py-1 text-[10px]">{displayDate(row.weavingDate, language)}</td>
                     <td className="whitespace-nowrap px-2 py-1 font-mono text-[10px]">{row.rollId || '—'}</td>
-                    <td className="px-1 py-1"><input aria-label={`${tx('Sản lượng theo đơn cuộn', 'Planned quantity roll')} ${row.rollNumber}`} type="number" min="0" step="any" inputMode="decimal" value={row.plannedQuantity} onChange={(event) => setRolls((current) => current.map((item, i) => i === index ? { ...item, plannedQuantity: event.target.value } : item))} className="min-h-8 w-full border border-line bg-white px-2 text-right font-mono text-xs" /></td>
+                    <td className="px-1 py-1"><input aria-label={`${tx('Sản lượng theo đơn cuộn', 'Planned quantity roll')} ${row.rollNumber}`} type="number" min="0" step="any" inputMode="decimal" value={row.plannedQuantity} readOnly className="min-h-8 w-full border border-line bg-slate-50 px-2 text-right font-mono text-xs text-slate-600" /></td>
                     <td className="px-1 py-1"><input aria-label={`${tx('Sản lượng thực tế cuộn', 'Actual quantity roll')} ${row.rollNumber}`} type="number" min="0" step="any" inputMode="decimal" value={row.actualQuantity} onChange={(event) => setRolls((current) => current.map((item, i) => i === index ? { ...item, actualQuantity: event.target.value } : item))} className="min-h-8 w-full border border-line bg-white px-2 text-right font-mono text-xs" /></td>
                     <td className="px-1 py-1"><input aria-label={`${tx('Ghi chú cuộn', 'Roll note')} ${row.rollNumber}`} value={row.note} onChange={(event) => setRolls((current) => current.map((item, i) => i === index ? { ...item, note: event.target.value } : item))} className="min-h-8 w-full border border-line bg-white px-2 text-xs" maxLength={1000} /></td></tr>)}</tbody></table></div>
               </section>}

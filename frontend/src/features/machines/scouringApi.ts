@@ -23,7 +23,6 @@ export type ScouringRecord = {
   inputFabricMeters: number | null;
   outputFabricMeters: number | null;
   productionQuantityMeters: number | null;
-  lossMeters: number | null;
 };
 
 export type ScouringRecordCreatePayload = {
@@ -49,7 +48,6 @@ export type ScouringRecordCreatePayload = {
   inputFabricMeters?: number | null;
   outputFabricMeters?: number | null;
   productionQuantityMeters?: number | null;
-  lossMeters?: number | null;
 };
 
 export type ScouringRecordApiResponse = {
@@ -77,7 +75,6 @@ export type ScouringRecordApiResponse = {
   input_fabric_meters: number | null;
   output_fabric_meters: number | null;
   production_quantity_meters: number | null;
-  loss_meters: number | null;
 };
 
 export type ScouringPhInspection = {
@@ -185,7 +182,6 @@ type ScouringRecordApiRequest = {
   input_fabric_meters?: number | null;
   output_fabric_meters?: number | null;
   production_quantity_meters?: number | null;
-  loss_meters?: number | null;
 };
 
 export type ScouringApiErrorDetails = unknown;
@@ -248,7 +244,6 @@ function toApiRequest(payload: ScouringRecordCreatePayload): ScouringRecordApiRe
     ...(payload.inputFabricMeters === undefined ? {} : { input_fabric_meters: payload.inputFabricMeters }),
     ...(payload.outputFabricMeters === undefined ? {} : { output_fabric_meters: payload.outputFabricMeters }),
     ...(payload.productionQuantityMeters === undefined ? {} : { production_quantity_meters: payload.productionQuantityMeters }),
-    ...(payload.lossMeters === undefined ? {} : { loss_meters: payload.lossMeters }),
   };
 }
 
@@ -278,7 +273,6 @@ function fromApiResponse(record: ScouringRecordApiResponse): ScouringRecord {
     inputFabricMeters: record.input_fabric_meters,
     outputFabricMeters: record.output_fabric_meters,
     productionQuantityMeters: record.production_quantity_meters,
-    lossMeters: record.loss_meters,
   };
 }
 

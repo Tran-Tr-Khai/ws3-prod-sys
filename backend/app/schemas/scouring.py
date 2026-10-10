@@ -36,7 +36,6 @@ class ScouringRecordCreate(BaseModel):
     input_fabric_meters: float | None = Field(default=None, ge=0)
     output_fabric_meters: float | None = Field(default=None, ge=0)
     production_quantity_meters: float | None = Field(default=None, ge=0)
-    loss_meters: float | None = Field(default=None, ge=0)
 
     _validate_naoh = field_validator("naoh")(_finite_number)
     _validate_soap = field_validator("soap")(_finite_number)
@@ -48,7 +47,6 @@ class ScouringRecordCreate(BaseModel):
     _validate_cylinder_temperature = field_validator("cylinder_temperature")(_finite_number)
     _validate_input_fabric_meters = field_validator("input_fabric_meters")(_finite_number)
     _validate_output_fabric_meters = field_validator("output_fabric_meters")(_finite_number)
-    _validate_loss_meters = field_validator("loss_meters")(_finite_number)
 
 
 class ScouringRecordResponse(ScouringRecordCreate):

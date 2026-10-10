@@ -62,16 +62,16 @@ class ScouringExcelExportTests(unittest.TestCase):
         self.assertEqual(workbook.sheetnames, ["Scouring", "pH inspections"])
         merged_ranges = {str(item) for item in workbook["Scouring"].merged_cells.ranges}
         self.assertNotIn("A4:A5", merged_ranges)
+        self.assertNotIn("T4:T5", merged_ranges)
         self.assertNotIn("U4:U5", merged_ranges)
-        self.assertNotIn("V4:V5", merged_ranges)
         self.assertEqual(workbook["Scouring"]["A5"].value, "TEST pH")
-        self.assertEqual(workbook["Scouring"]["U5"].value, "KẾT QUẢ")
-        self.assertEqual(workbook["Scouring"]["V5"].value, "TIẾN ĐỘ ĐƠN")
+        self.assertEqual(workbook["Scouring"]["T5"].value, "KẾT QUẢ")
+        self.assertEqual(workbook["Scouring"]["U5"].value, "TIẾN ĐỘ ĐƠN")
         self.assertEqual(workbook["Scouring"]["I4"].border.right.style, "medium")
         self.assertEqual(workbook["Scouring"]["J4"].border.left.style, "medium")
         self.assertEqual(workbook["Scouring"]["C5"].border.right.color.rgb, "009FB0B8")
         self.assertEqual(workbook["Scouring"]["I5"].border.right.color.rgb, "00385466")
-        self.assertEqual(workbook["Scouring"].max_column, 22)
+        self.assertEqual(workbook["Scouring"].max_column, 21)
         self.assertEqual(workbook["Scouring"].max_row, 5)
 
     def test_group_separators_are_kept_in_header_but_not_emphasized_in_rows(self):
@@ -97,7 +97,6 @@ class ScouringExcelExportTests(unittest.TestCase):
             cylinder_temperature=90,
             input_fabric_meters=100,
             output_fabric_meters=98,
-            loss_meters=2,
         )
         inspection = SimpleNamespace(
             id=4,
@@ -119,7 +118,7 @@ class ScouringExcelExportTests(unittest.TestCase):
         self.assertEqual(sheet["A6"].hyperlink.target, "#'pH inspections'!A2")
         self.assertEqual(sheet["C6"].value, "PKP-001")
         self.assertEqual(sheet["B6"].number_format, "dd/mm/yyyy - hh:mm")
-        self.assertEqual(sheet["V6"].value, "ĐANG XỬ LÝ")
+        self.assertEqual(sheet["U6"].value, "ĐANG XỬ LÝ")
         self.assertEqual(workbook["pH inspections"]["A2"].value, 1)
         self.assertEqual(workbook["pH inspections"]["C2"].value, "PKP-001")
 
