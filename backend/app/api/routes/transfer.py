@@ -144,7 +144,7 @@ def export_transfer_records(
     sheet.sheet_view.showGridLines = False
     sheet.merge_cells("A1:L1")
     title = sheet["A1"]
-    title.value = "H/T TRANSFER DAILY REPORT"
+    title.value = "TRANSFER DAILY REPORT"
     title.font = Font(name="Aptos Display", size=15, bold=True, color="FFFFFF")
     title.fill = PatternFill("solid", fgColor="385466")
     title.alignment = Alignment(horizontal="center", vertical="center")

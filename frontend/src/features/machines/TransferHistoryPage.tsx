@@ -41,9 +41,9 @@ export function TransferHistoryPage() {
     finally { setExporting(false); }
   };
 
-  return <WS3Shell title="WS3 / H/T Transfer" subtitle={vi ? 'Lịch sử sản xuất · Máy ép' : 'Production history · Heat transfer'} machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'H/T Transfer'} status="info" showGlobalNavigation={false} showMachineNavigation={false}>
+  return <WS3Shell title="WS3 / Transfer" subtitle={vi ? 'Lịch sử sản xuất · Máy ép' : 'Production history · Transfer'} machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} status="info" showGlobalNavigation={false} showMachineNavigation={false}>
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
-      <MachineNavigation machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'H/T Transfer'} basePath="/machine/HT-01" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{vi ? 'TRANG CHỦ' : 'HOME'}</HMIButton>} />
+      <MachineNavigation machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} basePath="/machine/HT-01" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{vi ? 'TRANG CHỦ' : 'HOME'}</HMIButton>} />
       <main className="min-h-0 flex-1 p-2">
         <section className="mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden border-2 border-industrialDark bg-white">
           <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-xs font-bold uppercase tracking-wide text-white">

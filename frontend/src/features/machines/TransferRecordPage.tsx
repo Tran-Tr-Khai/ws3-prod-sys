@@ -126,9 +126,9 @@ export function TransferRecordPage() {
   };
 
   return (
-    <WS3Shell title="WS3 / H/T Transfer" subtitle={vi ? 'Nhập báo cáo hằng ngày · Máy ép' : 'Daily report entry · Heat transfer'} machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'H/T Transfer'} status="info" showGlobalNavigation={false} showMachineNavigation={false} showSupportWidget={!isOperator}>
+    <WS3Shell title="WS3 / Transfer" subtitle={vi ? 'Nhập báo cáo hằng ngày · Máy ép' : 'Daily report entry · Transfer'} machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} status="info" showGlobalNavigation={false} showMachineNavigation={false} showSupportWidget={!isOperator}>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
-        <MachineNavigation machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'H/T Transfer'} basePath="/machine/HT-01" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{vi ? 'TRANG CHỦ' : 'HOME'}</HMIButton>} />
+        <MachineNavigation machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} basePath="/machine/HT-01" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{vi ? 'TRANG CHỦ' : 'HOME'}</HMIButton>} />
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-2 lg:flex-row lg:overflow-hidden">
             <aside className="flex min-h-0 min-w-0 flex-col border-2 border-industrialDark bg-white lg:w-[320px] lg:shrink-0">
               <header className="flex min-h-10 items-center border-b-2 border-industrialDark bg-industrialDark px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white">{vi ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION INFORMATION'}</header>
