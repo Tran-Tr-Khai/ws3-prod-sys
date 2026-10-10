@@ -213,7 +213,7 @@ export function TransferRecordPage() {
               <section className="flex min-h-0 flex-1 flex-col bg-white">
                 <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-industrial px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-white">
                   <h2>{vi ? 'HÔM NAY' : 'TODAY'}</h2>
-                  <span className="text-right text-[9px] tracking-normal">{pageRecords.length} / {todayRecords.length} · {vi ? 'ĐƠN TRONG TRANG NÀY / TỔNG ĐƠN TRONG NGÀY' : 'ORDERS ON THIS PAGE / TOTAL TODAY'}</span>
+                  <span className="text-right text-[9px] tracking-normal">{pageRecords.length} / {todayRecords.length}</span>
                 </header>
                 <div className="flex min-h-0 flex-1 flex-col bg-white p-2">
                   <div className="min-h-0 flex-1 overflow-auto">
