@@ -109,7 +109,7 @@ body {
 /* Keep Scouring entry grids explicit so the HMI remains stable even when the
    utility CSS is cached. */
 .scouring-record-grid {
-  column-gap: 0.75rem;
+  column-gap: 0.5rem;
   row-gap: 0.25rem;
   width: 100%;
 }
@@ -144,7 +144,7 @@ body {
 }
 
 .scouring-record-input-shell {
-  height: 58px;
+  height: 46px;
   background: #fff;
   border-color: #8296a1;
 }
@@ -161,17 +161,6 @@ body {
 
 .scouring-record-group {
   background: #fff;
-}
-
-/* Keep the three parameter groups visually unified; spacing, not rules,
-   separates them inside the bordered Scouring Parameters block. */
-.scouring-record-group > div > div {
-  border-bottom: 0;
-  padding-bottom: 0.75rem;
-}
-
-.scouring-record-group > div > div:last-child {
-  padding-bottom: 1rem;
 }
 
 /* Keep the two-level Scouring history header's vertical dividers aligned. */
@@ -398,6 +387,13 @@ body {
     padding-right: 0.4rem;
   }
 
+  .scouring-record-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 0.5rem;
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
+
   .scouring-record-group .overflow-x-auto {
     overflow-x: visible;
   }
@@ -407,7 +403,7 @@ body {
   }
 
   .scouring-record-input {
-    font-size: 22px;
+    font-size: 18px;
   }
 
   .scouring-record-unit {
@@ -422,10 +418,6 @@ body {
     position: sticky;
     bottom: 0;
     z-index: 20;
-  }
-
-  .scouring-record-back-action {
-    display: none;
   }
 
   .scouring-record-action-buttons {

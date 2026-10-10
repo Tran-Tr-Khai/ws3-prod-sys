@@ -3,11 +3,11 @@ from io import BytesIO
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import delete, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -78,6 +78,24 @@ def update_scouring_record(
     db.commit()
     db.refresh(record)
     return record
+
+
+@router.delete("/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_scouring_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    _user=Depends(get_current_user),
+) -> Response:
+    record = _get_record_or_404(record_id, db)
+    recorded_at = record.recorded_at
+    if recorded_at.tzinfo is None:
+        recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+    if recorded_at.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date() != datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date():
+        raise HTTPException(status_code=422, detail="Chỉ được xóa bản ghi của ngày hiện tại.")
+    db.execute(delete(ScouringPhInspection).where(ScouringPhInspection.scouring_record_id == record.id))
+    db.delete(record)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("", response_model=list[ScouringRecordResponse])

@@ -407,6 +407,13 @@ export async function updateScouringRecord(
   return fromApiResponse(response);
 }
 
+export async function deleteScouringRecord(recordId: number, options: RequestOptions = {}): Promise<void> {
+  await request<void>(`${scouringRecordsPath}/${encodeURIComponent(recordId)}`, {
+    method: 'DELETE',
+    signal: options.signal,
+  });
+}
+
 export async function getScouringPhInspections(recordId?: number, options: RequestOptions = {}): Promise<ScouringPhInspection[]> {
   const url = recordId === undefined ? scouringInspectionsPath : `${scouringInspectionsPath}?scouring_record_id=${encodeURIComponent(recordId)}`;
   const response = await request<ScouringPhInspectionApiResponse[]>(url, { signal: options.signal });
