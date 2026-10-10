@@ -13,9 +13,9 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.scouring import ScouringRecord
 from app.models.scouring_inspection import ScouringPhInspection
-from app.api.routes.machine_orders import set_order_progress
 from app.schemas.scouring import ScouringPhInspectionCreate, ScouringPhInspectionResponse, ScouringRecordCreate, ScouringRecordResponse
-from app.security.auth import get_current_user
+from app.security.auth import get_current_user, role_codes
+from app.services.machine_order_progress import activate_machine_order, set_order_progress
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_order_code, resolve_ws3_sop_code
 
 router = APIRouter(prefix="/scouring/records", tags=["scouring"])
@@ -36,19 +36,23 @@ def _get_record_or_404(record_id: int, db: Session) -> ScouringRecord:
 def create_scouring_record(
     payload: ScouringRecordCreate,
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ) -> ScouringRecord:
     if is_pkp_order_code(payload.order_number):
         raise HTTPException(status_code=422, detail="Vui lòng nhập mã SOP, không nhập mã PKP.")
     if payload.order_number and payload.order_number.strip():
         try:
-            order_rows, _aliases = resolve_ws3_sop_code(db, payload.order_number)
+            order_rows, aliases = resolve_ws3_sop_code(db, payload.order_number)
         except AmbiguousWS3OrderCode as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         if not order_rows:
             raise HTTPException(status_code=422, detail="Không tìm thấy mã SOP trong dữ liệu MES.")
-    record = ScouringRecord(**payload.model_dump())
-    if payload.order_number and payload.order_progress:
-        set_order_progress(db, payload.machine_id, payload.order_number, payload.order_progress)
+    record_values = payload.model_dump()
+    if payload.machine_id == "SC-01" and payload.order_number and payload.order_number.strip():
+        progress = "IN_PROGRESS" if "OPERATOR" in role_codes(user) else payload.order_progress or "IN_PROGRESS"
+        record_values["order_progress"] = progress
+        activate_machine_order(db, payload.machine_id, payload.order_number, aliases, progress)
+    record = ScouringRecord(**record_values)
     db.add(record)
     db.commit()
     db.refresh(record)

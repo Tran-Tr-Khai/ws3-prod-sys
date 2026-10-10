@@ -18,10 +18,10 @@ from sqlalchemy.orm import Session
 from app.config.settings import get_settings
 from app.db.session import get_db
 from app.models.buffing import BuffingCheck, BuffingCheckImage
-from app.api.routes.machine_orders import set_order_progress
+from app.services.machine_order_progress import activate_machine_order
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code, resolve_ws3_sop_code
 from app.schemas.buffing import BuffingCheckCreate, BuffingCheckResponse, BuffingImageResponse
-from app.security.auth import get_current_user
+from app.security.auth import get_current_user, role_codes
 
 router = APIRouter(prefix="/buffing/checks", tags=["buffing"])
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -70,17 +70,20 @@ def check_response(check: BuffingCheck) -> BuffingCheckResponse:
 
 
 @router.post("", response_model=BuffingCheckResponse, status_code=201)
-def create_buffing_check(payload: BuffingCheckCreate, db: Session = Depends(get_db)) -> BuffingCheckResponse:
+def create_buffing_check(payload: BuffingCheckCreate, db: Session = Depends(get_db), user=Depends(get_current_user)) -> BuffingCheckResponse:
     normalized_order = payload.order_number.strip()
     try:
-        _order_rows, _aliases = resolve_ws3_sop_code(db, normalized_order)
+        _order_rows, aliases = resolve_ws3_sop_code(db, normalized_order)
     except AmbiguousWS3OrderCode as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not _order_rows:
         raise HTTPException(status_code=422, detail="Không tìm thấy mã đơn trong dữ liệu MES.")
     payload.order_number = normalized_order
-    check = BuffingCheck(**payload.model_dump())
-    set_order_progress(db, payload.machine_id, normalized_order, payload.order_progress)
+    progress = "IN_PROGRESS" if "OPERATOR" in role_codes(user) else payload.order_progress
+    check_values = payload.model_dump()
+    check_values["order_progress"] = progress
+    check = BuffingCheck(**check_values)
+    activate_machine_order(db, payload.machine_id, normalized_order, aliases, progress)
     db.add(check)
     db.commit()
     db.refresh(check)

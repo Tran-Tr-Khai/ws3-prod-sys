@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
+import { MachineOrderProgressField } from '../../components/hmi/MachineOrderProgressField';
 import { useAuth } from '../../auth/AuthContext';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { SupportChatWidget } from '../support/SupportChatWidget';
@@ -192,6 +193,7 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
     setSaving(true); setError(''); setSaved(false);
     try {
       const result = await saveTenteringOrder(machineId, activeSop, inputFromDraft(header, rolls, orderProgress));
+      setOrderProgress(result.order_progress);
       const savedRolls = rollsFromOrder(result);
       setHeader(headerFromOrder(result));
       setRolls((current) => current.map((row) => {
@@ -218,7 +220,7 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
         <aside className="flex min-h-0 min-w-0 flex-col border-2 border-industrialDark bg-white lg:w-[320px] lg:shrink-0">
           <header className="flex min-h-10 items-center border-b-2 border-industrialDark bg-industrialDark px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white">{tx('THÔNG TIN VẬN HÀNH', 'OPERATION INFORMATION')}</header>
           <div className="grid content-start">
-            <OperationInfoFields beforeFields={<TenteringMachineSelect machineId={machineId} visibleLabel />} orderNumber={sopInput} onOrderNumberChange={(value) => { setSopInput(value.toUpperCase()); setActiveSop(''); setKnownOrder(false); setHeader({ ...emptyHeader }); setRolls(emptyRolls()); setNewOrder(false); setSaved(false); setLoading(false); setOrderProgress('IN_PROGRESS'); setProgressError(''); setError(''); }} operatorName={header.operatorName} onOperatorNameChange={(operatorName) => setHeader((current) => ({ ...current, operatorName }))} employeeId={header.operatorIdentifier} onEmployeeIdChange={(operatorIdentifier) => setHeader((current) => ({ ...current, operatorIdentifier }))} shift={header.shift} onShiftChange={(shift) => setHeader((current) => ({ ...current, shift }))} orderStatus={<label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{vi ? 'Tiến độ đơn' : 'Order progress'}<select className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark disabled:bg-hmiSection disabled:text-slate-400" value={orderProgress} disabled={!knownOrder || loading || progressSaving} onChange={(event) => void changeOrderProgress(event.target.value as 'IN_PROGRESS' | 'COMPLETED')}><option value="IN_PROGRESS">{vi ? 'ĐANG XỬ LÝ' : 'IN PROGRESS'}</option><option value="COMPLETED">{vi ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED'}</option></select>{loading && <span className="text-[9px] normal-case text-info">{vi ? 'Đang tra đơn…' : 'Looking up order…'}</span>}{progressSaving && <span className="text-[9px] normal-case text-info">{vi ? 'Đang lưu…' : 'Saving…'}</span>}{progressError && <span role="alert" className="text-[9px] normal-case text-alarm">{progressError}</span>}</label>} />
+            <OperationInfoFields beforeFields={<TenteringMachineSelect machineId={machineId} visibleLabel />} orderNumber={sopInput} onOrderNumberChange={(value) => { setSopInput(value.toUpperCase()); setActiveSop(''); setKnownOrder(false); setHeader({ ...emptyHeader }); setRolls(emptyRolls()); setNewOrder(false); setSaved(false); setLoading(false); setOrderProgress('IN_PROGRESS'); setProgressError(''); setError(''); }} operatorName={header.operatorName} onOperatorNameChange={(operatorName) => setHeader((current) => ({ ...current, operatorName }))} employeeId={header.operatorIdentifier} onEmployeeIdChange={(operatorIdentifier) => setHeader((current) => ({ ...current, operatorIdentifier }))} shift={header.shift} onShiftChange={(shift) => setHeader((current) => ({ ...current, shift }))} orderStatus={<MachineOrderProgressField value={orderProgress} language={language} automatic={isOperator} disabled={!knownOrder || loading} saving={progressSaving} error={progressError} onChange={(progress) => void changeOrderProgress(progress)} />} />
             {error && <p role="alert" className="border border-alarm bg-hmiAlarm p-2 text-[10px] font-bold text-alarm">{error}</p>}
             {saved && <p role="status" className="border border-success bg-hmiNormal p-2 text-[10px] font-bold text-success">{tx('ĐÃ LƯU PHIẾU TENTERING', 'TENTERING SHEET SAVED')}</p>}
           </div>

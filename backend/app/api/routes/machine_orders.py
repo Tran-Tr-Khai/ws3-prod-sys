@@ -13,6 +13,7 @@ from app.models.tentering import TenteringOrder
 from app.models.transfer import TransferRecord
 from app.models.user import User
 from app.security.auth import get_current_user, role_codes
+from app.services.machine_order_progress import set_order_progress
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_order_code, resolve_ws3_sop_code
 
 
@@ -34,22 +35,6 @@ def _authorize_machine(user: User, machine_id: str) -> None:
         raise HTTPException(status_code=400, detail="Unsupported machine")
     if not role_codes(user).intersection(MANAGER_ROLES) and machine_id not in (user.machine_ids or []):
         raise HTTPException(status_code=403, detail=f"{machine_id} access is required")
-
-
-def set_order_progress(db: Session, machine_id: str, order_number: str, progress: str) -> MachineOrderState:
-    normalized = order_number.strip().upper()
-    state = db.scalar(
-        select(MachineOrderState).where(
-            MachineOrderState.machine_id == machine_id,
-            MachineOrderState.order_number == normalized,
-        )
-    )
-    if state is None:
-        state = MachineOrderState(machine_id=machine_id, order_number=normalized, order_progress=progress)
-        db.add(state)
-    else:
-        state.order_progress = progress
-    return state
 
 
 def state_response(state: MachineOrderState) -> dict[str, str | int]:

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { normalizeShift } from '../../components/hmi/ShiftSelect';
 import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
+import { MachineOrderProgressField } from '../../components/hmi/MachineOrderProgressField';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { SupportChatWidget } from '../support/SupportChatWidget';
 import { createScouringPhInspection, createScouringRecord, updateScouringRecord, deleteScouringRecord, getScouringRecords, getScouringRecordsForOrder, getScouringPhInspections, getMachineOrderProgress, saveMachineOrderProgress, ScouringApiError, type ScouringPhInspection, type ScouringRecord } from './scouringApi';
@@ -130,6 +131,13 @@ function localizedShift(shift: string | null | undefined, language: string): str
   if (normalized === 'HÀNH CHÍNH') return language === 'vi' ? normalized : 'ADMINISTRATIVE';
   if (normalized.startsWith('CA ')) return language === 'vi' ? normalized : normalized.replace('CA ', 'SHIFT ');
   return shift || '—';
+}
+
+function factoryDateKey(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
 function RecordField({
@@ -325,7 +333,7 @@ export function ScouringRecordPage() {
 
   const normalizedOrderNumber = values.orderNumber.trim().toLocaleLowerCase();
   const selectedOrderRecord = recordEntryMode === 'edit'
-    ? savedOrderRecords.find((record) => record.id === editingRecordId) ?? null
+    ? savedOrderRecords.find((record) => record.id === editingRecordId && factoryDateKey(record.recordedAt) === factoryDateKey(new Date()) && normalizeShift(record.shift) === normalizeShift(values.shift)) ?? null
     : recordEntryMode === 'new' && saveSuccess
       ? savedOrderRecords[0] ?? null
       : null;
@@ -337,7 +345,10 @@ export function ScouringRecordPage() {
     setOrderRecordsLoading(true);
     setOrderRecordsError(false);
     const timer = window.setTimeout(() => {
-      Promise.all([getScouringRecordsForOrder(orderNumber), getMachineOrderProgress('SC-01', orderNumber)])
+      Promise.all([
+        getScouringRecordsForOrder(orderNumber),
+        getMachineOrderProgress('SC-01', orderNumber).catch(() => null),
+      ])
         .then(([records, savedProgress]) => {
           if (!active) return;
           setSavedOrderRecords(records);
@@ -346,9 +357,6 @@ export function ScouringRecordPage() {
           const latest = records[0];
           setValues((current) => current.orderNumber.trim().toLocaleLowerCase() !== orderNumber.toLocaleLowerCase() ? current : ({
             ...current,
-            operatorName: latest?.operatorName || current.operatorName,
-            operatorIdentifier: latest?.operatorIdentifier || current.operatorIdentifier,
-            shift: normalizeShift(latest?.shift) || current.shift,
             orderProgress: savedProgress?.orderProgress ?? latest?.orderProgress ?? current.orderProgress,
           }));
         })
@@ -383,7 +391,7 @@ export function ScouringRecordPage() {
     });
   };
 
-  const selectRecordForEditing = (record: ScouringRecord) => {
+  const selectRecordForEditing = useCallback((record: ScouringRecord) => {
     setRecordEntryMode('edit');
     setEditingRecordId(record.id);
     setSaveAttempted(false);
@@ -410,7 +418,55 @@ export function ScouringRecordPage() {
       outputFabricMeters: record.outputFabricMeters == null ? '' : String(record.outputFabricMeters),
       lossMeters: record.lossMeters == null ? '' : String(record.lossMeters),
     }));
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!normalizedOrderNumber || orderRecordsLoading || orderRecordsError) return;
+    if (savedOrderRecords.length === 0) {
+      setEditingRecordId(null);
+      setRecordEntryMode('new');
+      return;
+    }
+    const currentShift = normalizeShift(values.shift);
+    if (!currentShift) {
+      setEditingRecordId(null);
+      setRecordEntryMode(null);
+      return;
+    }
+    const todayKey = factoryDateKey(new Date());
+    const matchingRecord = savedOrderRecords.find((record) => factoryDateKey(record.recordedAt) === todayKey && normalizeShift(record.shift) === currentShift);
+    if (matchingRecord) {
+      if (saveSuccess && recordEntryMode === 'new' && savedOrderRecords[0]?.id === matchingRecord.id) return;
+      if (editingRecordId !== matchingRecord.id) selectRecordForEditing(matchingRecord);
+      else setRecordEntryMode('edit');
+      return;
+    }
+    if (editingRecordId !== null) {
+      setEditingRecordId(null);
+      setRecordEntryMode('new');
+      setSaveAttempted(false);
+      setSaveError(null);
+      setSaveSuccess(false);
+      setShowSaveSuccess(false);
+      setPhValues({});
+      setPhNote('');
+      setPhError(null);
+      setValues((current) => ({
+        ...initialValues,
+        orderNumber: current.orderNumber,
+        item: current.item,
+        lotYarn: current.lotYarn,
+        lotNumber: current.lotNumber,
+        operatorName: current.operatorName,
+        operatorIdentifier: current.operatorIdentifier,
+        shift: current.shift,
+        orderProgress: current.orderProgress,
+        inputFabricMeters: current.inputFabricMeters,
+      }));
+    } else if (recordEntryMode !== 'new') {
+      setRecordEntryMode('new');
+    }
+  }, [editingRecordId, normalizedOrderNumber, orderRecordsError, orderRecordsLoading, recordEntryMode, saveSuccess, savedOrderRecords, selectRecordForEditing, values.shift]);
 
   const cancelEditing = () => {
     setEditingRecordId(null);
@@ -455,7 +511,11 @@ export function ScouringRecordPage() {
     setShowProcessWarning(processFields.some((field) => fieldMessage(values[field.key], field) === 'warning'));
     if (saving || saveSuccess) return;
     if (orderRecordsLoading || orderRecordsError || (savedOrderRecords.length > 0 && recordEntryMode === null)) {
-      setSaveError(language === 'vi' ? 'Hãy chọn bản ghi cần sửa hoặc bắt đầu bản ghi mới cho ca/lượt này.' : 'Choose a record to edit or start a new record for this shift/run.');
+      setSaveError(language === 'vi' ? 'Chọn ca làm để hệ thống xác định bản ghi phù hợp.' : 'Select a shift so the system can determine the matching record.');
+      return;
+    }
+    if (recordEntryMode === 'edit' && !selectedOrderRecord) {
+      setSaveError(language === 'vi' ? 'Ca làm đã thay đổi. Hệ thống đang xác định lại bản ghi.' : 'The shift changed. The system is resolving the matching record.');
       return;
     }
     if (!values.orderNumber.trim() || !production) {
@@ -505,6 +565,7 @@ export function ScouringRecordPage() {
       setSavedOrderRecords((records) => editingRecordId === null
         ? [saved, ...records]
         : records.map((record) => record.id === saved.id ? saved : record).sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt) || b.id - a.id));
+      if (editingRecordId === null) setValues((current) => ({ ...current, orderProgress: saved.orderProgress ?? 'IN_PROGRESS' }));
       setTodayRefreshKey((key) => key + 1);
       setSaveSuccess(true);
       setShowSaveSuccess(true);
@@ -531,6 +592,8 @@ export function ScouringRecordPage() {
     finally { setPhSaving(false); }
   };
 
+  const orderStatusField = <MachineOrderProgressField value={values.orderProgress} language={language} automatic={isScouringOperator} disabled={!production} saving={progressSaving} error={progressError} onChange={(progress) => void changeOrderProgress(progress)} />;
+
   return (
     <WS3Shell title={language === 'vi' ? 'WS3 / Ghi nhận Scouring' : 'WS3 / Scouring Record'} subtitle={language === 'vi' ? 'Nhập dữ liệu vận hành · Scouring' : 'Operator data entry · Scouring'} machineId="SC-01" machineLabel="Scouring" status="info" time={new Date().toLocaleTimeString(language === 'vi' ? 'vi-VN' : 'en-GB')} showSupportWidget={!isScouringOperator}>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
@@ -541,18 +604,20 @@ export function ScouringRecordPage() {
               <header className="flex h-12 min-h-12 items-center border-b-2 border-industrialDark bg-white px-3 text-[11px] font-bold uppercase tracking-wider text-industrialDark">
                 <h2 className="whitespace-nowrap">{language === 'vi' ? 'Thông tin vận hành' : 'Operation details'}</h2>
               </header>
-              <OperationInfoFields orderNumber={values.orderNumber} orderNumberDisabled={editingRecordId !== null} onOrderNumberChange={(orderNumber) => { setProduction(null); setSavedOrderRecords([]); setOrderRecordsLoading(Boolean(orderNumber.trim())); setOrderRecordsError(false); setRecordEntryMode(null); setEditingRecordId(null); setSaveAttempted(false); setSaveError(null); setSaveSuccess(false); setShowSaveSuccess(false); setShowPhSaved(false); setPhValues({}); setPhNote(''); setPhError(null); setProgressError(null); setValues((current) => ({ ...current, orderNumber, operatorName: '', operatorIdentifier: '', shift: '', orderProgress: 'IN_PROGRESS', inputFabricMeters: '', outputFabricMeters: '', lossMeters: '' })); }} operatorName={values.operatorName} onOperatorNameChange={(operatorName) => setValues((current) => ({ ...current, operatorName }))} employeeId={values.operatorIdentifier} onEmployeeIdChange={(operatorIdentifier) => setValues((current) => ({ ...current, operatorIdentifier }))} shift={values.shift} onShiftChange={(shift) => setValues((current) => ({ ...current, shift }))} orderStatus={<label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}<select className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark disabled:bg-hmiSection disabled:text-slate-400" value={values.orderProgress} disabled={!production || progressSaving} onChange={(event) => void changeOrderProgress(event.target.value as 'IN_PROGRESS' | 'COMPLETED')}><option value="IN_PROGRESS">{language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS'}</option><option value="COMPLETED">{language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED'}</option></select>{progressSaving && <span className="text-[9px] normal-case text-info">{language === 'vi' ? 'Đang lưu…' : 'Saving…'}</span>}{progressError && <span role="alert" className="text-[9px] normal-case text-alarm">{progressError}</span>}</label>} />
+              <OperationInfoFields orderNumber={values.orderNumber} orderNumberDisabled={editingRecordId !== null} onOrderNumberChange={(orderNumber) => { setProduction(null); setSavedOrderRecords([]); setOrderRecordsLoading(Boolean(orderNumber.trim())); setOrderRecordsError(false); setRecordEntryMode(null); setEditingRecordId(null); setSaveAttempted(false); setSaveError(null); setSaveSuccess(false); setShowSaveSuccess(false); setShowPhSaved(false); setPhValues({}); setPhNote(''); setPhError(null); setProgressError(null); setValues((current) => ({ ...current, orderNumber, operatorName: '', operatorIdentifier: '', shift: '', orderProgress: 'IN_PROGRESS', inputFabricMeters: '', outputFabricMeters: '', lossMeters: '' })); }} operatorName={values.operatorName} onOperatorNameChange={(operatorName) => setValues((current) => ({ ...current, operatorName }))} employeeId={values.operatorIdentifier} onEmployeeIdChange={(operatorIdentifier) => setValues((current) => ({ ...current, operatorIdentifier }))} shift={values.shift} onShiftChange={(shift) => setValues((current) => ({ ...current, shift }))} orderStatus={orderStatusField} />
             </aside>
 
             <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-2 border-industrialDark bg-white">
               <nav className="flex h-12 min-h-12 shrink-0 border-b-2 border-line bg-white" aria-label={language === 'vi' ? 'Loại ghi nhận Scouring' : 'Scouring entry type'}>{(['operation', 'ph'] as const).map((mode) => <button key={mode} type="button" aria-pressed={entryMode === mode} onClick={() => setEntryMode(mode)} className={`h-full min-h-10 flex-1 border-b-2 px-3 text-[10px] font-bold uppercase tracking-wide ${entryMode === mode ? 'border-industrialDark bg-industrialDark text-white' : 'border-transparent text-slate-500'}`}>{mode === 'operation' ? (language === 'vi' ? 'Thông số vận hành' : 'Operation parameters') : (language === 'vi' ? 'Checklist pH' : 'pH checklist')}</button>)}</nav>
               {normalizedOrderNumber && orderRecordsLoading && <p role="status" className="shrink-0 border-b border-line bg-hmiSection px-3 py-2 text-[10px] font-semibold text-slate-600">{language === 'vi' ? 'Đang kiểm tra các bản ghi đã lưu của SOP này…' : 'Checking saved records for this SOP…'}</p>}
               {normalizedOrderNumber && orderRecordsError && <div role="alert" className="flex shrink-0 items-center justify-between gap-2 border-b border-alarm bg-hmiAlarm px-3 py-2 text-[10px] font-semibold text-alarm"><span>{language === 'vi' ? 'Không kiểm tra được bản ghi SOP. Hãy thử lại trước khi lưu để tránh tạo trùng ngoài ý muốn.' : 'Unable to check existing SOP records. Retry before saving to avoid an unintended duplicate.'}</span><button type="button" className="shrink-0 border border-alarm bg-white px-2 py-1 font-bold uppercase" onClick={() => setOrderLookupRetry((value) => value + 1)}>{language === 'vi' ? 'Thử lại' : 'Retry'}</button></div>}
-              {!orderRecordsLoading && !orderRecordsError && savedOrderRecords.length > 0 && <section className="shrink-0 border-b border-line bg-hmiSection p-2">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] font-bold uppercase text-industrialDark">{language === 'vi' ? `SOP này đã có ${savedOrderRecords.length} bản ghi` : `${savedOrderRecords.length} saved record(s) for this SOP`}</p><p className="text-[9px] text-slate-600">{language === 'vi' ? 'Sửa sẽ giữ nguyên checklist pH của bản ghi đã chọn.' : 'Editing keeps the selected record’s pH checklists.'}</p></div>
-                <div className="flex max-h-24 flex-wrap gap-1 overflow-auto">{savedOrderRecords.map((record) => <button key={record.id} type="button" onClick={() => selectRecordForEditing(record)} className={`flex min-h-8 items-center gap-2 border px-2 py-1 text-left text-[9px] ${editingRecordId === record.id ? 'border-industrialDark bg-white font-bold text-industrialDark' : 'border-line bg-white text-slate-600 hover:bg-hmiHover'}`}><span className="font-mono">{new Intl.DateTimeFormat(language === 'vi' ? 'vi-VN' : 'en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(record.recordedAt))}</span><span>{localizedShift(record.shift, language)}</span><span>{record.operatorName || record.operatorIdentifier || '—'}</span><span className="font-bold uppercase text-industrial">{editingRecordId === record.id ? (language === 'vi' ? 'Đang sửa' : 'Editing') : (language === 'vi' ? 'Sửa' : 'Edit')}</span></button>)}</div>
-                <div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" onClick={() => { setRecordEntryMode('new'); setEditingRecordId(null); setSaveAttempted(false); setSaveError(null); setSaveSuccess(false); setShowSaveSuccess(false); setShowPhSaved(false); setPhValues({}); setPhNote(''); setPhError(null); const latest = savedOrderRecords[0]; setValues((current) => ({ ...initialValues, orderNumber: current.orderNumber, operatorName: latest?.operatorName ?? current.operatorName, operatorIdentifier: latest?.operatorIdentifier ?? current.operatorIdentifier, shift: normalizeShift(latest?.shift) || latest?.shift || current.shift, orderProgress: latest?.orderProgress ?? current.orderProgress })); }} className={`min-h-8 border px-2 text-[9px] font-bold uppercase ${recordEntryMode === 'new' ? 'border-industrialDark bg-industrialDark text-white' : 'border-line bg-white text-industrialDark hover:bg-hmiHover'}`}>{language === 'vi' ? 'Tạo bản ghi cho ca / lượt mới' : 'Start a new shift / run record'}</button>{recordEntryMode === 'edit' && <span className="text-[9px] font-bold text-info">{language === 'vi' ? 'ĐANG CHỈNH SỬA BẢN GHI ĐÃ CHỌN' : 'EDITING THE SELECTED RECORD'}</span>}</div>
-              </section>}
+              {!orderRecordsLoading && !orderRecordsError && savedOrderRecords.length > 0 && <p role="status" className={`shrink-0 border-b px-3 py-2 text-[10px] font-semibold ${recordEntryMode === 'new' ? 'border-info bg-hmiSection text-industrialDark' : recordEntryMode === 'edit' ? 'border-success bg-hmiNormal text-success' : 'border-line bg-hmiSection text-slate-600'}`}>
+                {recordEntryMode === 'edit' && selectedOrderRecord
+                  ? (language === 'vi' ? `SOP này đã có bản ghi ca ${localizedShift(selectedOrderRecord.shift, language)} hôm nay (${new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(selectedOrderRecord.recordedAt))}). Hệ thống đã nạp để cập nhật; checklist pH được giữ nguyên.` : `A record for this SOP and shift already exists today (${new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(selectedOrderRecord.recordedAt))}). Loaded for update; pH checklists will be kept.`)
+                  : recordEntryMode === 'new' && values.shift
+                    ? (language === 'vi' ? `SOP này chưa có bản ghi ca ${localizedShift(values.shift, language)} hôm nay. Hệ thống sẽ tạo bản ghi ca/lượt mới.` : `This SOP has no ${localizedShift(values.shift, language)} record today. The system will create a new shift/run record.`)
+                    : (language === 'vi' ? `SOP này đã có ${savedOrderRecords.length} bản ghi. Chọn ca làm để hệ thống tự cập nhật bản ghi cùng ca hoặc tạo bản ghi ca mới.` : `${savedOrderRecords.length} record(s) found for this SOP. Select the shift and the system will update that shift’s record or start a new one.`)}
+              </p>}
                 {(productionLoading || productionError || (normalizedOrderNumber && !productionLoading && !productionError && !production)) && <div className="shrink-0 border-b border-line bg-white px-3 py-2 text-[10px]"><p role="status" className="font-bold text-warning">{productionLoading ? (language === 'vi' ? 'Đang đối chiếu dữ liệu MES…' : 'Looking up MES data…') : productionError ? (language === 'vi' ? 'Không tải được dữ liệu MES.' : 'MES data could not be loaded.') : (language === 'vi' ? 'Không tìm thấy mã đơn trong dữ liệu MES.' : 'Order not found in MES data.')}</p></div>}
               <div className="min-h-0 flex-[1.15] overflow-auto">
               {entryMode === 'ph' ? <section className="min-w-0 p-3"><header className="mb-3 flex justify-end border-b border-line pb-2"><span className="font-mono text-[9px] text-slate-500">8 {t('tanks')}</span></header>{selectedOrderRecord ? <p className="mb-3 text-[10px] text-slate-600">{t('operationRecord')}: <strong className="font-mono text-industrial">{selectedOrderRecord.orderNumber || '—'}</strong> · {localizedShift(selectedOrderRecord.shift, language)} · {selectedOrderRecord.operatorName || '—'} · {new Intl.DateTimeFormat(language === 'vi' ? 'vi-VN' : 'en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(selectedOrderRecord.recordedAt))}</p> : <p className="mb-3 border border-warning bg-hmiWarning p-2 text-[10px] font-bold text-warning">{savedOrderRecords.length > 0 && recordEntryMode === null ? (language === 'vi' ? 'Chọn bản ghi SOP đã lưu hoặc bắt đầu ca/lượt mới trước khi ghi checklist pH.' : 'Choose an existing SOP record or start a new shift/run before entering the pH checklist.') : (language === 'vi' ? 'Lưu thông số vận hành của ca/lượt này trước khi ghi checklist pH.' : 'Save operation parameters for this shift/run before entering the pH checklist.')}</p>}<div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">{Array.from({ length: 8 }, (_, tank) => <label key={tank} className="grid min-w-0 gap-1 p-2"><span className="text-[10px] font-bold uppercase text-industrial">{t('tank')} {tank}</span><span className="flex h-12 min-w-0 border-2 border-line"><input type="number" inputMode="decimal" step="any" value={phValues[tank] ?? ''} onChange={(event) => setPhValues((current) => ({ ...current, [tank]: event.target.value }))} className="min-w-0 flex-1 text-center font-mono text-lg font-bold text-industrial outline-none" aria-label={`${t('tank')} ${tank} pH`} /><span className="flex w-10 shrink-0 items-center justify-center border-l-2 border-line bg-surfaceMuted font-mono text-[10px] font-bold">pH</span></span></label>)}</div><div className="mt-3 min-w-0"><label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase text-slate-500">{t('note')}<input value={phNote} onChange={(event) => setPhNote(event.target.value)} className="min-h-9 min-w-0 border-2 border-line px-2 text-xs font-semibold normal-case" /></label></div>{phError && <p role="alert" className="mt-3 border border-alarm bg-hmiAlarm p-2 text-[10px] font-bold text-alarm">{phError}</p>}{showPhSaved && <p role="status" className="mt-3 border border-success bg-hmiNormal p-2 text-[10px] font-bold text-success">{language === 'vi' ? 'ĐÃ LƯU CHECKLIST pH' : 'pH CHECKLIST SAVED'}</p>}</section> : <>
@@ -582,10 +647,10 @@ export function ScouringRecordPage() {
               </>}
               </div>
               <div className="flex shrink-0 justify-end border-t border-line bg-white px-3 py-2">
-                {entryMode === 'operation' ? <HMIButton size="compact" variant="primary" disabled={saving || saveSuccess || productionLoading || orderRecordsLoading || orderRecordsError || recordEntryMode === null || !production || !values.orderNumber.trim()} onClick={saveRecord}>{saving ? t('saving') : editingRecordId !== null ? (language === 'vi' ? 'CẬP NHẬT BẢN GHI' : 'UPDATE RECORD') : t('saveRecord')}</HMIButton> : <HMIButton size="compact" variant="primary" disabled={phSaving || !selectedOrderRecord} onClick={() => void savePhInspection()}>{phSaving ? t('saving') : t('saveCheck')}</HMIButton>}
+                {entryMode === 'operation' ? <HMIButton size="compact" variant="primary" disabled={saving || saveSuccess || productionLoading || orderRecordsLoading || orderRecordsError || recordEntryMode === null || (recordEntryMode === 'edit' && !selectedOrderRecord) || !production || !values.orderNumber.trim()} onClick={saveRecord}>{saving ? t('saving') : recordEntryMode === 'edit' ? (language === 'vi' ? 'CẬP NHẬT BẢN GHI' : 'UPDATE RECORD') : t('saveRecord')}</HMIButton> : <HMIButton size="compact" variant="primary" disabled={phSaving || !selectedOrderRecord} onClick={() => void savePhInspection()}>{phSaving ? t('saving') : t('saveCheck')}</HMIButton>}
               </div>
               <section className="flex min-h-[190px] flex-[0.85] flex-col border-t border-line bg-white">
-                <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-industrial px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-white"><span>{language === 'vi' ? 'HÔM NAY' : 'TODAY'}</span><div className="flex items-center gap-3">{editingRecordId !== null && <button type="button" className="text-[9px] font-bold uppercase text-white underline" onClick={cancelEditing}>{language === 'vi' ? 'Bỏ sửa' : 'Cancel edit'}</button>}</div></header>
+                <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-industrial px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-white"><span>{language === 'vi' ? 'HÔM NAY' : 'TODAY'}</span></header>
                 <div className="min-h-0 flex-1 overflow-auto bg-white p-2">
                   <table className="w-full min-w-[1240px] border-collapse text-left text-[10px]"><thead className="sticky top-0 z-10 border-b border-line bg-white text-[9px] uppercase tracking-wider text-industrialDark"><tr><th className="px-3 py-2">{t('time')}</th><th className="px-3 py-2">SOP</th><th className="px-3 py-2">{language === 'vi' ? 'Người vận hành' : 'Operator'}</th><th className="px-3 py-2">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</th><th className="px-3 py-2">{language === 'vi' ? 'Ca' : 'Shift'}</th><th className="px-3 py-2">NaOH</th><th className="px-3 py-2">{t('speed')}</th><th className="px-3 py-2">{t('temperature')}</th><th className="px-3 py-2">{language === 'vi' ? 'Đầu ra (m)' : 'Output (m)'}</th><th className="px-3 py-2">pH</th><th className="px-2 py-2 text-center"></th></tr></thead><tbody>
                     {todayLoading ? <tr><td colSpan={11} className="px-3 py-6 text-center text-slate-500">{language === 'vi' ? 'Đang tải bản ghi…' : 'Loading records…'}</td></tr> : todayRecords.length === 0 ? <tr><td colSpan={11} className="px-3 py-6 text-center text-slate-500">{language === 'vi' ? 'Chưa có bản ghi trong ngày hôm nay.' : 'No records today.'}</td></tr> : todayRecords.map((record) => {

@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { MachineNavigation } from '../../components/hmi/MachineNavigation';
 import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
+import { MachineOrderProgressField } from '../../components/hmi/MachineOrderProgressField';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { createTransferRecord, deleteTransferRecord, getTransferOrderSource, listTransferRecords, type TransferRecord } from './transferApi';
@@ -130,12 +131,13 @@ export function TransferRecordPage() {
     setError(null);
     setMessage(null);
     try {
-      await createTransferRecord({
+      const saved = await createTransferRecord({
         machine_id: 'HT-01', production_date: productionDate, order_number: orderNumber.trim().toUpperCase(),
         operator_name: operatorName.trim(), operator_identifier: employeeId.trim(), shift,
         order_progress: orderProgress, item: entry.item.trim(), buyer: entry.buyer.trim(), design: entry.design.trim(),
         temperature: numericValue(entry.temperature), speed: numericValue(entry.speed), quantity_meters: numericValue(entry.quantityMeters),
       });
+      setOrderProgress(saved.order_progress);
       setTodayPage(1);
       setEntry((current) => ({ ...current, temperature: '', speed: '', quantityMeters: '' }));
       await loadTodayRecords();
@@ -177,17 +179,7 @@ export function TransferRecordPage() {
                 onEmployeeIdChange={setEmployeeId}
                 shift={shift}
                 onShiftChange={setShift}
-                orderStatus={(
-                  <label className={labelClass}>{vi ? 'Tiến độ đơn' : 'Order progress'}
-                    <select className={`${fieldClass} disabled:bg-hmiSection disabled:text-slate-400`} value={orderProgress} disabled={!knownOrder || sopLoading || progressSaving} onChange={(event) => void changeOrderProgress(event.target.value as 'IN_PROGRESS' | 'COMPLETED')}>
-                      <option value="IN_PROGRESS">{vi ? 'ĐANG XỬ LÝ' : 'IN PROGRESS'}</option>
-                      <option value="COMPLETED">{vi ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED'}</option>
-                    </select>
-                    {sopLoading && <span className="text-[9px] normal-case text-info">{vi ? 'Đang tra đơn…' : 'Looking up order…'}</span>}
-                    {progressSaving && <span className="text-[9px] normal-case text-info">{vi ? 'Đang lưu…' : 'Saving…'}</span>}
-                    {progressError && <span role="alert" className="text-[9px] normal-case text-alarm">{progressError}</span>}
-                  </label>
-                )}
+                orderStatus={<MachineOrderProgressField value={orderProgress} language={language} automatic={isOperator} disabled={!knownOrder || sopLoading} saving={progressSaving} error={progressError} onChange={(progress) => void changeOrderProgress(progress)} />}
               />
               </div>
             </aside>

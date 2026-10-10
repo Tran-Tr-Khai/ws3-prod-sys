@@ -6,16 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
-from sqlalchemy import desc, func, or_, select, update
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.routes.machine_orders import set_order_progress
 from app.db.session import get_db
 from app.models.transfer import TransferRecord
 from app.models.user import User
 from app.models.ws3_production import WS3WorkerRecord
 from app.schemas.transfer import TransferRecordCreate, TransferRecordResponse
 from app.security.auth import get_current_user, role_codes
+from app.services.machine_order_progress import activate_machine_order
 from app.services.snapshot_report import raw_value
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_sop_code
 router = APIRouter(prefix="/transfer/records", tags=["H/T Transfer"])
@@ -88,7 +88,7 @@ def create_transfer_record(
     if is_pkp_order_code(sop_no):
         raise HTTPException(status_code=422, detail="Vui lòng nhập mã SOP, không nhập mã PKP.")
     try:
-        order_rows, _aliases = resolve_ws3_sop_code(db, sop_no)
+        order_rows, aliases = resolve_ws3_sop_code(db, sop_no)
     except AmbiguousWS3OrderCode as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not order_rows:
@@ -96,13 +96,10 @@ def create_transfer_record(
 
     values = payload.model_dump()
     values["order_number"] = sop_no
+    progress = "IN_PROGRESS" if "OPERATOR" in role_codes(user) else payload.order_progress
+    values["order_progress"] = progress
     record = TransferRecord(**values)
-    set_order_progress(db, MACHINE_ID, sop_no, payload.order_progress)
-    db.execute(
-        update(TransferRecord)
-        .where(TransferRecord.machine_id == MACHINE_ID, TransferRecord.order_number == sop_no)
-        .values(order_progress=payload.order_progress)
-    )
+    activate_machine_order(db, MACHINE_ID, sop_no, aliases, progress)
     db.add(record)
     db.commit()
     db.refresh(record)

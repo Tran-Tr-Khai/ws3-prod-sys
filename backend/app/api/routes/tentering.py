@@ -16,6 +16,7 @@ from app.models.user import User
 from app.models.ws3_production import WS3MachineWS2Record, WS3ProductionOrder, WS3WorkerRecord
 from app.schemas.tentering import TenteringOrderInput, TenteringOrderResponse
 from app.security.auth import get_current_user, role_codes
+from app.services.machine_order_progress import activate_machine_order
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_sop_code
 from app.services.snapshot_report import build_report
 
@@ -334,7 +335,10 @@ def save_tentering_order(
             db.add(order)
             db.flush()
 
-        for field, value in payload.model_dump(exclude={"entries"}).items():
+        progress = "IN_PROGRESS" if "OPERATOR" in role_codes(user) else payload.order_progress
+        order_values = payload.model_dump(exclude={"entries"})
+        order_values["order_progress"] = progress
+        for field, value in order_values.items():
             setattr(order, field, value)
 
         for entry_data in payload.entries:
@@ -360,6 +364,8 @@ def save_tentering_order(
                 entry.recorded_by_id = user.id
                 entry.recorded_by_name = user.full_name or user.username
 
+        activate_machine_order(db, normalized_machine, normalized_sop, progress=progress)
+        order.order_progress = progress
         db.commit()
         return db.scalar(_order_query().where(TenteringOrder.id == order.id))
     except Exception:

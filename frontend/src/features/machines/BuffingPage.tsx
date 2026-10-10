@@ -4,6 +4,7 @@ import { HMIButton } from '../../components/hmi/HMIButton';
 import { MachineNavigation } from '../../components/hmi/MachineNavigation';
 import { normalizeShift } from '../../components/hmi/ShiftSelect';
 import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
+import { MachineOrderProgressField } from '../../components/hmi/MachineOrderProgressField';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useAuth } from '../../auth/AuthContext';
 import { createBuffingCheck, deleteBuffingCheck, getBuffingChecks, getBuffingChecksForOrder, getMachineOrderProgress, saveMachineOrderProgress, uploadBuffingImages, type BuffingCheck, type BuffingImage } from './scouringApi';
@@ -22,6 +23,7 @@ export function BuffingPage() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const canViewHistory = user?.role !== 'OPERATOR';
+  const isOperator = user?.role === 'OPERATOR';
   const [operator, setOperator] = useState('');
   const [operatorIdentifier, setOperatorIdentifier] = useState('');
   const [shift, setShift] = useState('');
@@ -257,6 +259,7 @@ export function BuffingPage() {
       try { photo = await captureCameraPhoto(); }
       catch { setError(t('cameraCaptureFailed')); }
       const saved = await createBuffingCheck({ checkDate: factoryToday(), orderNumber, orderProgress, operatorName: operator.trim(), operatorIdentifier: operatorIdentifier.trim(), shift: shift.trim(), checks, remark: remark.trim() || null });
+      setOrderProgress(saved.orderProgress ?? 'IN_PROGRESS');
       let images: BuffingImage[] = [];
       if (photo) {
         try { images = await uploadBuffingImages(saved.id, [photo]); }
@@ -314,7 +317,7 @@ export function BuffingPage() {
             <div className="buffing-layout grid min-h-0 flex-1 gap-2 bg-hmiConsole p-2 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)]">
             <aside className="buffing-no-print flex min-w-0 flex-col border-2 border-industrialDark bg-white">
               <header className="border-b-2 border-industrialDark bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-industrialDark">{language === 'vi' ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION DETAILS'}</header>
-              <OperationInfoFields orderNumber={orderNumber} onOrderNumberChange={(value) => { setOrderNumber(value); setOrderProduction(null); setOperator(''); setOperatorIdentifier(''); setShift(''); setOrderProgress('IN_PROGRESS'); setProgressError(null); }} operatorName={operator} onOperatorNameChange={setOperator} employeeId={operatorIdentifier} onEmployeeIdChange={setOperatorIdentifier} shift={shift} onShiftChange={setShift} orderStatus={<label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{language === 'vi' ? 'Tiến độ đơn' : 'Order progress'}<select className="min-h-9 w-full min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark disabled:bg-hmiSection disabled:text-slate-400" value={orderProgress} disabled={!orderProduction || orderLookupLoading || progressSaving} onChange={(event) => void changeOrderProgress(event.target.value as 'IN_PROGRESS' | 'COMPLETED')}><option value="IN_PROGRESS">{language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS'}</option><option value="COMPLETED">{language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED'}</option></select>{orderLookupLoading && <span className="text-[9px] normal-case text-info">{language === 'vi' ? 'Đang tra đơn…' : 'Looking up order…'}</span>}{progressSaving && <span className="text-[9px] normal-case text-info">{language === 'vi' ? 'Đang lưu…' : 'Saving…'}</span>}{progressError && <span role="alert" className="text-[9px] normal-case text-alarm">{progressError}</span>}</label>} />
+              <OperationInfoFields orderNumber={orderNumber} onOrderNumberChange={(value) => { setOrderNumber(value); setOrderProduction(null); setOperator(''); setOperatorIdentifier(''); setShift(''); setOrderProgress('IN_PROGRESS'); setProgressError(null); }} operatorName={operator} onOperatorNameChange={setOperator} employeeId={operatorIdentifier} onEmployeeIdChange={setOperatorIdentifier} shift={shift} onShiftChange={setShift} orderStatus={<MachineOrderProgressField value={orderProgress} language={language} automatic={isOperator} disabled={!orderProduction || orderLookupLoading} saving={progressSaving} error={progressError} onChange={(progress) => void changeOrderProgress(progress)} />} />
             </aside>
 
             <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border-2 border-industrialDark bg-white">
