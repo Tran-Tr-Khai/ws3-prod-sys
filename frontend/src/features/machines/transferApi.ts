@@ -57,9 +57,11 @@ export async function deleteTransferRecord(recordId: number): Promise<void> {
   if (!response.ok) throw new Error(await readError(response));
 }
 
-export async function downloadTransferReport(productionDate: string | undefined, language: 'vi' | 'en'): Promise<Blob> {
+export async function downloadTransferReport(productionDate: string | undefined, language: 'vi' | 'en', orderProgress?: TransferRecord['order_progress'], search?: string): Promise<Blob> {
   const params = new URLSearchParams({ language });
   if (productionDate) params.set('production_date', productionDate);
+  if (orderProgress) params.set('order_progress', orderProgress);
+  if (search) params.set('search', search);
   const response = await fetch(`${apiBaseUrl}/api/transfer/records/export?${params}`, { credentials: 'include' });
   if (!response.ok) throw new Error(await readError(response));
   return response.blob();

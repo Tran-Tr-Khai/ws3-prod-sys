@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
-from sqlalchemy import desc, func, select, update
+from sqlalchemy import desc, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.api.routes.machine_orders import set_order_progress
@@ -150,6 +150,8 @@ def delete_transfer_record(
 @router.get("/export")
 def export_transfer_records(
     production_date: date | None = Query(default=None),
+    order_progress: str | None = Query(default=None, pattern="^(IN_PROGRESS|COMPLETED)$"),
+    search: str | None = Query(default=None, max_length=160),
     language: str = Query(default="vi", pattern="^(vi|en)$"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -158,6 +160,19 @@ def export_transfer_records(
     statement = select(TransferRecord).where(TransferRecord.machine_id == MACHINE_ID)
     if production_date is not None:
         statement = statement.where(TransferRecord.production_date == production_date)
+    if order_progress is not None:
+        statement = statement.where(TransferRecord.order_progress == order_progress)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        statement = statement.where(or_(
+            TransferRecord.order_number.ilike(term),
+            TransferRecord.item.ilike(term),
+            TransferRecord.buyer.ilike(term),
+            TransferRecord.design.ilike(term),
+            TransferRecord.operator_name.ilike(term),
+            TransferRecord.operator_identifier.ilike(term),
+            TransferRecord.shift.ilike(term),
+        ))
     records = list(db.scalars(statement.order_by(TransferRecord.recorded_at, TransferRecord.id)).all())
 
     is_vi = language == "vi"

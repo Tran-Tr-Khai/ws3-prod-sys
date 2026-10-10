@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { MachineNavigation } from '../../components/hmi/MachineNavigation';
@@ -6,11 +6,20 @@ import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { downloadTransferReport, listTransferRecords, type TransferRecord } from './transferApi';
 
+type OrderProgress = '' | TransferRecord['order_progress'];
+
+function ProgressBadge({ progress, vi }: { progress: TransferRecord['order_progress']; vi: boolean }) {
+  const completed = progress === 'COMPLETED';
+  return <span className={`inline-flex whitespace-nowrap border px-1.5 py-0.5 text-[9px] font-bold uppercase ${completed ? 'border-green-600 bg-green-100 text-green-800' : 'border-blue-500 bg-blue-100 text-blue-800'}`}>{completed ? (vi ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED') : (vi ? 'ĐANG XỬ LÝ' : 'IN PROGRESS')}</span>;
+}
+
 export function TransferHistoryPage() {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const vi = language === 'vi';
   const [date, setDate] = useState('');
+  const [orderProgress, setOrderProgress] = useState<OrderProgress>('');
+  const [search, setSearch] = useState('');
   const [records, setRecords] = useState<TransferRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -19,18 +28,30 @@ export function TransferHistoryPage() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    void listTransferRecords(date || undefined).then((rows) => { if (active) setRecords(rows); })
+    setError('');
+    void listTransferRecords().then((rows) => { if (active) setRecords(rows); })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : (vi ? 'Không tải được lịch sử máy ép.' : 'Unable to load transfer history.')); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [date, vi]);
+  }, [vi]);
 
-  const filtered = records;
+  const filtered = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return records.filter((record) => {
+      const matchesDate = !date || record.production_date === date;
+      const matchesProgress = !orderProgress || record.order_progress === orderProgress;
+      const haystack = [record.order_number, record.item, record.buyer, record.design, record.operator_name, record.operator_identifier, record.shift].join(' ').toLocaleLowerCase();
+      return matchesDate && matchesProgress && (!term || haystack.includes(term));
+    });
+  }, [date, orderProgress, records, search]);
+
+  const clearFilters = () => { setDate(''); setOrderProgress(''); setSearch(''); };
+
   const exportExcel = async () => {
     setExporting(true);
     setError('');
     try {
-      const blob = await downloadTransferReport(date || undefined, language);
+      const blob = await downloadTransferReport(date || undefined, language, orderProgress || undefined, search.trim() || undefined);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -48,19 +69,33 @@ export function TransferHistoryPage() {
         <section className="mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden border-2 border-industrialDark bg-white">
           <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-xs font-bold uppercase tracking-wide text-white">
             <h1>{vi ? 'LỊCH SỬ SẢN XUẤT' : 'PRODUCTION HISTORY'}</h1>
-            <div className="flex items-center gap-2"><HMIButton size="compact" variant="secondary" disabled={loading || exporting || filtered.length === 0} onClick={() => void exportExcel()}>{exporting ? (vi ? 'ĐANG XUẤT…' : 'EXPORTING…') : 'EXCEL'}</HMIButton></div>
+            <HMIButton size="compact" variant="secondary" disabled={loading || exporting || filtered.length === 0} onClick={() => void exportExcel()}>{exporting ? (vi ? 'ĐANG XUẤT…' : 'EXPORTING…') : (vi ? 'BÁO CÁO EXCEL' : 'EXCEL REPORT')}</HMIButton>
           </header>
           <section className="shrink-0 border-b-2 border-industrialDark bg-hmiSection p-2">
-            <div className="grid grid-cols-[minmax(0,360px)_40px] items-end gap-2">
-              <label className="grid gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{vi ? 'Ngày sản xuất' : 'Production date'}<input type="date" className="min-h-10 min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark" value={date} onChange={(event) => setDate(event.target.value)} /></label>
-              <button type="button" aria-label={vi ? 'Xem tất cả' : 'Show all'} title={vi ? 'Xem tất cả' : 'Show all'} onClick={() => setDate('')} className="inline-flex h-10 w-10 items-center justify-center border-2 border-line bg-white text-lg font-bold text-industrial hover:bg-hmiHover">×</button>
+            <div className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(150px,0.8fr)_minmax(180px,0.9fr)_minmax(260px,2fr)_40px]">
+              <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{vi ? 'Ngày sản xuất' : 'Production date'}<input type="date" className="min-h-10 min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark" value={date} onChange={(event) => setDate(event.target.value)} /></label>
+              <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{vi ? 'Tiến độ đơn' : 'Order progress'}<select className="min-h-10 min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark" value={orderProgress} onChange={(event) => setOrderProgress(event.target.value as OrderProgress)}><option value="">{vi ? 'Tất cả tiến độ' : 'All progress'}</option><option value="IN_PROGRESS">{vi ? 'ĐANG XỬ LÝ' : 'IN PROGRESS'}</option><option value="COMPLETED">{vi ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED'}</option></select></label>
+              <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{vi ? 'Tìm đơn / sản phẩm / người vận hành' : 'Search order / item / operator'}<input className="min-h-10 min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={vi ? 'Mã SOP, loại vải, người mua, thiết kế, tên hoặc ID…' : 'SOP, item, buyer, design, name or ID…'} /></label>
+              <button type="button" aria-label={vi ? 'Xóa bộ lọc' : 'Clear filters'} title={vi ? 'Xóa bộ lọc' : 'Clear filters'} onClick={clearFilters} className="inline-flex h-10 w-10 items-center justify-center border-2 border-line bg-white text-lg font-bold text-industrial hover:bg-hmiHover">×</button>
             </div>
           </section>
           <div className="min-h-0 flex-1 overflow-auto">
             {loading ? <p className="p-8 text-center text-xs font-bold uppercase text-slate-500">{vi ? 'Đang tải lịch sử…' : 'Loading history…'}</p> : error ? <p role="alert" className="p-8 text-center text-xs font-semibold text-alarm">{error}</p> : filtered.length === 0 ? <p className="p-8 text-center text-xs font-semibold uppercase text-slate-500">{vi ? 'Chưa có bản ghi phù hợp.' : 'No matching records.'}</p> :
-              <table className="w-full min-w-[1100px] border-collapse text-left text-[10px]"><thead><tr>{(vi ? ['Ngày giờ', 'SOP', 'Loại vải', 'Người mua', 'Thiết kế', 'Nhiệt độ °C', 'Tốc độ m/min', 'Sản lượng m', 'Ca', 'Người vận hành'] : ['Date & time', 'SOP', 'Item', 'Buyer', 'Design', 'Temp °C', 'Speed m/min', "Q'ty m", 'Shift', 'Operator']).map((label) => <th key={label} className="sticky top-0 z-10 border-r border-b border-line bg-hmiSection px-2 py-2 text-[9px] font-bold uppercase">{label}</th>)}</tr></thead><tbody>{filtered.map((record) => <tr key={record.id} className="border-b border-line odd:bg-white even:bg-slate-50"><td className="whitespace-nowrap px-2 py-2 font-mono">{new Intl.DateTimeFormat(vi ? 'vi-VN' : 'en-GB', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(record.recorded_at))}</td><td className="px-2 py-2 font-mono font-bold">{record.order_number}</td><td className="px-2 py-2">{record.item}</td><td className="px-2 py-2">{record.buyer}</td><td className="px-2 py-2">{record.design}</td><td className="px-2 py-2 text-right font-mono">{record.temperature}</td><td className="px-2 py-2 text-right font-mono">{record.speed}</td><td className="px-2 py-2 text-right font-mono">{record.quantity_meters}</td><td className="px-2 py-2">{record.shift}</td><td className="px-2 py-2">{record.operator_name} · {record.operator_identifier}</td></tr>)}</tbody></table>}
+              <table className="w-full min-w-[1450px] border-collapse text-left text-[10px]"><thead className="sticky top-0 z-10 bg-industrial text-[9px] uppercase tracking-wider text-white"><tr>
+                <th rowSpan={2} className="whitespace-nowrap border-r border-line px-3 py-2">{vi ? 'Ngày giờ ghi' : 'Recorded date & time'}</th>
+                <th colSpan={4} className="border-r border-line px-3 py-2 text-center">{vi ? 'Thông tin đơn hàng' : 'Order information'}</th>
+                <th colSpan={3} className="border-r border-line px-3 py-2 text-center">{vi ? 'Thông số sản xuất' : 'Production parameters'}</th>
+                <th colSpan={3} className="border-r border-line px-3 py-2 text-center">{vi ? 'Thông tin vận hành' : 'Operation information'}</th>
+                <th rowSpan={2} className="whitespace-nowrap px-3 py-2">{vi ? 'Tiến độ đơn' : 'Order progress'}</th>
+              </tr><tr>
+                {(vi ? ['SOP', 'Loại vải', 'Người mua', 'Thiết kế', 'Nhiệt độ (°C)', 'Tốc độ (m/min)', 'Sản lượng (m)', 'Ca', 'Người vận hành', 'ID nhân viên'] : ['SOP', 'Item', 'Buyer', 'Design', 'Temp (°C)', 'Speed (m/min)', "Q'ty (m)", 'Shift', 'Operator', 'Employee ID']).map((label, index) => <th key={`${label}-${index}`} className="whitespace-nowrap border-r border-line px-3 py-2">{label}</th>)}
+              </tr></thead><tbody>{filtered.map((record) => <tr key={record.id} className="border-b border-line odd:bg-white even:bg-slate-50 hover:bg-hmiHover">
+                <td className="whitespace-nowrap border-r border-line px-3 py-2 font-mono font-bold text-industrial">{new Intl.DateTimeFormat(vi ? 'vi-VN' : 'en-GB', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(record.recorded_at))}</td>
+                <td className="whitespace-nowrap border-r border-line px-3 py-2 font-mono font-bold text-industrial">{record.order_number || '—'}</td><td className="max-w-[260px] truncate border-r border-line px-3 py-2" title={record.item}>{record.item || '—'}</td><td className="whitespace-nowrap border-r border-line px-3 py-2">{record.buyer || '—'}</td><td className="whitespace-nowrap border-r border-line px-3 py-2">{record.design || '—'}</td>
+                <td className="whitespace-nowrap border-r border-line px-3 py-2 text-right font-mono">{record.temperature.toLocaleString(vi ? 'vi-VN' : 'en-US')}</td><td className="whitespace-nowrap border-r border-line px-3 py-2 text-right font-mono">{record.speed.toLocaleString(vi ? 'vi-VN' : 'en-US')}</td><td className="whitespace-nowrap border-r border-line px-3 py-2 text-right font-mono">{record.quantity_meters.toLocaleString(vi ? 'vi-VN' : 'en-US')}</td><td className="whitespace-nowrap border-r border-line px-3 py-2">{record.shift || '—'}</td><td className="whitespace-nowrap border-r border-line px-3 py-2">{record.operator_name || '—'}</td><td className="whitespace-nowrap border-r border-line px-3 py-2 font-mono">{record.operator_identifier || '—'}</td><td className="px-3 py-2"><ProgressBadge progress={record.order_progress} vi={vi} /></td>
+              </tr>)}</tbody></table>}
           </div>
-          <footer className="shrink-0 border-t border-line bg-hmiSection px-3 py-1 text-right font-mono text-[10px] font-bold uppercase text-slate-500">{filtered.length} / {records.length} {vi ? 'bản ghi' : 'records'}</footer>
+          <footer className="shrink-0 border-t border-line bg-hmiSection px-3 py-1 text-right font-mono text-[10px] font-bold uppercase text-slate-500">{filtered.length} / {records.length}</footer>
         </section>
       </main>
     </div>
