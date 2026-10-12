@@ -11,6 +11,7 @@ from app.models.machine_order_state import MachineOrderState
 from app.models.scouring import ScouringRecord
 from app.models.tentering import TenteringOrder
 from app.models.transfer import TransferRecord
+from app.models.print import PrintRecord
 from app.models.user import User
 from app.security.auth import get_current_user, role_codes
 from app.services.machine_order_progress import set_order_progress
@@ -19,13 +20,13 @@ from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_cod
 
 router = APIRouter(prefix="/machine-orders", tags=["machine-orders"])
 MANAGER_ROLES = {"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}
-MACHINES = {"BU-01", "SC-01", "TE-01", "TE-02", "HT-01"}
+MACHINES = {"BU-01", "SC-01", "TE-01", "TE-02", "HT-01", "PR-01"}
 
 
 class OrderProgressUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    machine_id: Literal["BU-01", "SC-01", "TE-01", "TE-02", "HT-01"]
+    machine_id: Literal["BU-01", "SC-01", "TE-01", "TE-02", "HT-01", "PR-01"]
     order_number: str = Field(min_length=1, max_length=160)
     order_progress: Literal["IN_PROGRESS", "COMPLETED"]
 
@@ -139,10 +140,16 @@ def update_order_progress(
                 )
                 .values(order_progress=payload.order_progress)
             )
-        else:
+        elif payload.machine_id == "HT-01":
             db.execute(
                 update(TransferRecord)
                 .where(TransferRecord.machine_id == payload.machine_id, TransferRecord.order_number.in_(aliases or {normalized}))
+                .values(order_progress=payload.order_progress)
+            )
+        else:
+            db.execute(
+                update(PrintRecord)
+                .where(PrintRecord.machine_id == payload.machine_id, PrintRecord.order_number.in_(aliases or {normalized}))
                 .values(order_progress=payload.order_progress)
             )
         db.commit()

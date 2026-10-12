@@ -14,6 +14,7 @@ from app.models.ws3_production import WS3MachineWS2Record, WS3ProductionOrder, W
 from app.models.ws3_unrolling import WS3UnrollingRollEvent
 from app.models.tentering import TenteringOrder, TenteringRollEntry
 from app.models.transfer import TransferRecord
+from app.models.print import PrintRecord
 
 __all__ = [
     "Alarm",
@@ -49,4 +50,5 @@ __all__ = [
     "TenteringOrder",
     "TenteringRollEntry",
     "TransferRecord",
+    "PrintRecord",
 ]

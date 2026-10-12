@@ -331,12 +331,12 @@ def export_scouring_records(
 
 
 @router.get("/latest", response_model=ScouringRecordResponse)
-def get_latest_scouring_record(db: Session = Depends(get_db)) -> ScouringRecord:
-    record = db.scalars(
-        select(ScouringRecord)
-        .order_by(desc(ScouringRecord.recorded_at), desc(ScouringRecord.id))
-        .limit(1)
-    ).first()
+def get_latest_scouring_record(
+    db: Session = Depends(get_db),
+) -> ScouringRecord:
+    latest_query = select(ScouringRecord)
+    latest_query = latest_query.order_by(desc(ScouringRecord.recorded_at), desc(ScouringRecord.id)).limit(1)
+    record = db.scalars(latest_query).first()
     if record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

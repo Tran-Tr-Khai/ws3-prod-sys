@@ -95,6 +95,7 @@ def list_buffing_checks(
     check_date: date | None = Query(default=None),
     machine_id: str = Query(default="BU-01", min_length=1, max_length=50),
     order_number: str | None = Query(default=None, max_length=160),
+    limit: int | None = Query(default=None, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> list[BuffingCheckResponse]:
     statement = select(BuffingCheck).where(BuffingCheck.machine_id == machine_id)
@@ -108,6 +109,8 @@ def list_buffing_checks(
         aliases = aliases or {order_number.strip().upper()}
         statement = statement.where(func.upper(func.trim(BuffingCheck.order_number)).in_(aliases))
     statement = statement.order_by(desc(BuffingCheck.checked_at), desc(BuffingCheck.id))
+    if limit is not None:
+        statement = statement.limit(limit)
     return [check_response(check) for check in db.scalars(statement).all()]
 
 

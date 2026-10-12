@@ -12,6 +12,8 @@ import { TenteringRecordPage } from '../features/machines/TenteringRecordPage';
 import { TenteringHistoryPage } from '../features/machines/TenteringHistoryPage';
 import { TransferRecordPage } from '../features/machines/TransferRecordPage';
 import { TransferHistoryPage } from '../features/machines/TransferHistoryPage';
+import { PrintRecordPage } from '../features/machines/PrintRecordPage';
+import { PrintHistoryPage } from '../features/machines/PrintHistoryPage';
 import { UnrollingOrdersPage } from '../features/orders/UnrollingOrdersPage';
 import { ProductionOverviewPage } from '../features/production/ProductionOverviewPage';
 import { WS3OverviewPage } from '../features/production/WS3OverviewPage';
@@ -28,7 +30,8 @@ export default function App() {
   const genericRecordMachine = location.pathname.match(/^\/machine\/([^/]+)\/record$/)?.[1]?.toUpperCase() ?? null;
   const tenteringMachine = location.pathname.match(/^\/machine\/(TE-01|TE-02)\/(record|history)$/i);
   const transferMachine = location.pathname.match(/^\/machine\/(HT-01)\/(record|history)$/i)?.[1].toUpperCase() ?? null;
-  const restrictedMachine = location.pathname.startsWith('/machine/scouring') ? 'SC-01' : location.pathname.startsWith('/machine/buffing') ? 'BU-01' : tenteringMachine?.[1].toUpperCase() ?? transferMachine ?? genericRecordMachine;
+  const printMachine = location.pathname.match(/^\/machine\/(PR-01)\/(record|history)$/i)?.[1].toUpperCase() ?? null;
+  const restrictedMachine = location.pathname.startsWith('/machine/scouring') ? 'SC-01' : location.pathname.startsWith('/machine/buffing') ? 'BU-01' : tenteringMachine?.[1].toUpperCase() ?? transferMachine ?? printMachine ?? genericRecordMachine;
   if (location.pathname.startsWith('/machine/unrolling') && !['ADMIN', 'SUPERVISOR', 'PRODUCTION_MANAGER'].includes(user.role)) return <Navigate to="/ws3" replace />;
   if (user.role === 'OPERATOR' && restrictedMachine && !user.machineIds.includes(restrictedMachine)) return <Navigate to="/ws3" replace />;
   return (
@@ -61,6 +64,8 @@ export default function App() {
       <Route path="/machine/TE-02/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/TE-02/record" replace /> : <TenteringHistoryPage key="TE-02" machineId="TE-02" />} />
       <Route path="/machine/HT-01/record" element={<TransferRecordPage />} />
       <Route path="/machine/HT-01/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/HT-01/record" replace /> : <TransferHistoryPage />} />
+      <Route path="/machine/PR-01/record" element={<PrintRecordPage />} />
+      <Route path="/machine/PR-01/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/PR-01/record" replace /> : <PrintHistoryPage />} />
       <Route path="/machine/:machineId/record" element={<MachineOperationEntryPage />} />
       <Route path="/machine/tenter" element={<Navigate to="/machine/tenter/record" replace />} />
       <Route path="/machine/unrolling/record" element={<UnrollingOrdersPage />} />

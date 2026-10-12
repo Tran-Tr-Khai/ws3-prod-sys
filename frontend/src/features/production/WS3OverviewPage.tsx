@@ -18,23 +18,26 @@ const processes = [
   { name: 'Raising', code: 'RA-01', available: false },
   { name: 'Sueding', code: 'SU-01', available: false },
   { name: 'Transfer', code: 'HT-01', available: true },
+  { name: 'Print', code: 'PR-01', available: true },
 ];
 
-const overviewMachineFilterKey = 'ws3.overview.selected-machines.v2';
-const legacyOverviewMachineFilterKey = 'ws3.overview.selected-machines';
-const defaultOverviewMachineCodes = ['UN-01', 'BU-01', 'SC-01', 'TE-01', 'HT-01'];
+const overviewMachineFilterKey = 'ws3.overview.selected-machines.v3';
+const legacyOverviewMachineFilterKeys = ['ws3.overview.selected-machines.v2', 'ws3.overview.selected-machines'];
+const defaultOverviewMachineCodes = ['UN-01', 'BU-01', 'SC-01', 'TE-01', 'HT-01', 'PR-01'];
 const overviewFilterProcesses = processes.filter((process) => process.available);
 
 function getInitialOverviewMachineSelection(): string[] {
   try {
     const currentValue = window.localStorage.getItem(overviewMachineFilterKey);
     const migratingLegacySelection = currentValue === null;
-    const stored: unknown = JSON.parse(currentValue ?? window.localStorage.getItem(legacyOverviewMachineFilterKey) ?? 'null');
+    const legacyValue = legacyOverviewMachineFilterKeys.map((key) => window.localStorage.getItem(key)).find((value) => value !== null);
+    const stored: unknown = JSON.parse(currentValue ?? legacyValue ?? 'null');
     if (Array.isArray(stored) && stored.every((code) => typeof code === 'string')) {
       const validCodes = new Set(overviewFilterProcesses.map((process) => process.code));
       const selection = stored.filter((code): code is string => validCodes.has(code));
       if (stored.includes('TE-02') && !selection.includes('TE-01')) selection.push('TE-01');
       if (migratingLegacySelection && !selection.includes('HT-01')) selection.push('HT-01');
+      if (!selection.includes('PR-01')) selection.push('PR-01');
       return selection;
     }
   } catch {
@@ -82,7 +85,7 @@ export function WS3OverviewPage() {
   const entryPaths: Record<string, string> = { Buffing: '/machine/buffing/record', Scouring: '/machine/scouring/record/operation', Unrolling: '/machine/unrolling/record' };
   const actionLabels: Record<string, string> = {
     Unrolling: tx('XEM ĐƠN & IN PHIẾU', 'VIEW ORDERS & PRINT SLIPS'), Buffing: t('openBuffing'), Scouring: t('openScouring'),
-    Tentering: tx(`MỞ ${tenterName}`, `OPEN ${tenterName}`), Transfer: tx('MỞ TRANSFER', 'OPEN TRANSFER'),
+    Tentering: tx(`MỞ ${tenterName}`, `OPEN ${tenterName}`), Transfer: tx('MỞ TRANSFER', 'OPEN TRANSFER'), Print: tx('MỞ PRINT', 'OPEN PRINT'),
   };
 
   return <WS3Shell title={t('systemTitle')} subtitle={t('productionOverview')} status="info" time={new Date().toLocaleTimeString('vi-VN')} showGlobalNavigation={false} showSupportWidget={!isMachineOperator}>

@@ -6,6 +6,7 @@ from app.models.machine_order_state import MachineOrderState
 from app.models.scouring import ScouringRecord
 from app.models.tentering import TenteringOrder
 from app.models.transfer import TransferRecord
+from app.models.print import PrintRecord
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code
 
 
@@ -15,6 +16,7 @@ ORDER_RECORDS = {
     "TE-01": (TenteringOrder, "sop_no"),
     "TE-02": (TenteringOrder, "sop_no"),
     "HT-01": (TransferRecord, "order_number"),
+    "PR-01": (PrintRecord, "order_number"),
 }
 
 

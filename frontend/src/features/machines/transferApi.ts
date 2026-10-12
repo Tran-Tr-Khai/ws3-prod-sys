@@ -33,10 +33,10 @@ export async function getTransferOrderSource(sopNo: string): Promise<TransferOrd
   return await response.json() as TransferOrderSource | null;
 }
 
-export async function listTransferRecords(productionDate?: string): Promise<TransferRecord[]> {
+export async function listTransferRecords(productionDate?: string, options: { signal?: AbortSignal } = {}): Promise<TransferRecord[]> {
   const params = new URLSearchParams({ limit: '500' });
   if (productionDate) params.set('production_date', productionDate);
-  const response = await fetch(`${apiBaseUrl}/api/transfer/records?${params}`, { credentials: 'include' });
+  const response = await fetch(`${apiBaseUrl}/api/transfer/records?${params}`, { credentials: 'include', signal: options.signal });
   if (!response.ok) throw new Error(await readError(response));
   return await response.json() as TransferRecord[];
 }

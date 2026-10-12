@@ -364,9 +364,14 @@ export async function getScouringRecordsForOrder(orderNumber?: string, options: 
   return response.map(fromApiResponse);
 }
 
-export async function getLatestScouringRecord(options: RequestOptions = {}): Promise<ScouringRecord> {
-  const response = await request<ScouringRecordApiResponse>(`${scouringRecordsPath}/latest`, { signal: options.signal });
-  return fromApiResponse(response);
+export async function getLatestScouringRecord(options: RequestOptions = {}): Promise<ScouringRecord | null> {
+  try {
+    const response = await request<ScouringRecordApiResponse>(`${scouringRecordsPath}/latest`, { signal: options.signal });
+    return fromApiResponse(response);
+  } catch (error) {
+    if (error instanceof ScouringApiError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export async function getScouringRecord(id: number, options: RequestOptions = {}): Promise<ScouringRecord> {
@@ -419,8 +424,11 @@ export async function createScouringPhInspection(payload: ScouringPhInspectionCr
   return fromInspectionApiResponse(response);
 }
 
-export async function getBuffingChecks(checkDate?: string, options: RequestOptions = {}): Promise<BuffingCheck[]> {
-  const query = checkDate ? `?check_date=${encodeURIComponent(checkDate)}` : '';
+export async function getBuffingChecks(checkDate?: string, options: RequestOptions = {}, limit?: number): Promise<BuffingCheck[]> {
+  const params = new URLSearchParams();
+  if (checkDate) params.set('check_date', checkDate);
+  if (limit !== undefined) params.set('limit', String(limit));
+  const query = params.size ? `?${params.toString()}` : '';
   const response = await request<BuffingApiResponse[]>(`${buffingChecksPath}${query}`, { signal: options.signal });
   return response.map(fromBuffingApiResponse);
 }
@@ -445,7 +453,7 @@ function fromMachineOrderProgress(response: MachineOrderProgressApiResponse): Ma
 
 const machineOrderProgressPath = `${apiBaseUrl}/api/machine-orders/progress`;
 
-export type OrderProgressMachineId = 'BU-01' | 'SC-01' | 'TE-01' | 'TE-02' | 'HT-01';
+export type OrderProgressMachineId = 'BU-01' | 'SC-01' | 'TE-01' | 'TE-02' | 'HT-01' | 'PR-01';
 
 export async function getMachineOrderProgress(machineId: OrderProgressMachineId, orderNumber: string, options: RequestOptions = {}): Promise<MachineOrderProgress | null> {
   const query = `?machine_id=${encodeURIComponent(machineId)}&order_number=${encodeURIComponent(orderNumber.trim())}`;

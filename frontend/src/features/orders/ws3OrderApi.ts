@@ -108,8 +108,8 @@ export async function replaceWS3Snapshot(files: Partial<Record<'order' | 'machin
   return (await response.json()) as WS3SnapshotResult;
 }
 
-export async function getWS3ProductionReport(productionDate: string): Promise<WS3ProductionReport> {
-  const response = await fetch(`${apiBaseUrl}/api/ws3/production-orders?production_date=${encodeURIComponent(productionDate)}`, { credentials: 'include' });
+export async function getWS3ProductionReport(productionDate: string, options: { signal?: AbortSignal } = {}): Promise<WS3ProductionReport> {
+  const response = await fetch(`${apiBaseUrl}/api/ws3/production-orders?production_date=${encodeURIComponent(productionDate)}`, { credentials: 'include', signal: options.signal });
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || `Production report API returned HTTP ${response.status}`);
   return (await response.json()) as WS3ProductionReport;
 }

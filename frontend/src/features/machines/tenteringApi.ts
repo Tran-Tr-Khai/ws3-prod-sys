@@ -53,11 +53,11 @@ async function readError(response: Response): Promise<string> {
   return typeof body?.detail === 'string' ? body.detail : `Tentering API returned HTTP ${response.status}`;
 }
 
-export async function getTenteringOrders(machineId: string, query = ''): Promise<TenteringOrder[]> {
+export async function getTenteringOrders(machineId: string, query = '', options: { signal?: AbortSignal } = {}): Promise<TenteringOrder[]> {
   const params = new URLSearchParams({ limit: '100' });
   params.set('machine_id', machineId);
   if (query.trim()) params.set('q', query.trim());
-  const response = await fetch(`${apiBaseUrl}/api/tentering/orders?${params}`, { credentials: 'include' });
+  const response = await fetch(`${apiBaseUrl}/api/tentering/orders?${params}`, { credentials: 'include', signal: options.signal });
   if (!response.ok) throw new Error(await readError(response));
   return await response.json() as TenteringOrder[];
 }
