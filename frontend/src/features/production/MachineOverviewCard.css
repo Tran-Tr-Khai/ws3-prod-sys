@@ -72,7 +72,7 @@
 .machine-overview [data-tone="alarm"] { color: #a92f32; font-weight: 700; }
 .machine-overview [data-tone="info"] { color: #496d80; font-weight: 600; }
 .machine-overview__statuses [data-tone="warning"] { color: #956100; font-weight: 700; }
-.machine-overview__statuses [data-tone="info"] { color: #184568; font-weight: 700; }
+.machine-overview__statuses [data-tone="info"] { color: #16708a; font-weight: 700; }
 .machine-overview__statuses [data-tone="success"] { color: #18750b; font-weight: 700; }
 .machine-overview__statuses [data-tone="alarm"] { color: #a62932; font-weight: 700; }
 .machine-overview__footer { margin-top: auto; border-top: 1px solid #c7d2d8; padding: 10px 12px; }

@@ -6,7 +6,7 @@ import { normalizeShift } from '../../components/hmi/ShiftSelect';
 import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
 import { MachineOrderProgressField } from '../../components/hmi/MachineOrderProgressField';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
-import { SupportChatWidget } from '../support/SupportChatWidget';
+import { MachineOperationalNoticeDock } from '../support/MachineOperationalNoticeDock';
 import { createScouringPhInspection, createScouringRecord, updateScouringRecord, deleteScouringRecord, getScouringRecords, getScouringRecordsForOrder, getScouringPhInspections, getMachineOrderProgress, saveMachineOrderProgress, ScouringApiError, type ScouringPhInspection, type ScouringRecord } from './scouringApi';
 import { getWS3ProductionOrderContext, type WS3ProductionOrderReport } from '../orders/ws3OrderApi';
 import { useLanguage } from '../../i18n/LanguageContext';
@@ -159,9 +159,9 @@ function RecordField({
           onChange={(event) => onChange(event.target.value)}
           readOnly={field.key === 'inputFabricMeters'}
           aria-readonly={field.key === 'inputFabricMeters'}
-          className={`scouring-record-input min-w-0 flex-1 appearance-none border-0 px-2 text-center font-mono text-[18px] font-bold leading-none tabular-nums outline-none focus:ring-2 focus:ring-info/60 ${field.key === 'inputFabricMeters' ? 'bg-hmiSection' : 'bg-white focus:bg-white'} ${isError ? 'text-alarm' : isWarning ? 'text-warning' : field.key === 'outputFabricMeters' ? 'text-success' : field.key === 'inputFabricMeters' ? 'text-slate-500' : 'text-industrial'}`}
+          className={`scouring-record-input min-w-0 flex-1 appearance-none border-0 px-1 text-center font-mono text-[15px] font-bold leading-none tabular-nums outline-none focus:ring-2 focus:ring-info/60 ${field.key === 'inputFabricMeters' ? 'bg-hmiSection' : 'bg-white focus:bg-white'} ${isError ? 'text-alarm' : isWarning ? 'text-warning' : field.key === 'outputFabricMeters' ? 'text-success' : field.key === 'inputFabricMeters' ? 'text-slate-500' : 'text-industrial'}`}
         />
-        <span className="scouring-record-unit flex min-w-14 items-center justify-center border-l-2 border-line bg-surfaceMuted px-2 font-mono text-[13px] font-bold text-slate-600">{field.unit}</span>
+        <span className="scouring-record-unit flex min-w-10 items-center justify-center border-l-2 border-line bg-surfaceMuted px-1 font-mono text-[11px] font-bold text-slate-600">{field.unit}</span>
       </span>
       <span className="mt-1 min-h-3 text-[8px] font-bold uppercase leading-tight tracking-wide">
         {isError && <span className="text-alarm">{language === 'vi' ? 'LỖI' : 'ERROR'} · {field.required ? (language === 'vi' ? 'BẮT BUỘC NHẬP' : 'VALUE REQUIRED') : (language === 'vi' ? 'NHẬP SỐ HỢP LỆ' : 'ENTER A NUMBER')}</span>}
@@ -609,9 +609,9 @@ export function ScouringRecordPage() {
   return (
     <WS3Shell title={language === 'vi' ? 'WS3 / Ghi nhận Scouring' : 'WS3 / Scouring Record'} subtitle={language === 'vi' ? 'Nhập dữ liệu vận hành · Scouring' : 'Operator data entry · Scouring'} machineId="SC-01" machineLabel="Scouring" status="info" time={new Date().toLocaleTimeString(language === 'vi' ? 'vi-VN' : 'en-GB')} showSupportWidget={!isScouringOperator}>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
-        <div className="scouring-screen-frame scouring-full-width-frame mt-2 flex min-h-0 flex-1 flex-col overflow-hidden bg-hmiConsole">
-        <div className="min-h-0 flex-1 overflow-auto p-2">
-          <div className={`scouring-record-workspace grid w-full min-h-full grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)] gap-2 ${isScouringOperator ? 'scouring-record-workspace-with-notices' : ''}`}>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-hmiConsole">
+        <div className="h-full min-h-0 flex-1 overflow-auto p-2">
+          <div className={`scouring-record-workspace grid h-full w-full min-h-full grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)] gap-2 ${isScouringOperator ? 'scouring-record-workspace-with-notices' : ''}`}>
             <aside className="scouring-record-context flex h-full min-h-0 self-stretch flex-col border-2 border-industrialDark bg-white">
               <header className="flex h-12 min-h-12 items-center border-b-2 border-industrialDark bg-white px-3 text-[11px] font-bold uppercase tracking-wider text-industrialDark">
                 <h2 className="whitespace-nowrap">{language === 'vi' ? 'Thông tin vận hành' : 'Operation details'}</h2>
@@ -675,7 +675,7 @@ export function ScouringRecordPage() {
                 </div>
               </section>
               </section>
-            {isScouringOperator && <div className="scouring-record-notices min-w-0"><SupportChatWidget embedded /></div>}
+            {isScouringOperator && <div className="scouring-record-notices machine-operational-notices min-w-0"><MachineOperationalNoticeDock machineId="SC-01" /></div>}
           </div>
         </div>
         </div>

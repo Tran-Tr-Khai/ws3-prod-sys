@@ -8,6 +8,7 @@ import { MachineOrderProgressField } from '../../components/hmi/MachineOrderProg
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useExistingMachineRecord } from './useExistingMachineRecord';
+import { isOperatorAssignedToMachine, MachineOperationalNoticeDock } from '../support/MachineOperationalNoticeDock';
 import { MACHINE_NOTICE_DURATION_MS } from './noticeTiming';
 import { createTransferRecord, deleteTransferRecord, getTransferOrderSource, listTransferRecords, updateTransferRecord, type TransferRecord, type TransferRecordInput } from './transferApi';
 import { getMachineOrderProgress, saveMachineOrderProgress } from './scouringApi';
@@ -27,6 +28,7 @@ export function TransferRecordPage() {
   const { user } = useAuth();
   const { language } = useLanguage();
   const vi = language === 'vi';
+  const isTransferOperator = isOperatorAssignedToMachine(user, 'TR-01');
   const [productionDate] = useState(factoryToday);
   const [orderNumber, setOrderNumber] = useState('');
   const [operatorName, setOperatorName] = useState('');
@@ -85,7 +87,7 @@ export function TransferRecordPage() {
         const existingRecord = existingLookup.record;
         const [sourceResult, progressResult] = await Promise.allSettled([
           getTransferOrderSource(normalized),
-          getMachineOrderProgress('HT-01', normalized),
+          getMachineOrderProgress('TR-01', normalized),
         ]);
         if (!active) return;
         if (sourceResult.status === 'rejected' && !existingRecord) throw sourceResult.reason;
@@ -134,7 +136,7 @@ export function TransferRecordPage() {
     setProgressSaving(true);
     setProgressError('');
     try {
-      await saveMachineOrderProgress('HT-01', orderNumber.trim().toUpperCase(), nextProgress);
+      await saveMachineOrderProgress('TR-01', orderNumber.trim().toUpperCase(), nextProgress);
     } catch (reason) {
       setOrderProgress(previousProgress);
       setProgressError(reason instanceof Error ? reason.message : (vi ? 'Không lưu được tiến độ đơn.' : 'Unable to save order progress.'));
@@ -157,7 +159,7 @@ export function TransferRecordPage() {
     setMessage(null);
     try {
       const payload: TransferRecordInput = {
-        machine_id: 'HT-01', production_date: productionDate, order_number: orderNumber.trim().toUpperCase(),
+        machine_id: 'TR-01', production_date: productionDate, order_number: orderNumber.trim().toUpperCase(),
         operator_name: operatorName.trim(), operator_identifier: employeeId.trim(), shift,
         order_progress: orderProgress, item: entry.item.trim(), buyer: entry.buyer.trim(), design: entry.design.trim(),
         temperature: numericValue(entry.temperature), speed: numericValue(entry.speed), quantity_meters: numericValue(entry.quantityMeters),
@@ -190,12 +192,12 @@ export function TransferRecordPage() {
   };
 
   return (
-    <WS3Shell title="WS3 / Transfer" subtitle={vi ? 'Nhập báo cáo hằng ngày · Máy ép' : 'Daily report entry · Transfer'} machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} status="info" showGlobalNavigation={false} showMachineNavigation={false} showSupportWidget={!isOperator}>
+    <WS3Shell title="WS3 / Transfer" subtitle={vi ? 'Nhập báo cáo hằng ngày · Máy ép' : 'Daily report entry · Transfer'} machineId="TR-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} status="info" showGlobalNavigation={false} showMachineNavigation={false} showSupportWidget={!isTransferOperator}>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
-        <MachineNavigation machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} basePath="/machine/HT-01" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{vi ? 'TRANG CHỦ' : 'HOME'}</HMIButton>} />
+        <MachineNavigation machineId="TR-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} basePath="/machine/TR-01" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{vi ? 'TRANG CHỦ' : 'HOME'}</HMIButton>} />
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-2 lg:flex-row lg:overflow-hidden">
-            <aside className="flex min-h-0 min-w-0 flex-col border-2 border-industrialDark bg-white lg:w-[320px] lg:shrink-0">
-              <header className="flex min-h-10 items-center border-b-2 border-industrialDark bg-industrialDark px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white">{vi ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION INFORMATION'}</header>
+            <aside className="flex min-h-0 min-w-0 flex-col overflow-y-auto border-2 border-industrialDark bg-white lg:w-[320px] lg:shrink-0">
+              <header className="machine-primary-header flex min-h-10 items-center border-b-2 border-industrialDark px-3 py-2 text-[10px] font-bold uppercase tracking-wider">{vi ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION INFORMATION'}</header>
               <div className="grid content-start">
               <OperationInfoFields
                 orderNumber={orderNumber}
@@ -211,7 +213,7 @@ export function TransferRecordPage() {
               </div>
             </aside>
             <section className="flex min-h-[70dvh] min-w-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-white lg:min-h-0">
-              <header className="sticky top-0 z-10 flex min-h-10 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-white">
+              <header className="machine-primary-header sticky top-0 z-10 flex min-h-10 flex-wrap items-center justify-between gap-2 px-3 py-2">
                 <h1 className="text-[10px] font-bold uppercase tracking-wider">{vi ? 'THÔNG SỐ VẬN HÀNH' : 'OPERATION PARAMETERS'}</h1>
               </header>
               <section className="shrink-0 bg-white">
@@ -260,6 +262,7 @@ export function TransferRecordPage() {
                 </div>
               </section>
             </section>
+            {isTransferOperator && <div className="machine-operational-notices min-w-0 lg:w-[320px] lg:shrink-0"><MachineOperationalNoticeDock machineId="TR-01" /></div>}
         </div>
       </div>
     </WS3Shell>

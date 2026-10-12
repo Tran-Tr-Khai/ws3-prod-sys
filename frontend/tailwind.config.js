@@ -22,7 +22,7 @@ export default {
         success: '#2f7d52',
         warning: '#a46b00',
         alarm: '#b03535',
-        info: '#54788a',
+        info: '#4b6475',
         hmiConsole: '#ccd6da',
         hmiRail: '#aebbc2',
         hmiSection: '#d9e2e6',

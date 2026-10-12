@@ -20,13 +20,13 @@ from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_cod
 
 router = APIRouter(prefix="/machine-orders", tags=["machine-orders"])
 MANAGER_ROLES = {"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}
-MACHINES = {"BU-01", "SC-01", "TE-01", "TE-02", "HT-01", "PR-01"}
+MACHINES = {"BU-01", "SC-01", "TE-01", "TE-02", "TR-01", "PR-01"}
 
 
 class OrderProgressUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    machine_id: Literal["BU-01", "SC-01", "TE-01", "TE-02", "HT-01", "PR-01"]
+    machine_id: Literal["BU-01", "SC-01", "TE-01", "TE-02", "TR-01", "PR-01"]
     order_number: str = Field(min_length=1, max_length=160)
     order_progress: Literal["IN_PROGRESS", "COMPLETED"]
 
@@ -140,7 +140,7 @@ def update_order_progress(
                 )
                 .values(order_progress=payload.order_progress)
             )
-        elif payload.machine_id == "HT-01":
+        elif payload.machine_id == "TR-01":
             db.execute(
                 update(TransferRecord)
                 .where(TransferRecord.machine_id == payload.machine_id, TransferRecord.order_number.in_(aliases or {normalized}))

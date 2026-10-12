@@ -29,7 +29,7 @@ export default function App() {
   if (!user) return <Routes><Route path="/login" element={<LoginPage />} /><Route path="*" element={<Navigate to="/login" replace />} /></Routes>;
   const genericRecordMachine = location.pathname.match(/^\/machine\/([^/]+)\/record$/)?.[1]?.toUpperCase() ?? null;
   const tenteringMachine = location.pathname.match(/^\/machine\/(TE-01|TE-02)\/(record|history)$/i);
-  const transferMachine = location.pathname.match(/^\/machine\/(HT-01)\/(record|history)$/i)?.[1].toUpperCase() ?? null;
+  const transferMachine = location.pathname.match(/^\/machine\/(TR-01)\/(record|history)$/i)?.[1].toUpperCase() ?? null;
   const printMachine = location.pathname.match(/^\/machine\/(PR-01)\/(record|history)$/i)?.[1].toUpperCase() ?? null;
   const restrictedMachine = location.pathname.startsWith('/machine/scouring') ? 'SC-01' : location.pathname.startsWith('/machine/buffing') ? 'BU-01' : tenteringMachine?.[1].toUpperCase() ?? transferMachine ?? printMachine ?? genericRecordMachine;
   if (location.pathname.startsWith('/machine/unrolling') && !['ADMIN', 'SUPERVISOR', 'PRODUCTION_MANAGER'].includes(user.role)) return <Navigate to="/ws3" replace />;
@@ -62,8 +62,8 @@ export default function App() {
       <Route path="/machine/TE-02/record" element={<TenteringRecordPage key="TE-02" machineId="TE-02" />} />
       <Route path="/machine/TE-01/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/TE-01/record" replace /> : <TenteringHistoryPage key="TE-01" machineId="TE-01" />} />
       <Route path="/machine/TE-02/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/TE-02/record" replace /> : <TenteringHistoryPage key="TE-02" machineId="TE-02" />} />
-      <Route path="/machine/HT-01/record" element={<TransferRecordPage />} />
-      <Route path="/machine/HT-01/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/HT-01/record" replace /> : <TransferHistoryPage />} />
+      <Route path="/machine/TR-01/record" element={<TransferRecordPage />} />
+      <Route path="/machine/TR-01/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/TR-01/record" replace /> : <TransferHistoryPage />} />
       <Route path="/machine/PR-01/record" element={<PrintRecordPage />} />
       <Route path="/machine/PR-01/history" element={user.role === 'OPERATOR' ? <Navigate to="/machine/PR-01/record" replace /> : <PrintHistoryPage />} />
       <Route path="/machine/:machineId/record" element={<MachineOperationEntryPage />} />

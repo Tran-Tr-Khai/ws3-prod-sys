@@ -11,6 +11,7 @@ import { useExistingMachineRecord } from './useExistingMachineRecord';
 import { MACHINE_NOTICE_DURATION_MS } from './noticeTiming';
 import { createPrintRecord, deletePrintRecord, getPrintOrderSource, listPrintRecords, updatePrintRecord, type PrintRecord, type PrintRecordInput } from './printApi';
 import { getMachineOrderProgress, saveMachineOrderProgress } from './scouringApi';
+import { isOperatorAssignedToMachine, MachineOperationalNoticeDock } from '../support/MachineOperationalNoticeDock';
 
 type EntryValues = { item: string; buyer: string; design: string; speed: string; quantityMeters: string };
 const emptyEntry: EntryValues = { item: '', buyer: '', design: '', speed: '', quantityMeters: '' };
@@ -27,6 +28,7 @@ export function PrintRecordPage() {
   const { user } = useAuth();
   const { language } = useLanguage();
   const vi = language === 'vi';
+  const isPrintOperator = isOperatorAssignedToMachine(user, 'PR-01');
   const [productionDate] = useState(factoryToday);
   const [orderNumber, setOrderNumber] = useState('');
   const [operatorName, setOperatorName] = useState('');
@@ -189,12 +191,12 @@ export function PrintRecordPage() {
   };
 
   return (
-    <WS3Shell title="WS3 / Print" subtitle={vi ? 'Nhập báo cáo hằng ngày · Máy in' : 'Daily report entry · Print'} machineId="PR-01" machineLabel={vi ? 'Máy in' : 'Print'} status="info" showGlobalNavigation={false} showMachineNavigation={false} showSupportWidget={!isOperator}>
+    <WS3Shell title="WS3 / Print" subtitle={vi ? 'Nhập báo cáo hằng ngày · Máy in' : 'Daily report entry · Print'} machineId="PR-01" machineLabel={vi ? 'Máy in' : 'Print'} status="info" showGlobalNavigation={false} showMachineNavigation={false} showSupportWidget={!isPrintOperator}>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
         <MachineNavigation machineId="PR-01" machineLabel={vi ? 'Máy in' : 'Print'} basePath="/machine/PR-01" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{vi ? 'TRANG CHỦ' : 'HOME'}</HMIButton>} />
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-2 lg:flex-row lg:overflow-hidden">
-            <aside className="flex min-h-0 min-w-0 flex-col border-2 border-industrialDark bg-white lg:w-[320px] lg:shrink-0">
-              <header className="flex min-h-10 items-center border-b-2 border-industrialDark bg-industrialDark px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white">{vi ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION INFORMATION'}</header>
+            <aside className="flex min-h-0 min-w-0 flex-col overflow-y-auto border-2 border-industrialDark bg-white lg:w-[320px] lg:shrink-0">
+              <header className="machine-primary-header flex min-h-10 items-center border-b-2 border-industrialDark px-3 py-2 text-[10px] font-bold uppercase tracking-wider">{vi ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION INFORMATION'}</header>
               <div className="grid content-start">
               <OperationInfoFields
                 orderNumber={orderNumber}
@@ -210,7 +212,7 @@ export function PrintRecordPage() {
               </div>
             </aside>
             <section className="flex min-h-[70dvh] min-w-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-white lg:min-h-0">
-              <header className="sticky top-0 z-10 flex min-h-10 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-white">
+              <header className="machine-primary-header sticky top-0 z-10 flex min-h-10 flex-wrap items-center justify-between gap-2 px-3 py-2">
                 <h1 className="text-[10px] font-bold uppercase tracking-wider">{vi ? 'THÔNG SỐ VẬN HÀNH' : 'OPERATION PARAMETERS'}</h1>
               </header>
               <section className="shrink-0 bg-white">
@@ -258,6 +260,7 @@ export function PrintRecordPage() {
                 </div>
               </section>
             </section>
+            {isPrintOperator && <div className="machine-operational-notices min-w-0 lg:w-[320px] lg:shrink-0"><MachineOperationalNoticeDock machineId="PR-01" /></div>}
         </div>
       </div>
     </WS3Shell>

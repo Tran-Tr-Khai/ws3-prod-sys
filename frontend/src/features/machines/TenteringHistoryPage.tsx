@@ -31,7 +31,11 @@ function quantityText(entries: TenteringOrder['entries'], field: 'planned_quanti
 
 function savedDateKey(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? '' : new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+  return Number.isNaN(date.valueOf()) ? '' : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+
+function factoryToday(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
 function numberText(value: number | null, locale: string): string {
@@ -54,7 +58,7 @@ export function TenteringHistoryPage({ machineId: routeMachineId = 'TE-01' }: { 
   const machine = TENTERING_MACHINES.find((item) => item.id === machineId)!;
   const [orders, setOrders] = useState<TenteringOrder[]>([]);
   const [query, setQuery] = useState('');
-  const [savedDate, setSavedDate] = useState('');
+  const [savedDate, setSavedDate] = useState(factoryToday);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -115,7 +119,7 @@ export function TenteringHistoryPage({ machineId: routeMachineId = 'TE-01' }: { 
       <TenteringNavigation machineId={machineId} history showMachineSelector={false} />
       <main className="min-h-0 flex-1 overflow-auto p-2">
         <section className="flex min-h-full flex-col border-2 border-industrialDark bg-white">
-          <header className="flex flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-white">
+          <header className="machine-primary-header flex flex-wrap items-center justify-between gap-2 px-3 py-2">
             <h1 className="text-xs font-bold uppercase tracking-wider">{vi ? 'LỊCH SỬ' : 'HISTORY'}</h1>
             <div className="flex items-center gap-2"><span className="text-[10px] font-mono">{filteredOrders.length} {vi ? 'đơn' : 'orders'}</span><HMIButton size="compact" variant="secondary" onClick={() => void exportExcel()} disabled={loading || exporting || !filteredOrders.length}>{exporting ? (vi ? 'ĐANG XUẤT…' : 'EXPORTING…') : `${vi ? 'BÁO CÁO' : 'REPORT'} EXCEL`}</HMIButton></div>
           </header>

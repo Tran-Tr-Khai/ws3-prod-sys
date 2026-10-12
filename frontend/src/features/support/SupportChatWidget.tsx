@@ -10,6 +10,7 @@ const SUPPORT_WIDGET_HIDDEN_KEY = 'ws3.support-widget-hidden';
 const machineNames: Record<string, { vi: string; en: string }> = {
   'UN-01': { vi: 'Unrolling', en: 'Unrolling' }, 'BU-01': { vi: 'Buffing', en: 'Buffing' },
   'SC-01': { vi: 'Scouring', en: 'Scouring' }, 'DY-01': { vi: 'Dyeing', en: 'Dyeing' },
+  'TR-01': { vi: 'Transfer', en: 'Transfer' }, 'PR-01': { vi: 'Print', en: 'Print' },
   'WA-01': { vi: 'Washing', en: 'Washing' }, 'SK-01': { vi: 'Skachar', en: 'Skachar' },
   'TE-01': { vi: 'Tentering', en: 'Tentering' }, 'CA-01': { vi: 'Calendaring', en: 'Calendaring' },
   'RA-01': { vi: 'Raising', en: 'Raising' }, 'SU-01': { vi: 'Sueding', en: 'Sueding' },
@@ -18,14 +19,17 @@ const machineNames: Record<string, { vi: string; en: string }> = {
 const machineGroups: Record<string, { vi: string; en: string }> = {
   UNROLLING: { vi: 'UNROLLING', en: 'UNROLLING' }, BUFFING: { vi: 'BUFFING', en: 'BUFFING' },
   SCOURING: { vi: 'SCOURING', en: 'SCOURING' }, DYEING: { vi: 'DYEING', en: 'DYEING' },
+  TRANSFER: { vi: 'TRANSFER', en: 'TRANSFER' }, PRINT: { vi: 'PRINT', en: 'PRINT' },
   WASHING: { vi: 'WASHING', en: 'WASHING' }, SKACHAR: { vi: 'SKACHAR', en: 'SKACHAR' },
   TENTERING: { vi: 'TENTERING', en: 'TENTERING' }, CALENDARING: { vi: 'CALENDARING', en: 'CALENDARING' },
   RAISING: { vi: 'RAISING', en: 'RAISING' }, SUEDING: { vi: 'SUEDING', en: 'SUEDING' },
 };
 
+const machineGroupPrefixes: Record<string, string> = { TRANSFER: 'TR', PRINT: 'PR' };
+
 const machineGroupForId = (machineId: string) => {
   const prefix = machineId.trim().toUpperCase().split('-', 1)[0];
-  return Object.keys(machineGroups).find((group) => group.startsWith(prefix)) ?? machineId;
+  return Object.keys(machineGroups).find((group) => (machineGroupPrefixes[group] ?? group.slice(0, prefix.length)) === prefix) ?? machineId;
 };
 
 export function SupportChatWidget({ embedded = false }: { embedded?: boolean }) {
@@ -207,10 +211,10 @@ export function SupportChatWidget({ embedded = false }: { embedded?: boolean }) 
   if (isMachineOperator) {
     const machineNotices = operationalNotices.filter((notice) => operatorMachineGroups.has(notice.recipientGroup));
     const machineNamesForNotice = [...operatorMachineGroups].map((group) => machineGroups[group]?.[language] ?? group).join(' · ');
-    return <section aria-label={language === 'vi' ? 'Thông báo vận hành' : 'Operational notices'} className={`${embedded ? 'operational-notice-dock relative flex h-[min(420px,60vh)] min-h-[280px] w-full min-w-0 flex-col' : 'fixed bottom-3 right-3 z-50 flex h-[min(460px,calc(100vh-1.5rem))] w-[min(380px,calc(100vw-1.5rem))] flex-col sm:bottom-4 sm:right-4'} border-2 border-industrialDark bg-white shadow-2xl`}>
-        <header className="flex h-12 min-h-12 shrink-0 items-center bg-industrialDark px-3 text-white"><div><h2 className="text-xs font-bold uppercase">{language === 'vi' ? 'Thông báo vận hành' : 'Operational notices'}</h2><p className="text-[9px] text-slate-300">{machineNamesForNotice} · {language === 'vi' ? 'Thông báo từ Admin' : 'Admin announcements'}</p></div></header>
+    return <section aria-label={language === 'vi' ? 'Thông báo' : 'Notices'} className={`${embedded ? 'operational-notice-dock relative flex h-full min-h-0 w-full min-w-0 flex-col' : 'fixed bottom-3 right-3 z-50 flex h-[min(460px,calc(100vh-1.5rem))] w-[min(380px,calc(100vw-1.5rem))] flex-col sm:bottom-4 sm:right-4'} border-2 border-industrialDark bg-white shadow-2xl`}>
+        <header className="flex h-12 min-h-12 shrink-0 items-center bg-industrial px-3 text-white"><div><h2 className="text-xs font-bold uppercase">{language === 'vi' ? 'Thông báo' : 'Notices'}</h2><p className="text-[9px] text-slate-200">{machineNamesForNotice} · {language === 'vi' ? 'Thông báo từ Admin' : 'Admin announcements'}</p></div></header>
         <div ref={noticeListRef} className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto bg-white p-2">
-          {machineNotices.length === 0 && <p className="py-4 text-center text-[10px] text-slate-500">{language === 'vi' ? 'Chưa có thông báo vận hành.' : 'No operational notices yet.'}</p>}
+          {machineNotices.length === 0 && <p className="py-4 text-center text-[10px] text-slate-500">{language === 'vi' ? 'Chưa có thông báo.' : 'No notices yet.'}</p>}
           {machineNotices.map((notice) => { const ownMessage = notice.sender.toLowerCase() === user.username.toLowerCase(); const fromManager = ['ADMIN', 'SUPERVISOR'].includes(notice.senderRole.toUpperCase()); const highlighted = fromManager && !seenOperationalMessageIds.has(notice.id); return <article key={`${notice.id}-${notice.ticketId}`} className={`max-w-[92%] border px-2 py-2 ${ownMessage ? 'ml-auto bg-industrial text-white' : 'bg-white'} ${highlighted ? 'border-warning bg-hmiWarning ring-2 ring-warning/40' : 'border-line'}`}><div className="mb-1 flex items-center justify-between gap-2 text-[8px] font-bold uppercase opacity-80"><button type="button" onClick={() => markOperationalNoticeSeen(notice.id)} className="flex min-w-0 items-center gap-2 text-left"><span className="truncate">{notice.senderName} · {formatTime(notice.sentAt)}</span>{highlighted && <span className="shrink-0 bg-warning px-1 py-0.5 text-white">{language === 'vi' ? 'MỚI' : 'NEW'}</span>}</button>{ownMessage && <button type="button" title={language === 'vi' ? 'Gỡ tin nhắn của bạn' : 'Remove your message'} aria-label={language === 'vi' ? 'Gỡ tin nhắn của bạn' : 'Remove your message'} disabled={deletingMessageId === notice.id} onClick={() => void removeOwnMessage(notice.ticketId, notice.id)} className="px-1 text-sm leading-none opacity-90 hover:opacity-100 disabled:opacity-40">×</button>}</div><button type="button" onClick={() => markOperationalNoticeSeen(notice.id)} className="block w-full text-left"><span className="whitespace-pre-wrap break-words text-[11px] leading-relaxed">{notice.message}</span></button></article>; })}
         </div>
         <form className="shrink-0 border-t border-line bg-hmiSection p-2" onSubmit={(event) => { event.preventDefault(); void sendOperationalReply(); }}><label htmlFor="operational-reply" className="sr-only">{language === 'vi' ? 'Soạn báo cáo vận hành' : 'Compose operational report'}</label><div className="flex items-end gap-1"><textarea id="operational-reply" rows={2} className="min-h-10 min-w-0 flex-1 resize-y border border-line bg-white px-2 py-1.5 text-[10px]" value={operationalReply} onChange={(event) => { setOperationalReply(event.target.value); setOperationalReplySent(false); }} placeholder={language === 'vi' ? 'Nhập tin nhắn hoặc báo cáo...' : 'Write a message or report...'} /><button type="submit" disabled={!operationalReplyTicketId || sendingOperationalReply || !operationalReply.trim()} className="min-h-10 border-2 border-industrialDark bg-industrial px-3 text-[9px] font-bold uppercase text-white disabled:opacity-50">{sendingOperationalReply ? '…' : language === 'vi' ? 'Gửi' : 'Send'}</button></div>{operationalReplySent && <p role="status" className="mt-1 text-[9px] font-bold text-success">{language === 'vi' ? 'Đã gửi báo cáo.' : 'Report sent.'}</p>}</form>

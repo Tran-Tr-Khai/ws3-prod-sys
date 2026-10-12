@@ -42,7 +42,7 @@ class MachineOverviewTests(unittest.TestCase):
             values.update(recorded_at=when, item='Fabric', naoh=1, soap=1, desizer=1, h2o2=1, chelate=1, speed=45, temperature=95, cylinder_temperature=95, production_quantity_meters=0)
         else:
             values.update(recorded_at=when, production_date=date(2026, 10, day), item='Fabric', buyer='', design='', speed=40, quantity_meters=0)
-            if machine == 'HT-01':
+            if machine == 'TR-01':
                 values['temperature'] = 90
         row = model(**values)
         self.db.add(row)
@@ -65,14 +65,14 @@ class MachineOverviewTests(unittest.TestCase):
                 self.assertEqual(get_overview(self.db, machine)['id'], latest.id)
 
     def test_canonical_state_overrides_copied_status(self):
-        old = self.record('HT-01', 'SOP-A', 1, 'COMPLETED')
-        self.record('HT-01', 'SOP-B', 2)
+        old = self.record('TR-01', 'SOP-A', 1, 'COMPLETED')
+        self.record('TR-01', 'SOP-B', 2)
         self.db.add_all([
-            MachineOrderState(machine_id='HT-01', order_number='SOP-A', order_progress='IN_PROGRESS'),
-            MachineOrderState(machine_id='HT-01', order_number='SOP-B', order_progress='COMPLETED'),
+            MachineOrderState(machine_id='TR-01', order_number='SOP-A', order_progress='IN_PROGRESS'),
+            MachineOrderState(machine_id='TR-01', order_number='SOP-B', order_progress='COMPLETED'),
         ])
         self.db.commit()
-        result = get_overview(self.db, 'HT-01')
+        result = get_overview(self.db, 'TR-01')
         self.assertEqual(result['id'], old.id)
         self.assertEqual(result['progress'], 'IN_PROGRESS')
         self.assertEqual(result['output'], 0)

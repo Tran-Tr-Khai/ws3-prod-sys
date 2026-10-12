@@ -5,7 +5,7 @@ import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
 import { MachineOrderProgressField } from '../../components/hmi/MachineOrderProgressField';
 import { useAuth } from '../../auth/AuthContext';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { SupportChatWidget } from '../support/SupportChatWidget';
+import { isOperatorAssignedToMachine, MachineOperationalNoticeDock } from '../support/MachineOperationalNoticeDock';
 import { TENTERING_MACHINES, TenteringMachineSelect, TenteringNavigation } from './TenteringNavigation';
 import { getTenteringOrder, getTenteringOrderSource, saveTenteringOrder, type TenteringOrder, type TenteringOrderInput } from './tenteringApi';
 import { getMachineOrderProgress, saveMachineOrderProgress } from './scouringApi';
@@ -132,6 +132,7 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
   const [progressSaving, setProgressSaving] = useState(false);
   const [progressError, setProgressError] = useState('');
   const isOperator = user?.role === 'OPERATOR';
+  const isTenteringOperator = isOperatorAssignedToMachine(user, machineId);
   const tx = (vietnamese: string, english: string) => vi ? vietnamese : english;
   const findExistingOrder = useCallback((normalizedSop: string) => getTenteringOrder(machineId, normalizedSop), [machineId]);
   const existingLookup = useExistingMachineRecord(sopInput, findExistingOrder, 300);
@@ -232,7 +233,7 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
       <TenteringNavigation machineId={machineId} showMachineSelector={false} />
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-2 lg:flex-row lg:overflow-hidden">
         <aside className="flex min-h-0 min-w-0 flex-col border-2 border-industrialDark bg-white lg:w-[320px] lg:shrink-0">
-          <header className="flex min-h-10 items-center border-b-2 border-industrialDark bg-industrialDark px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white">{tx('THÔNG TIN VẬN HÀNH', 'OPERATION INFORMATION')}</header>
+          <header className="machine-primary-header flex min-h-10 items-center border-b-2 border-industrialDark px-3 py-2 text-[10px] font-bold uppercase tracking-wider">{tx('THÔNG TIN VẬN HÀNH', 'OPERATION INFORMATION')}</header>
           <div className="grid content-start">
             <OperationInfoFields beforeFields={<TenteringMachineSelect machineId={machineId} visibleLabel />} orderNumber={sopInput} onOrderNumberChange={(value) => { setSopInput(value.toUpperCase()); setActiveSop(''); setKnownOrder(false); setHeader({ ...emptyHeader }); setRolls(emptyRolls()); setNewOrder(false); setSaved(false); setLoading(false); setOrderProgress('IN_PROGRESS'); setProgressError(''); setError(''); }} operatorName={header.operatorName} onOperatorNameChange={(operatorName) => setHeader((current) => ({ ...current, operatorName }))} employeeId={header.operatorIdentifier} onEmployeeIdChange={(operatorIdentifier) => setHeader((current) => ({ ...current, operatorIdentifier }))} shift={header.shift} onShiftChange={(shift) => setHeader((current) => ({ ...current, shift }))} orderStatus={<MachineOrderProgressField value={orderProgress} language={language} automatic={isOperator} disabled={!knownOrder || loading} saving={progressSaving} error={progressError} onChange={(progress) => void changeOrderProgress(progress)} />} />
             {error && <p role="alert" className="border border-alarm bg-hmiAlarm p-2 text-[10px] font-bold text-alarm">{error}</p>}
@@ -240,12 +241,11 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
           </div>
         </aside>
         <main className="min-h-0 min-w-0 flex-1 overflow-auto border-2 border-industrialDark bg-white">
-          <header className="sticky top-0 z-10 flex min-h-10 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-white">
+          <header className="machine-primary-header sticky top-0 z-10 flex min-h-10 flex-wrap items-center justify-between gap-2 px-3 py-2">
             <h1 className="text-xs font-bold uppercase tracking-wider">{tx('THÔNG SỐ VẬN HÀNH', 'OPERATION PARAMETERS')}</h1>
           </header>
           <div className="grid gap-3 p-3">
-            {!activeSop ? <div className="border border-info bg-sky-50 p-4 text-xs text-info">{tx('Nhập mã SOP để mở dữ liệu đã có hoặc bắt đầu phiếu mới.', 'Enter an SOP to open an existing record or start a new sheet.')}</div> : <>
-              {newOrder && <div className="border border-warning bg-hmiWarning p-2 text-[10px] font-semibold text-warning">{tx('Chưa có phiếu đã lưu cho SOP này. Hãy nhập thông tin đơn và dữ liệu từng cuộn.', 'No sheet is saved for this SOP. Enter the order information and per-roll details.')}</div>}
+              {activeSop && newOrder && <div className="border border-warning bg-hmiWarning p-2 text-[10px] font-semibold text-warning">{tx('Chưa có phiếu đã lưu cho SOP này. Hãy nhập thông tin đơn và dữ liệu từng cuộn.', 'No sheet is saved for this SOP. Enter the order information and per-roll details.')}</div>}
               <section className="border border-line">
                 <header className="border-b border-line bg-hmiSection px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-industrialDark">{tx('THÔNG TIN ĐƠN', 'ORDER INFORMATION')}</header>
                 <div className="grid gap-3 p-3 xl:grid-cols-3">
@@ -275,7 +275,7 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
                   </section>
                 </div>
               </section>
-              {rolls.length === 0 ? <p className="border border-info bg-sky-50 p-3 text-xs text-info">{tx('Chưa tìm thấy cuộn của SOP này trong dữ liệu MES.', 'No rolls were found for this SOP in the MES data.')}</p> : <section className="min-w-0 border border-line">
+              {!activeSop ? <p className="border border-line bg-hmiSection p-3 text-xs text-slate-500">{tx('Danh sách cuộn sẽ hiển thị sau khi nhập mã SOP.', 'The roll list will appear after an SOP is entered.')}</p> : rolls.length === 0 ? <p className="border border-info bg-sky-50 p-3 text-xs text-info">{tx('Chưa tìm thấy cuộn của SOP này trong dữ liệu MES.', 'No rolls were found for this SOP in the MES data.')}</p> : <section className="min-w-0 border border-line">
                 <div className="overflow-x-auto"><table className="w-full min-w-[1000px] border-collapse text-left text-[10px]"><thead className="bg-hmiSection text-[9px] uppercase tracking-wide text-industrialDark"><tr>{[tx('STT / CUỘN', 'NO. / ROLL'), tx('NGÀY DỆT', 'WEAVING DATE'), tx('MÃ ROLL', 'ROLL ID'), tx('SẢN LƯỢNG THEO ĐƠN', 'PLANNED QUANTITY'), tx('SẢN LƯỢNG THỰC TẾ', 'ACTUAL QUANTITY'), tx('GHI CHÚ', 'NOTE')].map((label) => <th key={label} className="border-r border-b border-line px-2 py-2">{label}</th>)}</tr></thead>
                   <tbody>{rolls.map((row, index) => <tr key={row.rollNumber} className="border-b border-line odd:bg-white even:bg-slate-50"><td className="w-16 px-2 py-1.5 text-center font-mono font-bold">{row.rollNumber}</td>
                     <td aria-label={`${tx('Ngày dệt cuộn', 'Weaving date roll')} ${row.rollNumber}`} className="whitespace-nowrap px-2 py-1 text-[10px]">{displayDate(row.weavingDate, language)}</td>
@@ -284,12 +284,11 @@ export function TenteringRecordPage({ machineId: routeMachineId = 'TE-01' }: { m
                     <td className="px-1 py-1"><input aria-label={`${tx('Sản lượng thực tế cuộn', 'Actual quantity roll')} ${row.rollNumber}`} type="number" min="0" step="any" inputMode="decimal" value={row.actualQuantity} onChange={(event) => setRolls((current) => current.map((item, i) => i === index ? { ...item, actualQuantity: event.target.value } : item))} className="min-h-8 w-full border border-line bg-white px-2 text-right font-mono text-xs" /></td>
                     <td className="px-1 py-1"><input aria-label={`${tx('Ghi chú cuộn', 'Roll note')} ${row.rollNumber}`} value={row.note} onChange={(event) => setRolls((current) => current.map((item, i) => i === index ? { ...item, note: event.target.value } : item))} className="min-h-8 w-full border border-line bg-white px-2 text-xs" maxLength={1000} /></td></tr>)}</tbody></table></div>
               </section>}
-              <div className="flex justify-end"><HMIButton variant="primary" size="large" disabled={saving || loading} onClick={() => void save()}>{saving ? tx('ĐANG LƯU…', 'SAVING…') : tx('LƯU PHIẾU', 'SAVE SHEET')}</HMIButton></div>
-            </>}
+              <div className="flex justify-end"><HMIButton variant="primary" size="large" disabled={!activeSop || saving || loading} onClick={() => void save()}>{saving ? tx('ĐANG LƯU…', 'SAVING…') : tx('LƯU PHIẾU', 'SAVE SHEET')}</HMIButton></div>
           </div>
         </main>
+        {isTenteringOperator && <div className="machine-operational-notices min-w-0 lg:w-[320px] lg:shrink-0"><MachineOperationalNoticeDock machineId={machineId} /></div>}
       </div>
-      {isOperator && <div className="shrink-0 border-t border-line"><SupportChatWidget embedded /></div>}
     </div>
   </WS3Shell>;
 }

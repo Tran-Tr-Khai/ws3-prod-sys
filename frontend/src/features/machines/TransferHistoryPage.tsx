@@ -7,6 +7,7 @@ import { useLanguage } from '../../i18n/LanguageContext';
 import { downloadTransferReport, listTransferRecords, type TransferRecord } from './transferApi';
 
 type OrderProgress = '' | TransferRecord['order_progress'];
+const factoryToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
 function ProgressBadge({ progress, vi }: { progress: TransferRecord['order_progress']; vi: boolean }) {
   const completed = progress === 'COMPLETED';
@@ -17,7 +18,7 @@ export function TransferHistoryPage() {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const vi = language === 'vi';
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(factoryToday);
   const [orderProgress, setOrderProgress] = useState<OrderProgress>('');
   const [search, setSearch] = useState('');
   const [records, setRecords] = useState<TransferRecord[]>([]);
@@ -55,19 +56,19 @@ export function TransferHistoryPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `ht-transfer-report-${date || 'all'}.xlsx`;
+      link.download = `tr-transfer-report-${date || 'all'}.xlsx`;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (reason) { setError(reason instanceof Error ? reason.message : (vi ? 'Không xuất được Excel.' : 'Unable to export Excel.')); }
     finally { setExporting(false); }
   };
 
-  return <WS3Shell title="WS3 / Transfer" subtitle={vi ? 'Lịch sử sản xuất · Máy ép' : 'Production history · Transfer'} machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} status="info" showGlobalNavigation={false} showMachineNavigation={false}>
+  return <WS3Shell title="WS3 / Transfer" subtitle={vi ? 'Lịch sử sản xuất · Máy ép' : 'Production history · Transfer'} machineId="TR-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} status="info" showGlobalNavigation={false} showMachineNavigation={false}>
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
-      <MachineNavigation machineId="HT-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} basePath="/machine/HT-01" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{vi ? 'TRANG CHỦ' : 'HOME'}</HMIButton>} />
+      <MachineNavigation machineId="TR-01" machineLabel={vi ? 'Máy ép' : 'Transfer'} basePath="/machine/TR-01" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{vi ? 'TRANG CHỦ' : 'HOME'}</HMIButton>} />
       <main className="min-h-0 flex-1 p-2">
         <section className="mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden border-2 border-industrialDark bg-white">
-          <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-xs font-bold uppercase tracking-wide text-white">
+          <header className="machine-primary-header flex shrink-0 flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs font-bold uppercase tracking-wide">
             <h1>{vi ? 'LỊCH SỬ SẢN XUẤT' : 'PRODUCTION HISTORY'}</h1>
             <HMIButton size="compact" variant="secondary" disabled={loading || exporting || filtered.length === 0} onClick={() => void exportExcel()}>{exporting ? (vi ? 'ĐANG XUẤT…' : 'EXPORTING…') : (vi ? 'BÁO CÁO EXCEL' : 'EXCEL REPORT')}</HMIButton>
           </header>

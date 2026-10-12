@@ -18,9 +18,9 @@ from app.security.auth import get_current_user, role_codes
 from app.services.machine_order_progress import activate_machine_order
 from app.services.snapshot_report import raw_value
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_sop_code
-router = APIRouter(prefix="/transfer/records", tags=["H/T Transfer"])
+router = APIRouter(prefix="/transfer/records", tags=["Transfer"])
 MANAGER_ROLES = {"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}
-MACHINE_ID = "HT-01"
+MACHINE_ID = "TR-01"
 
 
 def _authorize(user: User) -> None:
@@ -212,7 +212,7 @@ def export_transfer_records(
     is_vi = language == "vi"
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "HT Transfer"
+    sheet.title = "TR Transfer"
     sheet.sheet_view.showGridLines = False
     sheet.merge_cells("A1:L1")
     title = sheet["A1"]
@@ -265,7 +265,7 @@ def export_transfer_records(
     workbook.save(output)
     output.seek(0)
     date_suffix = production_date.isoformat() if production_date else "all"
-    filename = f"ht-transfer-daily-report-{date_suffix}.xlsx"
+    filename = f"tr-transfer-daily-report-{date_suffix}.xlsx"
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

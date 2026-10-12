@@ -7,6 +7,7 @@ import { useLanguage } from '../../i18n/LanguageContext';
 import { downloadPrintReport, listPrintRecords, type PrintRecord } from './printApi';
 
 type OrderProgress = '' | PrintRecord['order_progress'];
+const factoryToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
 function ProgressBadge({ progress, vi }: { progress: PrintRecord['order_progress']; vi: boolean }) {
   const completed = progress === 'COMPLETED';
@@ -17,7 +18,7 @@ export function PrintHistoryPage() {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const vi = language === 'vi';
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(factoryToday);
   const [orderProgress, setOrderProgress] = useState<OrderProgress>('');
   const [search, setSearch] = useState('');
   const [records, setRecords] = useState<PrintRecord[]>([]);
@@ -67,7 +68,7 @@ export function PrintHistoryPage() {
       <MachineNavigation machineId="PR-01" machineLabel={vi ? 'Máy in' : 'Print'} basePath="/machine/PR-01" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{vi ? 'TRANG CHỦ' : 'HOME'}</HMIButton>} />
       <main className="min-h-0 flex-1 p-2">
         <section className="mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden border-2 border-industrialDark bg-white">
-          <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 bg-industrialDark px-3 py-2 text-xs font-bold uppercase tracking-wide text-white">
+          <header className="machine-primary-header flex shrink-0 flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs font-bold uppercase tracking-wide">
             <h1>{vi ? 'LỊCH SỬ SẢN XUẤT' : 'PRODUCTION HISTORY'}</h1>
             <HMIButton size="compact" variant="secondary" disabled={loading || exporting || filtered.length === 0} onClick={() => void exportExcel()}>{exporting ? (vi ? 'ĐANG XUẤT…' : 'EXPORTING…') : (vi ? 'BÁO CÁO EXCEL' : 'EXCEL REPORT')}</HMIButton>
           </header>

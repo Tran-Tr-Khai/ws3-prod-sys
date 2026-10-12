@@ -69,10 +69,10 @@ class MockMachineSimulator:
                 start_time=now - timedelta(hours=4, minutes=5),
             ),
             MachineDefinition(
-                machine_id="HT-01",
+                machine_id="TR-01",
                 process="H/T TRANSFER",
                 status="RUNNING",
-                batch="B-HT-260916-01",
+                batch="B-TR-260916-01",
                 base_speed=18.0,
                 base_temperature=185.0,
                 base_production_today=320.0,

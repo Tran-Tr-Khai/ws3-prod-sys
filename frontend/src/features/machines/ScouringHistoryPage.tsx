@@ -139,7 +139,7 @@ export function ScouringHistoryPage() {
   return <WS3Shell title="WS3 / Scouring History" subtitle="Stored Scouring records · PostgreSQL" machineId="SC-01" machineLabel="Scouring" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-navy text-slate-800">
       <div className="scouring-screen-frame scouring-full-width-frame mt-2 flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-industrialDark bg-hmiConsole">
-      <header className="flex min-h-8 shrink-0 items-center justify-between border-b-2 border-industrialDark bg-industrialDark px-2 py-1 text-white">
+      <header className="machine-primary-header flex min-h-8 shrink-0 items-center justify-between border-b-2 border-industrialDark px-2 py-1">
         <h2 className="text-xs font-bold uppercase tracking-wider">{t('history')}</h2>
         <div className="flex items-center gap-2"><span className="hidden text-[10px] font-semibold uppercase text-slate-300 sm:inline">{t('newestFirst')}</span><HMIButton size="compact" variant="secondary" className="!min-h-6 !px-2 !py-1 !text-[9px]" onClick={() => void exportExcel()} disabled={loading || exporting || filteredRecords.length === 0}>{exporting ? (language === 'vi' ? 'ĐANG XUẤT…' : 'EXPORTING…') : `${t('overview')} EXCEL`}</HMIButton></div>
       </header>

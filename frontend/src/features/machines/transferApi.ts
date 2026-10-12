@@ -2,7 +2,7 @@ const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 export type TransferRecord = {
   id: number;
-  machine_id: 'HT-01';
+  machine_id: 'TR-01';
   production_date: string;
   recorded_at: string;
   order_number: string;
@@ -24,7 +24,7 @@ export type TransferOrderSource = { item: string | null; buyer: string | null; d
 
 async function readError(response: Response): Promise<string> {
   const body = await response.json().catch(() => null) as { detail?: unknown } | null;
-  return typeof body?.detail === 'string' ? body.detail : `H/T Transfer API returned HTTP ${response.status}`;
+  return typeof body?.detail === 'string' ? body.detail : `Transfer API returned HTTP ${response.status}`;
 }
 
 export async function getTransferOrderSource(sopNo: string): Promise<TransferOrderSource | null> {

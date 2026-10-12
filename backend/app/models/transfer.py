@@ -7,7 +7,7 @@ from app.db.base import Base, TimestampMixin
 
 
 class TransferRecord(TimestampMixin, Base):
-    """One H/T Transfer production entry from the daily operator report."""
+    """One Transfer production entry from the daily operator report."""
 
     __tablename__ = "transfer_records"
     __table_args__ = (Index("ix_transfer_records_machine_date", "machine_id", "production_date"),)

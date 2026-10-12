@@ -17,13 +17,13 @@ const processes = [
   { name: 'Calendaring', code: 'CA-01', available: false },
   { name: 'Raising', code: 'RA-01', available: false },
   { name: 'Sueding', code: 'SU-01', available: false },
-  { name: 'Transfer', code: 'HT-01', available: true },
+  { name: 'Transfer', code: 'TR-01', available: true },
   { name: 'Print', code: 'PR-01', available: true },
 ];
 
 const overviewMachineFilterKey = 'ws3.overview.selected-machines.v3';
 const legacyOverviewMachineFilterKeys = ['ws3.overview.selected-machines.v2', 'ws3.overview.selected-machines'];
-const defaultOverviewMachineCodes = ['UN-01', 'BU-01', 'SC-01', 'TE-01', 'HT-01', 'PR-01'];
+const defaultOverviewMachineCodes = ['UN-01', 'BU-01', 'SC-01', 'TE-01', 'TR-01', 'PR-01'];
 const overviewFilterProcesses = processes.filter((process) => process.available);
 
 function getInitialOverviewMachineSelection(): string[] {
@@ -34,9 +34,10 @@ function getInitialOverviewMachineSelection(): string[] {
     const stored: unknown = JSON.parse(currentValue ?? legacyValue ?? 'null');
     if (Array.isArray(stored) && stored.every((code) => typeof code === 'string')) {
       const validCodes = new Set(overviewFilterProcesses.map((process) => process.code));
-      const selection = stored.filter((code): code is string => validCodes.has(code));
+      const normalizedStored = stored.map((code) => code === 'HT-01' ? 'TR-01' : code);
+      const selection = normalizedStored.filter((code): code is string => validCodes.has(code));
       if (stored.includes('TE-02') && !selection.includes('TE-01')) selection.push('TE-01');
-      if (migratingLegacySelection && !selection.includes('HT-01')) selection.push('HT-01');
+      if (migratingLegacySelection && !selection.includes('TR-01')) selection.push('TR-01');
       if (!selection.includes('PR-01')) selection.push('PR-01');
       return selection;
     }

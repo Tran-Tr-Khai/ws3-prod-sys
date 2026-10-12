@@ -22,7 +22,7 @@ const productionFields: Record<string, string[]> = {
   'SC-01': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
   'TE-01': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
   'TE-02': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
-  'HT-01': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
+  'TR-01': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
   'PR-01': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
 };
 
@@ -32,7 +32,7 @@ export function useMachineOverview(activeTenteringMachine: string) {
   const buffing = useProgressiveMachineOverview('BU-01');
   const scouring = useProgressiveMachineOverview('SC-01');
   const tentering = useProgressiveMachineOverview(activeTenteringMachine);
-  const transfer = useProgressiveMachineOverview('HT-01');
+  const transfer = useProgressiveMachineOverview('TR-01');
   const print = useProgressiveMachineOverview('PR-01');
   const canViewMesOrders = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
   const today = factoryToday();
@@ -108,7 +108,7 @@ export function useMachineOverview(activeTenteringMachine: string) {
     'BU-01': summarize('BU-01', buffing),
     'SC-01': summarize('SC-01', scouring),
     [activeTenteringMachine]: summarize(activeTenteringMachine, tentering),
-    'HT-01': summarize('HT-01', transfer),
+    'TR-01': summarize('TR-01', transfer),
     'PR-01': summarize('PR-01', print),
     'UN-01': {
       operation: [field('machine', t('machine'), 'UN-01')],

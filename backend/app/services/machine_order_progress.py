@@ -15,7 +15,7 @@ ORDER_RECORDS = {
     "SC-01": (ScouringRecord, "order_number"),
     "TE-01": (TenteringOrder, "sop_no"),
     "TE-02": (TenteringOrder, "sop_no"),
-    "HT-01": (TransferRecord, "order_number"),
+    "TR-01": (TransferRecord, "order_number"),
     "PR-01": (PrintRecord, "order_number"),
 }
 

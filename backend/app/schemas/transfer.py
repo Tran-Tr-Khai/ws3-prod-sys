@@ -13,7 +13,7 @@ def _finite_nonnegative(value: float) -> float:
 class TransferRecordCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    machine_id: Literal["HT-01"] = "HT-01"
+    machine_id: Literal["TR-01"] = "TR-01"
     production_date: date
     recorded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     order_number: str = Field(min_length=1, max_length=160)

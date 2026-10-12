@@ -7,6 +7,8 @@ MACHINE_GROUPS: tuple[tuple[str, str], ...] = (
     ("UNROLLING", "UN"),
     ("BUFFING", "BU"),
     ("SCOURING", "SC"),
+    ("TRANSFER", "TR"),
+    ("PRINT", "PR"),
     ("DYEING", "DY"),
     ("WASHING", "WA"),
     ("SKACHAR", "SK"),

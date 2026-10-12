@@ -10,6 +10,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { createBuffingCheck, deleteBuffingCheck, getBuffingChecks, getBuffingChecksForOrder, getMachineOrderProgress, saveMachineOrderProgress, uploadBuffingImages, type BuffingCheck, type BuffingImage } from './scouringApi';
 import { getWS3ProductionOrderContext, type WS3ProductionOrderReport } from '../orders/ws3OrderApi';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { isOperatorAssignedToMachine, MachineOperationalNoticeDock } from '../support/MachineOperationalNoticeDock';
 
 const currentFactoryDateTime = () => new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short' }).format(new Date());
 const factoryToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -24,6 +25,7 @@ export function BuffingPage() {
   const { user } = useAuth();
   const canViewHistory = user?.role !== 'OPERATOR';
   const isOperator = user?.role === 'OPERATOR';
+  const isBuffingOperator = isOperatorAssignedToMachine(user, 'BU-01');
   const [operator, setOperator] = useState('');
   const [operatorIdentifier, setOperatorIdentifier] = useState('');
   const [shift, setShift] = useState('');
@@ -307,16 +309,15 @@ export function BuffingPage() {
   };
 
   return (
-    <WS3Shell showGlobalNavigation={false} showMachineNavigation={false} title={`WS3 / ${t('buffingDailyCheck')}`} subtitle={`${t('periodicChecklist')} · Buffing`} machineId="BU-01" machineLabel="Buffing" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
+    <WS3Shell showGlobalNavigation={false} showMachineNavigation={false} showSupportWidget={!isBuffingOperator} title={`WS3 / ${t('buffingDailyCheck')}`} subtitle={`${t('periodicChecklist')} · Buffing`} machineId="BU-01" machineLabel="Buffing" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
       <div className="buffing-page-shell flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
         <MachineNavigation machineId="BU-01" machineLabel="Buffing" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{t('home')}</HMIButton>} />
-        <div className="buffing-page-content min-h-0 flex-1 p-2">
-          <div className="buffing-card mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden border-2 border-industrialDark bg-white">
-            <header className="flex shrink-0 items-center justify-between gap-3 bg-industrialDark px-3 py-2 text-white"><h1 className="text-sm font-bold uppercase tracking-wider">{t('periodicChecklist')}</h1><HMIButton size="compact" className="max-w-[360px] truncate" variant={cameraConnected ? 'primary' : undefined} onClick={() => void openCameraPicker()} disabled={saving}>{cameraConnected ? `${connectedCameraLabel} · ${t('cameraConnected')}` : t('connectCamera')}</HMIButton></header>
-
-            <div className="buffing-layout grid min-h-0 flex-1 gap-2 bg-hmiConsole p-2 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)]">
-            <aside className="buffing-no-print flex min-w-0 flex-col border-2 border-industrialDark bg-white">
-              <header className="border-b-2 border-industrialDark bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-industrialDark">{language === 'vi' ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION DETAILS'}</header>
+        <div className="buffing-page-content min-h-0 flex-1 p-0">
+          <div className="buffing-card mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden bg-hmiConsole">
+            <div className="flex shrink-0 justify-end px-2 pt-2"><HMIButton size="compact" className="max-w-[360px] truncate" variant={cameraConnected ? 'primary' : undefined} onClick={() => void openCameraPicker()} disabled={saving}>{cameraConnected ? `${connectedCameraLabel} · ${t('cameraConnected')}` : t('connectCamera')}</HMIButton></div>
+            <div className={`buffing-layout grid min-h-0 flex-1 gap-2 bg-hmiConsole p-2 ${isBuffingOperator ? 'lg:grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)_minmax(260px,1fr)]' : 'lg:grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)]'}`}>
+            <aside className="buffing-no-print flex min-w-0 flex-col overflow-y-auto border-2 border-industrialDark bg-white">
+              <header className="machine-primary-header border-b-2 border-industrialDark px-3 py-2 text-[11px] font-bold uppercase tracking-wider">{language === 'vi' ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION DETAILS'}</header>
               <OperationInfoFields orderNumber={orderNumber} onOrderNumberChange={(value) => { setOrderNumber(value); setOrderProduction(null); setOperator(''); setOperatorIdentifier(''); setShift(''); setOrderProgress('IN_PROGRESS'); setProgressError(null); }} operatorName={operator} onOperatorNameChange={setOperator} employeeId={operatorIdentifier} onEmployeeIdChange={setOperatorIdentifier} shift={shift} onShiftChange={setShift} orderStatus={<MachineOrderProgressField value={orderProgress} language={language} automatic={isOperator} disabled={!orderProduction || orderLookupLoading} saving={progressSaving} error={progressError} onChange={(progress) => void changeOrderProgress(progress)} />} />
             </aside>
 
@@ -353,6 +354,7 @@ export function BuffingPage() {
             </section>}
             </>}
             </section>
+            {isBuffingOperator && <div className="machine-operational-notices min-w-0"><MachineOperationalNoticeDock machineId="BU-01" /></div>}
             </div>
           </div>
         </div>
