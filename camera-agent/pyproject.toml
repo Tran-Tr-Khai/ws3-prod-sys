@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ws3-camera-agent"
+version = "0.1.0"
+description = "Local Windows bridge for industrial cameras used by WS3"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "Pillow==11.3.0",
+]
+
+[project.scripts]
+ws3-camera-agent = "ws3_camera_agent.app:main"
+
+[tool.setuptools.packages.find]
+include = ["ws3_camera_agent*"]

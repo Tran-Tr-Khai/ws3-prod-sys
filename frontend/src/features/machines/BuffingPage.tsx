@@ -11,6 +11,7 @@ import { createBuffingCheck, deleteBuffingCheck, getBuffingChecks, getBuffingChe
 import { getWS3ProductionOrderContext, type WS3ProductionOrderReport } from '../orders/ws3OrderApi';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { isOperatorAssignedToMachine, MachineOperationalNoticeDock } from '../support/MachineOperationalNoticeDock';
+import { captureHikrobotPhoto, listHikrobotCameras, type HikrobotCamera } from './hikrobotCameraAgent';
 
 const currentFactoryDateTime = () => new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short' }).format(new Date());
 const factoryToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -18,6 +19,16 @@ const toCheckRow = (row: BuffingCheck) => ({ id: row.id, time: new Date(row.chec
 type CheckRow = ReturnType<typeof toCheckRow>;
 const BUFFING_CAMERA_STORAGE_KEY = 'ws3.buffing.camera-id';
 const BUFFING_CAMERA_SKIP_STORAGE_KEY = 'ws3.buffing.camera-skipped';
+const BUFFING_MVS_CAMERA_PREFIX = 'mvs:';
+type SelectedCamera = { source: 'browser' | 'mvs'; id: string };
+
+function storedCamera(): SelectedCamera | null {
+  const saved = window.localStorage.getItem(BUFFING_CAMERA_STORAGE_KEY);
+  if (!saved) return null;
+  if (saved.startsWith(BUFFING_MVS_CAMERA_PREFIX)) return { source: 'mvs', id: saved.slice(BUFFING_MVS_CAMERA_PREFIX.length) };
+  // Keep existing browser camera choices working after the MVS option is added.
+  return { source: 'browser', id: saved };
+}
 
 export function BuffingPage() {
   const navigate = useNavigate();
@@ -45,14 +56,18 @@ export function BuffingPage() {
   const [error, setError] = useState<string | null>(null);
   const [gallery, setGallery] = useState<{ images: BuffingImage[]; index: number } | null>(null);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
-  const [selectedCameraId, setSelectedCameraId] = useState(() => window.localStorage.getItem(BUFFING_CAMERA_STORAGE_KEY) ?? '');
+  const [mvsCameras, setMvsCameras] = useState<HikrobotCamera[]>([]);
+  const [mvsAgentError, setMvsAgentError] = useState<string | null>(null);
+  const [selectedCamera, setSelectedCamera] = useState<SelectedCamera | null>(storedCamera);
   const [cameraConnected, setCameraConnected] = useState(false);
   const [cameraSkipped, setCameraSkipped] = useState(() => window.localStorage.getItem(BUFFING_CAMERA_SKIP_STORAGE_KEY) === 'true');
   const [cameraConnecting, setCameraConnecting] = useState(false);
   const [cameraPickerOpen, setCameraPickerOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
-  const connectedCameraLabel = cameras.find((camera) => camera.deviceId === selectedCameraId)?.label || t('cameraConnected');
+  const connectedCameraLabel = selectedCamera?.source === 'mvs'
+    ? mvsCameras.find((camera) => camera.id === selectedCamera.id)?.label || 'MVS / Hikrobot'
+    : cameras.find((camera) => camera.deviceId === selectedCamera?.id)?.label || t('cameraConnected');
   const cameraText = language === 'vi' ? {
     beforeChecklist: 'Kết nối camera trước khi thực hiện checklist, hoặc tiếp tục nếu máy này không có camera.',
     continueWithout: 'TIẾP TỤC KHÔNG DÙNG CAMERA',
@@ -172,7 +187,7 @@ export function BuffingPage() {
 
   const toggleCheck = (index: number) => setChecks((current) => current.map((value, itemIndex) => itemIndex === index ? !value : value));
 
-  const connectCamera = async (cameraId: string) => {
+  const connectBrowserCamera = async (cameraId: string) => {
     if (!navigator.mediaDevices?.getUserMedia) { setError(cameraErrorMessage()); return; }
     setError(null);
     setCameraConnecting(true);
@@ -186,7 +201,7 @@ export function BuffingPage() {
       }
       const devices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput');
       setCameras(devices);
-      setSelectedCameraId(cameraId);
+      setSelectedCamera({ source: 'browser', id: cameraId });
       window.localStorage.setItem(BUFFING_CAMERA_STORAGE_KEY, cameraId);
       setCameraConnected(true);
       setCameraSkipped(false);
@@ -200,25 +215,72 @@ export function BuffingPage() {
     }
   };
 
-  const openCameraPicker = async () => {
-    setCameraPickerOpen(true);
-    if (!navigator.mediaDevices?.getUserMedia) { setError(cameraErrorMessage()); return; }
+  const connectMvsCamera = async (camera: HikrobotCamera) => {
     setError(null);
     setCameraConnecting(true);
     try {
-      const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      permissionStream.getTracks().forEach((track) => track.stop());
-      const devices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput');
-      setCameras(devices);
+      stopCamera();
+      // Take one frame as a connection check.  MVS cameras are opened only for
+      // a snapshot, so the page does not keep an exclusive SDK handle while idle.
+      await captureHikrobotPhoto(camera.id);
+      setSelectedCamera({ source: 'mvs', id: camera.id });
+      window.localStorage.setItem(BUFFING_CAMERA_STORAGE_KEY, `${BUFFING_MVS_CAMERA_PREFIX}${camera.id}`);
+      setCameraConnected(true);
+      setCameraSkipped(false);
+      window.localStorage.removeItem(BUFFING_CAMERA_SKIP_STORAGE_KEY);
+      setCameraPickerOpen(false);
     } catch (reason) {
-      setError(cameraErrorMessage(reason));
+      stopCamera();
+      setError(reason instanceof Error ? reason.message : (language === 'vi' ? 'Không thể kết nối MVS Camera Agent.' : 'Unable to connect to the MVS Camera Agent.'));
+    } finally {
+      setCameraConnecting(false);
+    }
+  };
+
+  const openCameraPicker = async () => {
+    setCameraPickerOpen(true);
+    setError(null);
+    setMvsAgentError(null);
+    setCameraConnecting(true);
+    try {
+      const browserCameras = (async () => {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error(cameraErrorMessage());
+        const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        permissionStream.getTracks().forEach((track) => track.stop());
+        return (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput');
+      })();
+      const industrialCameras = listHikrobotCameras();
+      const [browserResult, industrialResult] = await Promise.allSettled([browserCameras, industrialCameras]);
+      if (browserResult.status === 'fulfilled') setCameras(browserResult.value);
+      if (industrialResult.status === 'fulfilled') setMvsCameras(industrialResult.value);
+      if (industrialResult.status === 'rejected') {
+        setMvsCameras([]);
+        setMvsAgentError(industrialResult.reason instanceof Error ? industrialResult.reason.message : 'MVS Camera Agent is unavailable.');
+      }
+      if (browserResult.status === 'rejected' && industrialResult.status === 'rejected') {
+        const browserError = browserResult.reason instanceof Error ? browserResult.reason.message : cameraErrorMessage();
+        setError(browserError);
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : cameraErrorMessage());
     } finally {
       setCameraConnecting(false);
     }
   };
 
   useEffect(() => {
-    if (selectedCameraId) void connectCamera(selectedCameraId);
+    if (selectedCamera?.source === 'browser') void connectBrowserCamera(selectedCamera.id);
+    if (selectedCamera?.source === 'mvs') {
+      void listHikrobotCameras()
+        .then((devices) => {
+          setMvsCameras(devices);
+          const saved = devices.find((device) => device.id === selectedCamera.id);
+          if (saved) return connectMvsCamera(saved);
+          setError(language === 'vi' ? 'Không tìm thấy MVS camera đã lưu. Hãy chọn lại camera.' : 'The saved MVS camera is no longer available. Select it again.');
+          return undefined;
+        })
+        .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'MVS Camera Agent is unavailable.'));
+    }
   // Restore the user's previously approved camera once per page visit.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -258,7 +320,11 @@ export function BuffingPage() {
     setError(null);
     try {
       let photo: File | null = null;
-      try { photo = await captureCameraPhoto(); }
+      try {
+        photo = selectedCamera?.source === 'mvs'
+          ? await captureHikrobotPhoto(selectedCamera.id)
+          : await captureCameraPhoto();
+      }
       catch { setError(t('cameraCaptureFailed')); }
       const saved = await createBuffingCheck({ checkDate: factoryToday(), orderNumber, orderProgress, operatorName: operator.trim(), operatorIdentifier: operatorIdentifier.trim(), shift: shift.trim(), checks, remark: remark.trim() || null });
       setOrderProgress(saved.orderProgress ?? 'IN_PROGRESS');
@@ -359,7 +425,28 @@ export function BuffingPage() {
           </div>
         </div>
       </div>
-      {cameraPickerOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-6" role="dialog" aria-modal="true" aria-label={t('camera')} onClick={() => !cameraConnecting && setCameraPickerOpen(false)}><div className="w-full max-w-md border-2 border-industrialDark bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}><header className="flex items-center justify-between bg-industrialDark px-3 py-2 text-white"><h2 className="text-xs font-bold uppercase tracking-wider">{t('camera')}</h2><button type="button" className="text-lg leading-none disabled:opacity-40" aria-label={t('cancel')} onClick={() => setCameraPickerOpen(false)} disabled={cameraConnecting}>×</button></header><div className="p-2">{cameraConnecting ? <div className="flex items-center justify-center gap-2 px-2 py-8 text-xs font-semibold text-slate-600"><span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-industrial" aria-hidden="true" />{cameraText.waitingPermission}</div> : cameras.length > 0 ? cameras.map((camera, index) => <button key={camera.deviceId} type="button" className={`mb-1 flex w-full items-center justify-between border px-3 py-2 text-left text-xs font-semibold ${camera.deviceId === selectedCameraId ? 'border-industrial bg-hmiSelected text-industrialDark' : 'border-line bg-white hover:bg-hmiHover'}`} onClick={() => void connectCamera(camera.deviceId)}><span>{camera.label || `${t('camera')} ${index + 1}`}</span>{camera.deviceId === selectedCameraId && <span className="text-[9px] uppercase tracking-wide">{t('cameraConnected')}</span>}</button>) : <p className="px-2 py-4 text-xs leading-relaxed text-alarm">{error || t('cameraUnavailable')}</p>}</div></div></div>}
+      {cameraPickerOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-6" role="dialog" aria-modal="true" aria-label={t('camera')} onClick={() => !cameraConnecting && setCameraPickerOpen(false)}>
+        <div className="w-full max-w-md border-2 border-industrialDark bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <header className="flex items-center justify-between bg-industrialDark px-3 py-2 text-white">
+            <h2 className="text-xs font-bold uppercase tracking-wider">{t('camera')}</h2>
+            <button type="button" className="text-lg leading-none disabled:opacity-40" aria-label={t('cancel')} onClick={() => setCameraPickerOpen(false)} disabled={cameraConnecting}>×</button>
+          </header>
+          <div className="p-2">
+            {cameraConnecting ? <div className="flex items-center justify-center gap-2 px-2 py-8 text-xs font-semibold text-slate-600"><span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-industrial" aria-hidden="true" />{cameraText.waitingPermission}</div> : <>
+              {cameras.length > 0 && <section className="mb-3">
+                <h3 className="px-1 pb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">Browser / USB webcam</h3>
+                {cameras.map((camera, index) => <button key={camera.deviceId} type="button" className={`mb-1 flex w-full items-center justify-between border px-3 py-2 text-left text-xs font-semibold ${selectedCamera?.source === 'browser' && camera.deviceId === selectedCamera.id ? 'border-industrial bg-hmiSelected text-industrialDark' : 'border-line bg-white hover:bg-hmiHover'}`} onClick={() => void connectBrowserCamera(camera.deviceId)}><span>{camera.label || `${t('camera')} ${index + 1}`}</span>{selectedCamera?.source === 'browser' && camera.deviceId === selectedCamera.id && <span className="text-[9px] uppercase tracking-wide">{t('cameraConnected')}</span>}</button>)}
+              </section>}
+              <section>
+                <h3 className="px-1 pb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">MVS / Hikrobot industrial camera</h3>
+                {mvsCameras.map((camera) => <button key={camera.id} type="button" className={`mb-1 flex w-full items-center justify-between border px-3 py-2 text-left text-xs font-semibold ${selectedCamera?.source === 'mvs' && camera.id === selectedCamera.id ? 'border-industrial bg-hmiSelected text-industrialDark' : 'border-line bg-white hover:bg-hmiHover'}`} onClick={() => void connectMvsCamera(camera)}><span>{camera.label}<span className="ml-2 text-[9px] font-normal text-slate-500">{camera.transport}</span></span>{selectedCamera?.source === 'mvs' && camera.id === selectedCamera.id && <span className="text-[9px] uppercase tracking-wide">{t('cameraConnected')}</span>}</button>)}
+                {mvsCameras.length === 0 && <p className="px-1 py-2 text-xs leading-relaxed text-slate-600">{mvsAgentError || 'No MVS industrial camera was found on this workstation.'}</p>}
+              </section>
+              {cameras.length === 0 && mvsCameras.length === 0 && <p className="px-1 py-3 text-xs leading-relaxed text-alarm">{error || t('cameraUnavailable')}</p>}
+            </>}
+          </div>
+        </div>
+      </div>}
       {gallery && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 sm:p-6" role="dialog" aria-modal="true" aria-label={t('buffingImages')} onClick={() => setGallery(null)}><div className="relative flex max-h-full max-w-full flex-col items-center gap-3" onClick={(event) => event.stopPropagation()}><button type="button" aria-label={t('closeGallery')} className="absolute -right-3 -top-3 z-10 flex h-8 w-8 items-center justify-center bg-industrial text-lg text-white shadow-lg" onClick={() => setGallery(null)}>×</button><img src={gallery.images[gallery.index].url} alt={`${t('buffingImages')} ${gallery.index + 1}`} className="block w-[min(92vw,1440px)] max-h-[calc(100vh-7rem)] aspect-[4/3] object-contain shadow-2xl" /><div className="flex w-full items-center justify-between gap-3 text-white"><button type="button" aria-label={t('previousImage')} className="h-9 w-12 border border-white/60 bg-industrial/90 text-xl disabled:opacity-40" disabled={gallery.index === 0} onClick={() => setGallery((current) => current ? { ...current, index: Math.max(0, current.index - 1) } : current)}>‹</button><span className="text-xs font-bold">{gallery.index + 1} / {gallery.images.length}</span><button type="button" aria-label={t('nextImage')} className="h-9 w-12 border border-white/60 bg-industrial/90 text-xl disabled:opacity-40" disabled={gallery.index === gallery.images.length - 1} onClick={() => setGallery((current) => current ? { ...current, index: Math.min(current.images.length - 1, current.index + 1) } : current)}>›</button></div></div></div>}
     </WS3Shell>
   );
