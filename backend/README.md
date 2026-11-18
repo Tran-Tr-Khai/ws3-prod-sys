@@ -9,7 +9,7 @@ Từ thư mục gốc repository:
 
 ```powershell
 uv sync --project backend --group dev
-Copy-Item backend\.env.example backend\.env
+if (-not (Test-Path backend\.env)) { Copy-Item backend\.env.example backend\.env }
 docker compose up -d postgres
 uv run --project backend alembic -c backend\alembic.ini upgrade head
 uv run --directory backend python run.py
@@ -57,7 +57,7 @@ PostgreSQL disposable có quyền tạo/xóa database test.
 
 - `pyproject.toml`: nguồn khai báo dependency và cấu hình tooling.
 - `uv.lock`: phiên bản dependency đã khóa, Docker dùng với `--frozen`.
-- `Dockerfile`: image backend.
+- `Dockerfile`: image backend được cài dependency bằng `uv`.
 - `alembic.ini`: vị trí migration và logging Alembic.
 - `.env.example`: mẫu cấu hình backend local.
 - `alembic/README`: quy tắc migration và baseline hiện tại.

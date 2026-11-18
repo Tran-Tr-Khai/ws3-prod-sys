@@ -3,6 +3,16 @@
 Hệ thống MES nội bộ gồm giao diện vận hành, API backend, PostgreSQL,
 Nginx và Camera Agent cho các camera công nghiệp Hikrobot/MVS.
 
+## Chọn cách chạy
+
+| Mục đích | Chọn luồng |
+| --- | --- |
+| Code, debug API/UI, xem lỗi trực tiếp | [Chạy local](#3-chạy-local-để-phát-triển) |
+| Chạy nguyên hệ thống bằng container | [Chạy Docker](#4-chạy-toàn-hệ-thống-bằng-docker) |
+
+Không chạy đồng thời backend local với backend Docker trên cùng port. Camera
+Agent luôn chạy trên máy được nối camera, độc lập với hai luồng trên.
+
 ## 1. Yêu cầu môi trường
 
 - Windows hoặc Ubuntu.
@@ -33,14 +43,14 @@ Các lệnh dưới đây chạy từ thư mục gốc repository trong PowerShe
 
 ```powershell
 uv sync --project backend --group dev
-Copy-Item backend\.env.example backend\.env
+if (-not (Test-Path backend\.env)) { Copy-Item backend\.env.example backend\.env }
 docker compose up -d postgres
 uv run --project backend alembic -c backend\alembic.ini upgrade head
 uv run --directory backend python run.py
 ```
 
-Nếu đã có `backend/.env`, không chạy lại `Copy-Item` vì lệnh này sẽ ghi đè
-cấu hình local. API chạy tại `http://localhost:8000`.
+Nếu cần đổi database hoặc CORS, mở `backend\.env` trước khi chạy migration.
+API chạy tại `http://localhost:8000`.
 
 Health check và tài liệu OpenAPI:
 
@@ -61,6 +71,7 @@ uv run --directory backend python -m app.db.create_user <username> <password> --
 Mở terminal thứ hai:
 
 ```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 npm ci
 npm run dev
 ```
@@ -90,14 +101,26 @@ xem [camera-agent/README.md](camera-agent/README.md).
 mẫu rồi thay các giá trị bắt buộc:
 
 ```powershell
-Copy-Item .env.production.example .env.production
+if (-not (Test-Path .env.production)) { Copy-Item .env.production.example .env.production }
+notepad .env.production
 ```
+
+Trước khi chạy, bắt buộc thay `POSTGRES_PASSWORD` và `AUTH_SECRET_KEY`. Đặt
+`BACKEND_CORS_ORIGINS` theo đúng URL/IP người dùng truy cập, ví dụ
+`https://192.168.100.253`. Không dùng giá trị `REPLACE_WITH_...`.
 
 HTTP:
 
 ```powershell
 docker compose -p ws3 --env-file .env.production `
   -f docker-compose.production.yml up -d --build
+```
+
+Có thể kiểm tra cấu hình đã được Compose resolve trước khi tạo container:
+
+```powershell
+docker compose -p ws3 --env-file .env.production `
+  -f docker-compose.production.yml config --quiet
 ```
 
 HTTPS:
@@ -112,6 +135,13 @@ HTTPS yêu cầu certificate/key hợp lệ trong thư mục `WS3_TLS_DIR`. Nế
 hoặc 443 đang được ứng dụng khác sử dụng, hãy dừng stack gây xung đột hoặc đổi
 port trong `.env.production`.
 
+Overlay HTTPS hiện yêu cầu hai file sau trong `WS3_TLS_DIR`:
+
+```text
+ws3-lan.crt
+ws3-lan.key
+```
+
 Kiểm tra stack:
 
 ```powershell
@@ -119,6 +149,22 @@ docker compose -p ws3 --env-file .env.production `
   -f docker-compose.production.yml ps
 docker compose -p ws3 --env-file .env.production `
   -f docker-compose.production.yml logs --tail=100 backend web
+```
+
+Dừng stack nhưng giữ volume database:
+
+```powershell
+docker compose -p ws3 --env-file .env.production `
+  -f docker-compose.production.yml -f docker-compose.https.yml down
+```
+
+Không dùng `down -v` nếu chưa có chủ đích xóa database và media volume.
+
+Nếu gặp `port is already allocated`, kiểm tra container đang chiếm port:
+
+```powershell
+docker ps --format "table {{.Names}}\t{{.Ports}}"
+docker compose -p ws3 ps
 ```
 
 ## 5. Các file cấu hình quan trọng

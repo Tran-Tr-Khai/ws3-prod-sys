@@ -12,7 +12,7 @@ Chạy từ thư mục gốc repository trong PowerShell:
 
 ```powershell
 uv sync --project backend --group dev
-Copy-Item backend\.env.example backend\.env
+if (-not (Test-Path backend\.env)) { Copy-Item backend\.env.example backend\.env }
 docker compose up -d postgres
 uv run --project backend alembic -c backend\alembic.ini upgrade head
 ```
