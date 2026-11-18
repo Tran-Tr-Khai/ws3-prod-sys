@@ -18,9 +18,11 @@ Nếu danh sách đơn/cuộn trống sau khi dọn database, kiểm tra trạng
 
 Worker ghi checklist chất lượng theo từng lượt, kèm thông tin vận hành/đơn và ảnh khi cần. Tổng quan tính từ các lượt liên quan đến đơn: số lượt có lỗi trên tổng lượt kiểm tra; trạng thái `ĐẠT` chỉ đúng khi tổng lỗi bằng 0. Ảnh được lưu ngoài database trong media volume, nên backup cần bao gồm volume này.
 
-## Scouring
+## Scouring (tạm dừng)
 
-Worker ghi bản ghi vận hành và kiểm tra pH theo các màn hình tương ứng. Lịch sử đọc từ các bảng Scouring; số mét của quy trình này không thay cho số lượt checklist Buffing.
+Luồng Scouring chưa nằm trong phạm vi chuẩn hóa hiện tại và router đã không
+được mount vào backend. Nội dung/schema còn lại chỉ dùng để tham chiếu lịch sử,
+không phải hướng dẫn vận hành hay tích hợp mới.
 
 ## Máy và giao diện
 

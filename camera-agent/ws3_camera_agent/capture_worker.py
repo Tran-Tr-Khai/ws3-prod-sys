@@ -32,6 +32,15 @@ def serve() -> int:
             elif action == "capture" and isinstance(request.get("camera_id"), str):
                 jpeg = service.capture_jpeg(request["camera_id"])
                 response = {"ok": True, "jpeg": base64.b64encode(jpeg).decode("ascii")}
+            elif action == "stream_start" and isinstance(request.get("camera_id"), str):
+                service.start_stream(request["camera_id"])
+                response = {"ok": True}
+            elif action == "stream_frame" and isinstance(request.get("camera_id"), str):
+                jpeg = service.stream_jpeg(request["camera_id"])
+                response = {"ok": True, "jpeg": base64.b64encode(jpeg).decode("ascii")}
+            elif action == "stream_stop":
+                service.stop_stream()
+                response = {"ok": True}
             else:
                 raise CameraAgentError("Yêu cầu camera không hợp lệ.")
         except CameraAgentError as error:
@@ -39,6 +48,7 @@ def serve() -> int:
         except Exception as error:  # pragma: no cover - converts vendor SDK errors into a safe response
             response = response_for_error(CameraAgentError(str(error)))
         print(json.dumps(response, separators=(",", ":")), flush=True)
+    service.close()
     return 0
 
 

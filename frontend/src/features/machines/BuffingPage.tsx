@@ -1,17 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { HMIButton } from '../../components/hmi/HMIButton';
-import { MachineNavigation } from '../../components/hmi/MachineNavigation';
-import { normalizeShift } from '../../components/hmi/ShiftSelect';
-import { OperationInfoFields } from '../../components/hmi/OperationInfoFields';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { formatShiftLabel, normalizeShift } from '../../components/hmi/ShiftSelect';
+import { MachineOperationSidebar } from '../../components/hmi/MachineOperationSidebar';
 import { MachineOrderProgressField } from '../../components/hmi/MachineOrderProgressField';
-import { WS3Shell } from '../../components/hmi/WS3Shell';
+import { WS3MesShell } from '../../components/mes/WS3MesShell';
 import { useAuth } from '../../auth/AuthContext';
 import { createBuffingCheck, deleteBuffingCheck, getBuffingChecks, getBuffingChecksForOrder, getMachineOrderProgress, saveMachineOrderProgress, uploadBuffingImages, type BuffingCheck, type BuffingImage } from './scouringApi';
 import { getWS3ProductionOrderContext, type WS3ProductionOrderReport } from '../orders/ws3OrderApi';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { isOperatorAssignedToMachine, MachineOperationalNoticeDock } from '../support/MachineOperationalNoticeDock';
-import { captureHikrobotPhoto, listHikrobotCameras, type HikrobotCamera } from './hikrobotCameraAgent';
+import { captureHikrobotPhoto, hikrobotStreamUrl, listHikrobotCameras, type HikrobotCamera } from './hikrobotCameraAgent';
+import './BuffingPage.css';
 
 const currentFactoryDateTime = () => new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short' }).format(new Date());
 const factoryToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -21,6 +20,16 @@ const BUFFING_CAMERA_STORAGE_KEY = 'ws3.buffing.camera-id';
 const BUFFING_CAMERA_SKIP_STORAGE_KEY = 'ws3.buffing.camera-skipped';
 const BUFFING_MVS_CAMERA_PREFIX = 'mvs:';
 type SelectedCamera = { source: 'browser' | 'mvs'; id: string };
+
+function BuffingNavigation({ canViewHistory, language }: { canViewHistory: boolean; language: string }) {
+  const tx = (vi: string, en: string) => language === 'vi' ? vi : en;
+
+  return <nav className="buffing-mes-nav" aria-label={tx('Điều hướng Buffing', 'Buffing navigation')}>
+    <NavLink end to="/ws3">{tx('Máy móc', 'Machinery')}</NavLink>
+    <NavLink end to="/machine/buffing/record">{tx('Vận hành', 'Operation')}</NavLink>
+    {canViewHistory && <NavLink to="/machine/buffing/history">{tx('Lịch sử', 'History')}</NavLink>}
+  </nav>;
+}
 
 function storedCamera(): SelectedCamera | null {
   const saved = window.localStorage.getItem(BUFFING_CAMERA_STORAGE_KEY);
@@ -41,6 +50,8 @@ export function BuffingPage() {
   const [operatorIdentifier, setOperatorIdentifier] = useState('');
   const [shift, setShift] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
+  const [operationCollapsed, setOperationCollapsed] = useState(false);
+  const [operationWidth, setOperationWidth] = useState(272);
   const [orderProgress, setOrderProgress] = useState<'IN_PROGRESS' | 'COMPLETED'>('IN_PROGRESS');
   const [orderProduction, setOrderProduction] = useState<WS3ProductionOrderReport | null>(null);
   const [orderLookupLoading, setOrderLookupLoading] = useState(false);
@@ -65,13 +76,54 @@ export function BuffingPage() {
   const [cameraPickerOpen, setCameraPickerOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
+  const operationDragRef = useRef<{ startX: number; startWidth: number; moved: boolean } | null>(null);
   const connectedCameraLabel = selectedCamera?.source === 'mvs'
     ? mvsCameras.find((camera) => camera.id === selectedCamera.id)?.label || 'MVS / Hikrobot'
     : cameras.find((camera) => camera.deviceId === selectedCamera?.id)?.label || t('cameraConnected');
+  const mvsStreamUrl = cameraConnected && selectedCamera?.source === 'mvs' ? hikrobotStreamUrl(selectedCamera.id) : null;
+  const workspaceStyle = { '--buffing-operation-width': `${operationCollapsed ? 10 : operationWidth}px` } as CSSProperties;
+  const handleOperationDividerPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    operationDragRef.current = { startX: event.clientX, startWidth: operationCollapsed ? 40 : operationWidth, moved: false };
+  };
+  const handleOperationDividerPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = operationDragRef.current;
+    if (!drag) return;
+    const delta = event.clientX - drag.startX;
+    if (Math.abs(delta) > 4) drag.moved = true;
+    if (!drag.moved) return;
+    const nextWidth = drag.startWidth + delta;
+    if (nextWidth <= 10) {
+      setOperationWidth(10);
+      setOperationCollapsed(true);
+    } else {
+      setOperationWidth(Math.min(420, Math.max(10, nextWidth)));
+      if (operationCollapsed) setOperationCollapsed(false);
+    }
+  };
+  const handleOperationDividerPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = operationDragRef.current;
+    operationDragRef.current = null;
+    if (drag && !drag.moved) setOperationCollapsed((current) => !current);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const handleOperationDividerKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setOperationCollapsed((current) => !current);
+      return;
+    }
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const delta = event.key === 'ArrowRight' ? 16 : -16;
+    setOperationCollapsed(false);
+    setOperationWidth((current) => Math.min(420, Math.max(220, current + delta)));
+  };
   const cameraText = language === 'vi' ? {
     beforeChecklist: 'Kết nối camera trước khi thực hiện checklist, hoặc tiếp tục nếu máy này không có camera.',
     continueWithout: 'TIẾP TỤC KHÔNG DÙNG CAMERA',
-    skippedNotice: 'Đang thao tác không dùng camera. Có thể thêm ảnh thủ công tại ô hình ảnh sau khi lưu.',
     operatorRequired: 'Chọn đơn sản xuất và nhập tên, ID nhân viên, ca làm trước khi xác nhận.',
     saveFailed: 'Không thể lưu kiểm tra Buffing.',
     noImage: 'Không có ảnh',
@@ -79,7 +131,6 @@ export function BuffingPage() {
   } : {
     beforeChecklist: 'Connect a camera before completing the checklist, or continue if this station has no camera.',
     continueWithout: 'CONTINUE WITHOUT CAMERA',
-    skippedNotice: 'Working without a camera. You can add a photo manually from the image cell after saving.',
     operatorRequired: 'Select an order and enter operator name, employee ID, and shift before confirming.',
     saveFailed: 'Unable to save Buffing check.',
     noImage: 'No image',
@@ -109,6 +160,14 @@ export function BuffingPage() {
   };
 
   useEffect(() => () => stopCamera(), [stopCamera]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const stream = cameraStreamRef.current;
+    if (!cameraConnected || selectedCamera?.source !== 'browser' || !video || !stream) return;
+    video.srcObject = stream;
+    void video.play().catch(() => undefined);
+  }, [cameraConnected, selectedCamera]);
 
   useEffect(() => {
     if (!gallery) return;
@@ -220,8 +279,8 @@ export function BuffingPage() {
     setCameraConnecting(true);
     try {
       stopCamera();
-      // Take one frame as a connection check.  MVS cameras are opened only for
-      // a snapshot, so the page does not keep an exclusive SDK handle while idle.
+      // This one-off capture verifies the camera before the persistent MJPEG
+      // stream opens.  It is not used as a polling source for the live preview.
       await captureHikrobotPhoto(camera.id);
       setSelectedCamera({ source: 'mvs', id: camera.id });
       window.localStorage.setItem(BUFFING_CAMERA_STORAGE_KEY, `${BUFFING_MVS_CAMERA_PREFIX}${camera.id}`);
@@ -375,79 +434,85 @@ export function BuffingPage() {
   };
 
   return (
-    <WS3Shell showGlobalNavigation={false} showMachineNavigation={false} showSupportWidget={!isBuffingOperator} title={`WS3 / ${t('buffingDailyCheck')}`} subtitle={`${t('periodicChecklist')} · Buffing`} machineId="BU-01" machineLabel="Buffing" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
-      <div className="buffing-page-shell flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
-        <MachineNavigation machineId="BU-01" machineLabel="Buffing" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{t('home')}</HMIButton>} />
-        <div className="buffing-page-content min-h-0 flex-1 p-0">
-          <div className="buffing-card mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden bg-hmiConsole">
-            <div className="flex shrink-0 justify-end px-2 pt-2"><HMIButton size="compact" className="max-w-[360px] truncate" variant={cameraConnected ? 'primary' : undefined} onClick={() => void openCameraPicker()} disabled={saving}>{cameraConnected ? `${connectedCameraLabel} · ${t('cameraConnected')}` : t('connectCamera')}</HMIButton></div>
-            <div className={`buffing-layout grid min-h-0 flex-1 gap-2 bg-hmiConsole p-2 ${isBuffingOperator ? 'lg:grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)_minmax(260px,1fr)]' : 'lg:grid-cols-[minmax(0,0.85fr)_minmax(0,3.15fr)]'}`}>
-            <aside className="buffing-no-print flex min-w-0 flex-col overflow-y-auto border-2 border-industrialDark bg-white">
-              <header className="machine-primary-header border-b-2 border-industrialDark px-3 py-2 text-[11px] font-bold uppercase tracking-wider">{language === 'vi' ? 'THÔNG TIN VẬN HÀNH' : 'OPERATION DETAILS'}</header>
-              <OperationInfoFields orderNumber={orderNumber} onOrderNumberChange={(value) => { setOrderNumber(value); setOrderProduction(null); setOperator(''); setOperatorIdentifier(''); setShift(''); setOrderProgress('IN_PROGRESS'); setProgressError(null); }} operatorName={operator} onOperatorNameChange={setOperator} employeeId={operatorIdentifier} onEmployeeIdChange={setOperatorIdentifier} shift={shift} onShiftChange={setShift} orderStatus={<MachineOrderProgressField value={orderProgress} language={language} automatic={isOperator} disabled={!orderProduction || orderLookupLoading} saving={progressSaving} error={progressError} onChange={(progress) => void changeOrderProgress(progress)} />} />
-            </aside>
+    <WS3MesShell module="Buffing" breadcrumbs={[]} navigation={<BuffingNavigation canViewHistory={canViewHistory} language={language} />} showSupportWidget={!isBuffingOperator}>
+      <div className="buffing-mes">
+        <div className={`buffing-mes__workspace ${isBuffingOperator ? 'buffing-mes__workspace--with-notices' : ''} ${operationCollapsed ? 'buffing-mes__workspace--operation-collapsed' : ''}`} style={workspaceStyle}>
+            <MachineOperationSidebar className={operationCollapsed ? 'is-collapsed' : ''} orderNumber={orderNumber} onOrderNumberChange={(value) => { setOrderNumber(value); setOrderProduction(null); setOperator(''); setOperatorIdentifier(''); setShift(''); setOrderProgress('IN_PROGRESS'); setProgressError(null); }} operatorName={operator} onOperatorNameChange={setOperator} employeeId={operatorIdentifier} onEmployeeIdChange={setOperatorIdentifier} shift={shift} onShiftChange={setShift} orderStatus={<MachineOrderProgressField value={orderProgress} language={language} automatic={isOperator} disabled={!orderProduction || orderLookupLoading} saving={progressSaving} error={progressError} onChange={(progress) => void changeOrderProgress(progress)} />}>
+              <div className="buffing-mes__operation-divider" role="separator" tabIndex={0} aria-orientation="vertical" aria-valuemin={220} aria-valuemax={420} aria-valuenow={operationCollapsed ? 0 : operationWidth} aria-label={language === 'vi' ? 'Thu gọn hoặc thay đổi độ rộng thông tin vận hành' : 'Collapse or resize operation details'} onPointerDown={handleOperationDividerPointerDown} onPointerMove={handleOperationDividerPointerMove} onPointerUp={handleOperationDividerPointerUp} onPointerCancel={() => { operationDragRef.current = null; }} onKeyDown={handleOperationDividerKeyDown} />
+            </MachineOperationSidebar>
 
-            <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border-2 border-industrialDark bg-white">
-            <video ref={videoRef} className="sr-only" muted playsInline />
-            {!canPerformChecklist && <section className="flex min-h-0 flex-1 items-center justify-center bg-white p-6"><div className="w-full max-w-md border-2 border-industrialDark border-t-4 border-t-industrialDark bg-white p-6 text-center shadow-[6px_6px_0_rgba(36,59,74,0.14)]"><h2 className="text-sm font-bold uppercase tracking-wider text-industrialDark">{t('camera')}</h2><p className="mt-2 text-xs leading-relaxed text-slate-600">{cameraText.beforeChecklist}</p>{error && <p className="mt-3 text-xs font-semibold text-alarm">{error}</p>}<div className="mx-auto mt-5 grid w-full max-w-xs gap-2"><HMIButton size="large" className="w-full justify-center" variant="primary" onClick={() => void openCameraPicker()}>{t('connectCamera')}</HMIButton><HMIButton size="large" className="w-full justify-center" onClick={() => { window.localStorage.setItem(BUFFING_CAMERA_SKIP_STORAGE_KEY, 'true'); setCameraSkipped(true); setError(null); }}>{cameraText.continueWithout}</HMIButton></div></div></section>}
+            <section className="buffing-mes__checklist">
+            {error && <div className="buffing-no-print buffing-mes__error">{error}</div>}
+
+            <div className="buffing-mes__active-work">
+            <section className="buffing-mes__camera-panel" aria-label={language === 'vi' ? 'Hình ảnh camera' : 'Camera preview'}>
+              <header className="buffing-mes__camera-header">
+                <strong>{cameraConnected ? connectedCameraLabel : (language === 'vi' ? 'Chưa kết nối camera' : 'No camera connected')}</strong>
+                <div className="buffing-mes__camera-header-actions"><span className={cameraConnected ? 'is-connected' : 'is-idle'}><i aria-hidden="true" />{cameraConnected ? t('cameraConnected') : (language === 'vi' ? 'Chờ kết nối' : 'Awaiting connection')}</span><button type="button" className="buffing-mes__camera-button" onClick={() => void openCameraPicker()} disabled={saving}>{language === 'vi' ? 'Đổi' : 'Change'}</button></div>
+              </header>
+              <div className="buffing-mes__camera-stage">
+                <video ref={videoRef} className={selectedCamera?.source === 'browser' && cameraConnected ? 'buffing-mes__camera-video' : 'sr-only'} muted playsInline autoPlay />
+                {selectedCamera?.source === 'mvs' && mvsStreamUrl
+                    ? <img src={mvsStreamUrl} className="buffing-mes__camera-image" alt={language === 'vi' ? 'Ảnh trực tiếp từ camera MVS' : 'MVS camera live preview'} />
+                    : <div className="buffing-mes__camera-placeholder"><span aria-hidden="true">◎</span><p>{language === 'vi' ? 'Chưa có hình ảnh xem trước' : 'No preview available'}</p></div>}
+              </div>
+            </section>
+
+            {!canPerformChecklist && <section className="buffing-mes__camera-guidance"><p>{cameraText.beforeChecklist}</p><div><button type="button" className="buffing-mes__primary-button" onClick={() => void openCameraPicker()}>{t('connectCamera')}</button><button type="button" className="buffing-mes__secondary-button" onClick={() => { window.localStorage.setItem(BUFFING_CAMERA_SKIP_STORAGE_KEY, 'true'); setCameraSkipped(true); setError(null); }}>{cameraText.continueWithout}</button></div></section>}
+
             {canPerformChecklist && <>
-            {error && <div className="buffing-no-print shrink-0 border-b border-alarm bg-white px-3 py-2 text-[10px] font-semibold text-alarm">{error}</div>}
-            {cameraSkipped && !cameraConnected && <div className="buffing-no-print shrink-0 border-b border-line bg-hmiHover px-3 py-2 text-[10px] font-semibold text-industrialDark">{cameraText.skippedNotice}</div>}
-
-            <section className="buffing-no-print shrink-0 border-b-2 border-white bg-white p-3">
+            <section className="buffing-no-print buffing-mes__check-form">
               <div className="grid items-stretch gap-3 lg:grid-cols-[1.15fr_1fr]">
                 <div className="box-border flex h-20 min-h-20 flex-col"><div className="mb-1 flex shrink-0 items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-600"><span>{t('currentCheck')}</span><time className="font-mono normal-case tracking-normal text-industrial">{currentFactoryDateTime()}</time></div><div className="grid min-h-0 flex-1 grid-cols-5 gap-1">{checks.map((checked, index) => <button key={index} type="button" className={`min-h-0 border-2 text-sm font-bold ${checked ? 'border-success bg-success text-white' : 'border-line bg-white text-industrialDark'}`} onClick={() => toggleCheck(index)}>{index + 1}<span className="block text-[8px]">{checked ? t('ok') : t('check')}</span></button>)}</div></div>
                 <label className="box-border flex h-20 min-h-20 flex-col gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600"><span className="block h-4 shrink-0 leading-4">{t('remark')}</span><textarea className="box-border min-h-0 flex-1 resize-none border-2 border-line bg-white px-2 py-1 text-xs font-semibold" value={remark} onChange={(event) => setRemark(event.target.value)} placeholder={t('note')} /></label>
               </div>
-              <div className="mt-2 flex items-center justify-between gap-3 bg-white">
+              <div className="mt-2 flex items-center justify-between gap-3">
                 <div className="text-left text-[10px] font-bold uppercase tracking-wide text-slate-500">{t('checkInterval')}: <span className="ml-1 font-mono text-industrialDark">15 min</span></div>
-                <div className="flex justify-end gap-2"><HMIButton size="compact" onClick={() => navigate('/ws3')}>{t('cancel')}</HMIButton><HMIButton size="compact" variant="primary" onClick={() => void addCheck()} disabled={saving || loading || !orderNumber.trim() || !operator.trim() || !operatorIdentifier.trim() || !shift.trim()}>{saving ? t('saving') : t('confirmCheck')}</HMIButton></div>
+                <div className="flex justify-end gap-2"><button type="button" className="buffing-mes__secondary-button" onClick={() => navigate('/ws3')}>{t('cancel')}</button><button type="button" className="buffing-mes__primary-button" onClick={() => void addCheck()} disabled={saving || loading || !orderNumber.trim() || !operator.trim() || !operatorIdentifier.trim() || !shift.trim()}>{saving ? t('saving') : t('confirmCheck')}</button></div>
               </div>
             </section>
+            </>}
+            </div>
 
-            {canViewHistory && <section className="buffing-history flex min-h-0 flex-1 flex-col bg-white">
-              <div className="flex shrink-0 items-center border-b border-line bg-industrial px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-white"><span>{language === 'vi' ? 'HÔM NAY' : 'TODAY'}</span></div>
+            {canPerformChecklist && canViewHistory && <section className="buffing-history buffing-mes__history flex min-h-0 flex-1 flex-col bg-white">
               <div className="buffing-history-scroll min-h-0 flex-1 overflow-auto bg-white p-2">
                 <table className="w-full min-w-[1320px] border-collapse text-left text-[10px]">
                   <thead className="sticky top-0 z-10 border-b border-line bg-white text-[9px] uppercase tracking-wider text-industrialDark">
                     <tr><th className="px-3 py-2">{t('time')}</th><th className="px-3 py-2">SOP</th><th className="px-3 py-2">{t('operator')}</th><th className="px-3 py-2">{language === 'vi' ? 'ID nhân viên' : 'Employee ID'}</th><th className="px-3 py-2">{language === 'vi' ? 'Ca làm' : 'Shift'}</th>{[1, 2, 3, 4, 5].map((point) => <th key={point} className="px-3 py-2 text-center">{point}</th>)}<th className="px-3 py-2">{t('remark')}</th><th className="px-3 py-2">{t('buffingImages')}</th><th className="w-12 px-2 py-2 text-center" aria-label={t('deleteCheck')}></th></tr>
                   </thead>
                   <tbody>
-                    {loading ? <tr><td colSpan={13} className="px-3 py-8 text-center text-xs uppercase tracking-wide text-slate-500">{t('loadingHistory')}</td></tr> : rows.length === 0 ? <tr><td colSpan={13} className="px-3 py-8 text-center text-xs uppercase tracking-wide text-slate-500">{t('noChecksToday')}</td></tr> : rows.map((row) => <tr key={row.id} className="border-b border-line"><td className="px-3 py-2 font-mono font-bold text-industrial">{row.time}</td><td className="px-3 py-2 font-mono font-semibold text-industrialDark">{row.orderNumber || '—'}</td><td className="px-3 py-2 font-semibold text-industrialDark">{row.operator || '—'}</td><td className="px-3 py-2 font-mono">{row.operatorIdentifier || '—'}</td><td className="px-3 py-2">{row.shift || '—'}</td>{row.checks.map((checked, index) => <td key={index} className={`px-3 py-2 text-center text-lg font-bold ${checked ? 'text-success' : 'text-alarm'}`}>{checked ? '✓' : '×'}</td>)}<td className="px-3 py-2 text-slate-600">{row.remark || '—'}</td><td className="px-3 py-2">{row.images.length > 0 ? <button type="button" className="flex items-center gap-2 text-industrial underline" onClick={() => setGallery({ images: row.images, index: row.images.findIndex((image) => image.isPrimary) >= 0 ? row.images.findIndex((image) => image.isPrimary) : 0 })}><img src={row.images.find((image) => image.isPrimary)?.url ?? row.images[0].url} alt={t('primaryImage')} className="h-10 w-14 object-cover" /><span>{row.images.length} {t('imageCount')}</span></button> : <label className="inline-flex min-h-7 cursor-pointer items-center border border-industrial px-2 text-[9px] font-bold text-industrial hover:bg-hmiHover"><span>{t('addImage')}</span><input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => void addManualImage(row.id, event)} /></label>}</td><td className="px-2 py-2 text-center"><button type="button" className="inline-flex h-7 w-7 items-center justify-center border border-alarm text-alarm hover:bg-red-50 disabled:cursor-wait disabled:opacity-50" title={t('deleteCheck')} aria-label={t('deleteCheck')} disabled={deletingId === row.id} onClick={() => void removeCheck(row.id)}><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M9 7l1-2h4l1 2M6 7l1 13h10l1-13" /></svg></button></td></tr>)}
+                    {loading ? <tr><td colSpan={13} className="px-3 py-8 text-center text-xs uppercase tracking-wide text-slate-500">{t('loadingHistory')}</td></tr> : rows.length === 0 ? <tr><td colSpan={13} className="px-3 py-8 text-center text-xs uppercase tracking-wide text-slate-500">{t('noChecksToday')}</td></tr> : rows.map((row) => <tr key={row.id} className="border-b border-line"><td className="px-3 py-2 font-mono font-bold text-industrial">{row.time}</td><td className="px-3 py-2 font-mono font-semibold text-industrialDark">{row.orderNumber || '—'}</td><td className="px-3 py-2 font-semibold text-industrialDark">{row.operator || '—'}</td><td className="px-3 py-2 font-mono">{row.operatorIdentifier || '—'}</td><td className="px-3 py-2">{formatShiftLabel(row.shift, language) || '—'}</td>{row.checks.map((checked, index) => <td key={index} className={`px-3 py-2 text-center text-lg font-bold ${checked ? 'text-success' : 'text-alarm'}`}>{checked ? '✓' : '×'}</td>)}<td className="px-3 py-2 text-slate-600">{row.remark || '—'}</td><td className="px-3 py-2">{row.images.length > 0 ? <button type="button" className="flex items-center gap-2 text-industrial underline" onClick={() => setGallery({ images: row.images, index: row.images.findIndex((image) => image.isPrimary) >= 0 ? row.images.findIndex((image) => image.isPrimary) : 0 })}><img src={row.images.find((image) => image.isPrimary)?.url ?? row.images[0].url} alt={t('primaryImage')} className="h-10 w-14 object-cover" /><span>{row.images.length} {t('imageCount')}</span></button> : <label className="inline-flex min-h-7 cursor-pointer items-center border border-industrial px-2 text-[9px] font-bold text-industrial hover:bg-hmiHover"><span>{t('addImage')}</span><input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => void addManualImage(row.id, event)} /></label>}</td><td className="px-2 py-2 text-center"><button type="button" className="inline-flex h-7 w-7 items-center justify-center border border-alarm text-alarm hover:bg-red-50 disabled:cursor-wait disabled:opacity-50" title={t('deleteCheck')} aria-label={t('deleteCheck')} disabled={deletingId === row.id} onClick={() => void removeCheck(row.id)}><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M9 7l1-2h4l1 2M6 7l1 13h10l1-13" /></svg></button></td></tr>)}
                   </tbody>
                 </table>
               </div>
             </section>}
-            </>}
             </section>
-            {isBuffingOperator && <div className="machine-operational-notices min-w-0"><MachineOperationalNoticeDock machineId="BU-01" /></div>}
+            {isBuffingOperator && <div className="machine-operational-notices buffing-mes__notices"><MachineOperationalNoticeDock machineId="BU-01" /></div>}
             </div>
           </div>
-        </div>
-      </div>
-      {cameraPickerOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-6" role="dialog" aria-modal="true" aria-label={t('camera')} onClick={() => !cameraConnecting && setCameraPickerOpen(false)}>
-        <div className="w-full max-w-md border-2 border-industrialDark bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-          <header className="flex items-center justify-between bg-industrialDark px-3 py-2 text-white">
-            <h2 className="text-xs font-bold uppercase tracking-wider">{t('camera')}</h2>
-            <button type="button" className="text-lg leading-none disabled:opacity-40" aria-label={t('cancel')} onClick={() => setCameraPickerOpen(false)} disabled={cameraConnecting}>×</button>
+      {cameraPickerOpen && <div className="buffing-mes__camera-modal-backdrop" role="dialog" aria-modal="true" aria-label={t('camera')} onClick={() => !cameraConnecting && setCameraPickerOpen(false)}>
+        <div className="buffing-mes__camera-modal" onClick={(event) => event.stopPropagation()}>
+          <header className="buffing-mes__camera-modal-header">
+            <h2>{language === 'vi' ? 'Camera' : 'Camera'}</h2>
+            <button type="button" className="buffing-mes__camera-modal-close" aria-label={t('cancel')} onClick={() => setCameraPickerOpen(false)} disabled={cameraConnecting}>×</button>
           </header>
-          <div className="p-2">
-            {cameraConnecting ? <div className="flex items-center justify-center gap-2 px-2 py-8 text-xs font-semibold text-slate-600"><span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-industrial" aria-hidden="true" />{cameraText.waitingPermission}</div> : <>
-              {cameras.length > 0 && <section className="mb-3">
-                <h3 className="px-1 pb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">Browser / USB webcam</h3>
-                {cameras.map((camera, index) => <button key={camera.deviceId} type="button" className={`mb-1 flex w-full items-center justify-between border px-3 py-2 text-left text-xs font-semibold ${selectedCamera?.source === 'browser' && camera.deviceId === selectedCamera.id ? 'border-industrial bg-hmiSelected text-industrialDark' : 'border-line bg-white hover:bg-hmiHover'}`} onClick={() => void connectBrowserCamera(camera.deviceId)}><span>{camera.label || `${t('camera')} ${index + 1}`}</span>{selectedCamera?.source === 'browser' && camera.deviceId === selectedCamera.id && <span className="text-[9px] uppercase tracking-wide">{t('cameraConnected')}</span>}</button>)}
-              </section>}
-              <section>
-                <h3 className="px-1 pb-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">MVS / Hikrobot industrial camera</h3>
-                {mvsCameras.map((camera) => <button key={camera.id} type="button" className={`mb-1 flex w-full items-center justify-between border px-3 py-2 text-left text-xs font-semibold ${selectedCamera?.source === 'mvs' && camera.id === selectedCamera.id ? 'border-industrial bg-hmiSelected text-industrialDark' : 'border-line bg-white hover:bg-hmiHover'}`} onClick={() => void connectMvsCamera(camera)}><span>{camera.label}<span className="ml-2 text-[9px] font-normal text-slate-500">{camera.transport}</span></span>{selectedCamera?.source === 'mvs' && camera.id === selectedCamera.id && <span className="text-[9px] uppercase tracking-wide">{t('cameraConnected')}</span>}</button>)}
-                {mvsCameras.length === 0 && <p className="px-1 py-2 text-xs leading-relaxed text-slate-600">{mvsAgentError || 'No MVS industrial camera was found on this workstation.'}</p>}
+          <div className="buffing-mes__camera-modal-body">
+            {cameraConnecting ? <div className="buffing-mes__camera-modal-loading"><span className="buffing-mes__camera-modal-spinner" aria-hidden="true" />{cameraText.waitingPermission}</div> : <>
+              <section className="buffing-mes__camera-source">
+                <div className="buffing-mes__camera-source-heading"><h3>{language === 'vi' ? 'Camera công nghiệp · MVS / Hikrobot' : 'Industrial camera · MVS / Hikrobot'}</h3><span>{mvsCameras.length}</span></div>
+                {mvsCameras.length > 0 && <div className="buffing-mes__camera-list">{mvsCameras.map((camera) => { const selected = selectedCamera?.source === 'mvs' && camera.id === selectedCamera.id; return <button key={camera.id} type="button" className={`buffing-mes__camera-option ${selected ? 'is-selected' : ''}`} onClick={() => void connectMvsCamera(camera)}><span className="buffing-mes__camera-option-main"><span className="buffing-mes__camera-option-name">{camera.label}</span><small>{camera.transport}</small></span>{selected ? <span className="buffing-mes__camera-option-status"><i aria-hidden="true" />{language === 'vi' ? 'Đã kết nối' : 'Connected'}</span> : <span className="buffing-mes__camera-option-arrow" aria-hidden="true">›</span>}</button>; })}</div>}
+                {mvsCameras.length === 0 && <p className="buffing-mes__camera-empty">{mvsAgentError || 'No MVS industrial camera was found on this workstation.'}</p>}
               </section>
-              {cameras.length === 0 && mvsCameras.length === 0 && <p className="px-1 py-3 text-xs leading-relaxed text-alarm">{error || t('cameraUnavailable')}</p>}
+              {cameras.length > 0 && <section className="buffing-mes__camera-source">
+                <div className="buffing-mes__camera-source-heading"><h3>{language === 'vi' ? 'Webcam trình duyệt / USB' : 'Browser / USB webcam'}</h3><span>{cameras.length}</span></div>
+                <div className="buffing-mes__camera-list">{cameras.map((camera, index) => { const selected = selectedCamera?.source === 'browser' && camera.deviceId === selectedCamera.id; return <button key={camera.deviceId} type="button" className={`buffing-mes__camera-option ${selected ? 'is-selected' : ''}`} onClick={() => void connectBrowserCamera(camera.deviceId)}><span className="buffing-mes__camera-option-main"><span className="buffing-mes__camera-option-name">{camera.label || `${t('camera')} ${index + 1}`}</span><small>Browser</small></span>{selected ? <span className="buffing-mes__camera-option-status"><i aria-hidden="true" />{language === 'vi' ? 'Đã kết nối' : 'Connected'}</span> : <span className="buffing-mes__camera-option-arrow" aria-hidden="true">›</span>}</button>; })}</div>
+              </section>}
+              {cameras.length === 0 && mvsCameras.length === 0 && <p className="buffing-mes__camera-error">{error || t('cameraUnavailable')}</p>}
             </>}
           </div>
         </div>
       </div>}
       {gallery && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 sm:p-6" role="dialog" aria-modal="true" aria-label={t('buffingImages')} onClick={() => setGallery(null)}><div className="relative flex max-h-full max-w-full flex-col items-center gap-3" onClick={(event) => event.stopPropagation()}><button type="button" aria-label={t('closeGallery')} className="absolute -right-3 -top-3 z-10 flex h-8 w-8 items-center justify-center bg-industrial text-lg text-white shadow-lg" onClick={() => setGallery(null)}>×</button><img src={gallery.images[gallery.index].url} alt={`${t('buffingImages')} ${gallery.index + 1}`} className="block w-[min(92vw,1440px)] max-h-[calc(100vh-7rem)] aspect-[4/3] object-contain shadow-2xl" /><div className="flex w-full items-center justify-between gap-3 text-white"><button type="button" aria-label={t('previousImage')} className="h-9 w-12 border border-white/60 bg-industrial/90 text-xl disabled:opacity-40" disabled={gallery.index === 0} onClick={() => setGallery((current) => current ? { ...current, index: Math.max(0, current.index - 1) } : current)}>‹</button><span className="text-xs font-bold">{gallery.index + 1} / {gallery.images.length}</span><button type="button" aria-label={t('nextImage')} className="h-9 w-12 border border-white/60 bg-industrial/90 text-xl disabled:opacity-40" disabled={gallery.index === gallery.images.length - 1} onClick={() => setGallery((current) => current ? { ...current, index: Math.min(current.images.length - 1, current.index + 1) } : current)}>›</button></div></div></div>}
-    </WS3Shell>
+    </WS3MesShell>
   );
 }

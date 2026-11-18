@@ -60,14 +60,25 @@ Mật khẩu tối thiểu 10 ký tự. Role CLI hỗ trợ: `ADMIN`, `PRODUCTIO
 ```powershell
 npm run lint
 npm run build
-uv run --project backend python -m unittest discover -s backend/tests -v
+uv run --directory backend python -m unittest discover -s tests -v
+uv run --directory backend ruff check app tests
 ```
-
 Migration integration tests cần PostgreSQL riêng và `MIGRATION_TEST_ADMIN_URL` có quyền tạo/xóa database test; xem [hướng dẫn Alembic](deployment/alembic-safety.md). Không trỏ biến này vào production. Kiểm thử MES mẫu có thể bỏ qua nếu thiếu fixture nội bộ.
+
+## Xem thử dashboard Tenter
+
+Khi chưa kết nối được relay realtime, mở trang record Tenter với query
+`?mock=tenter`, ví dụ `http://localhost:5173/machine/TE-01/record?mock=tenter`.
+Mock chỉ thay thế tín hiệu vận hành realtime để kiểm tra biểu đồ và bố cục;
+lookup/lưu SOP vẫn gọi API và dữ liệu MES thật. Không dùng query này khi kiểm
+tra kết nối relay hoặc vận hành thực tế.
 
 ## Quy ước thay đổi
 
 - Thêm cấu trúc PostgreSQL: tạo migration Alembic và kiểm tra cả database trống lẫn đường nâng cấp được hỗ trợ.
 - Không sửa lịch sử migration đã áp dụng tùy tiện; ngoại lệ bootstrap cần nêu lý do và kiểm chứng schema cũ/mới.
 - Khi đổi request/response, cập nhật frontend/API liên quan.
+- Dùng chữ ký FastAPI dễ đọc (`db: Session = Depends(get_db)`,
+  `limit: int = Query(...)`). Ruff đã nhận diện metadata FastAPI để không báo
+  nhầm B008; chỉ dùng `Annotated` khi nó làm chữ ký rõ hơn.
 - Không commit dữ liệu MES hoặc dump thật nếu chưa loại bỏ thông tin nhạy cảm.

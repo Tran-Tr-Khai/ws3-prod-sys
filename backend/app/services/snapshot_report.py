@@ -12,8 +12,25 @@ from app.services.snapshot_sources import key
 
 
 def raw_value(record: WS3ProductionOrder, name: str) -> str:
+    """
+    Read one named raw MES column from a production-order source row.
+
+    Args:
+        record: Production-order row containing the original MES payload.
+        name: Canonical source column name to locate.
+
+    Returns:
+        Raw cell value, or an empty string when the column is absent.
+    """
     data = json.loads(record.raw_data_json or '{}')
-    return next((value for label, value in zip(data.get('columns', []), data.get('row', [])) if key(label) == key(name)), '')
+    return next(
+        (
+            value
+            for label, value in zip(data.get('columns', []), data.get('row', []), strict=False)
+            if key(label) == key(name)
+        ),
+        '',
+    )
 
 
 def roll_date(roll_id: str | None, machine_no: str | None) -> str | None:
@@ -33,6 +50,18 @@ def build_report(
     workers: Sequence[WS3WorkerRecord],
     production_date: str | None,
 ) -> dict[str, object]:
+    """
+    Join MES order, roll and worker snapshots without positional assumptions.
+
+    Args:
+        orders: Production-order lines to group by PKP.
+        machines: Machine/roll rows used to attach physical rolls to SOPs.
+        workers: Worker rows used to resolve shift and operator per roll.
+        production_date: Optional source production date shown in the report.
+
+    Returns:
+        Report summary and PKP orders, including unresolved-data warnings.
+    """
     machine_index = defaultdict(list)
     worker_index = defaultdict(list)
     grouped = defaultdict(list)

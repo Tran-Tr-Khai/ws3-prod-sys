@@ -29,6 +29,7 @@ services:
       AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-8}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
       MEDIA_ROOT: ${MEDIA_ROOT:-/app/media}
+      TENTER_REALTIME_WS_URL: ${TENTER_REALTIME_WS_URL:-}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
       - ws3_media_data:/app/media

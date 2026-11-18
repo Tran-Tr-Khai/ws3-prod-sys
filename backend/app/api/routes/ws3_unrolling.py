@@ -1,9 +1,8 @@
 from collections import defaultdict
 from datetime import date
 import re
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -20,15 +19,24 @@ from app.schemas.ws3_unrolling import (
     WS3UnrollingRollResponse,
 )
 from app.security.auth import get_current_user, role_codes
+from app.security.authorization import MANAGER_ROLES
 from app.services.snapshot_report import build_report
 
 
 router = APIRouter(prefix="/ws3/unrolling", tags=["ws3-unrolling"])
-MANAGER_ROLES = {"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}
 UNROLLING_PREFIX = "UN-"
 
 
 def _is_unrolling_operator(user: User) -> bool:
+    """
+    Determine whether a user is assigned to operate an Unrolling machine.
+
+    Args:
+        user: Authenticated MES user.
+
+    Returns:
+        `True` when the user has the operator role and an `UN-` machine.
+    """
     return "OPERATOR" in role_codes(user) and any(
         str(machine_id).strip().upper().startswith(UNROLLING_PREFIX)
         for machine_id in (user.machine_ids or [])
@@ -36,22 +44,51 @@ def _is_unrolling_operator(user: User) -> bool:
 
 
 def _stable_code(value: str) -> str:
+    """Normalize a production identifier for case-insensitive comparisons."""
     return value.strip().upper()
 
 
 def _require_unrolling_read(user: User) -> None:
+    """
+    Authorize a user to view Unrolling worklists.
+
+    Args:
+        user: Authenticated MES user.
+
+    Raises:
+        HTTPException: 403 when the user has no Unrolling read access.
+    """
     if MANAGER_ROLES.intersection(role_codes(user)) or _is_unrolling_operator(user):
         return
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unrolling access is required")
 
 
 def _require_unrolling_write(user: User) -> None:
+    """
+    Authorize a user to record physical Unrolling roll movements.
+
+    Args:
+        user: Authenticated MES user.
+
+    Raises:
+        HTTPException: 403 unless the user is assigned to an Unrolling machine.
+    """
     if _is_unrolling_operator(user):
         return
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only assigned Unrolling workers can record roll movement")
 
 
 def _events_by_roll(db: Session, pk_numbers: list[str]) -> dict[tuple[str, str], dict[str, WS3UnrollingRollEvent]]:
+    """
+    Replay roll event history into the current state of each PKP/roll pair.
+
+    Args:
+        db: Database session used to load event history.
+        pk_numbers: Production order numbers included in the current worklist.
+
+    Returns:
+        Current collected and transferred events indexed by normalized PKP/roll.
+    """
     if not pk_numbers:
         return {}
     stable_pk_numbers = {_stable_code(pk_no) for pk_no in pk_numbers}
@@ -80,6 +117,16 @@ def _serialize_report_order(
     report_order: dict[str, object],
     events: dict[tuple[str, str], dict[str, WS3UnrollingRollEvent]],
 ) -> WS3UnrollingOrderResponse:
+    """
+    Combine one snapshot report order with its persisted movement events.
+
+    Args:
+        report_order: Order and roll information generated from the MES snapshot.
+        events: Current movement state indexed by production order and roll.
+
+    Returns:
+        API response with roll-level and aggregate collection progress.
+    """
     pk_no = str(report_order["pk_no"])
     rolls: list[WS3UnrollingRollResponse] = []
     for report_roll in report_order["rolls"]:  # type: ignore[union-attr]
@@ -122,6 +169,19 @@ def _serialize_report_order(
 
 
 def _current_report_order(db: Session, pk_no: str) -> dict[str, object]:
+    """
+    Rebuild one production order from the current snapshot before a write.
+
+    Args:
+        db: Database session containing snapshot source rows.
+        pk_no: Production order number being acted on.
+
+    Returns:
+        Current report order with the valid roll set.
+
+    Raises:
+        HTTPException: 404 when the PKP is absent or 409 when no roll data exists.
+    """
     order_lines = db.scalars(
         select(WS3ProductionOrder).where(WS3ProductionOrder.pk_no == pk_no)
     ).all()
@@ -145,12 +205,29 @@ def _current_report_order(db: Session, pk_no: str) -> dict[str, object]:
 
 @router.get("/orders", response_model=WS3UnrollingOrdersResponse)
 def list_unrolling_orders(
-    q: Annotated[str, Query(max_length=160)] = "",
-    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    q: str = "",
+    limit: int = 200,
     order_date: date | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> WS3UnrollingOrdersResponse:
+    """
+    Return the authorized Unrolling worklist from the current MES snapshot.
+
+    Args:
+        q: Optional PKP or SOP search text.
+        limit: Maximum production orders to return.
+        order_date: Optional production date filter.
+        db: Database session containing snapshot and movement data.
+        user: Authenticated user requesting the worklist.
+
+    Returns:
+        Pending-first production orders with the current roll movement state.
+    """
+    if len(q) > 160:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Search text is too long")
+    if not 1 <= limit <= 500:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Limit must be between 1 and 500")
     _require_unrolling_read(user)
     statement = select(WS3ProductionOrder).where(
         WS3ProductionOrder.pk_no.is_not(None), WS3ProductionOrder.pk_no != "",
@@ -180,6 +257,7 @@ def list_unrolling_orders(
     orders = [_serialize_report_order(order, events) for order in report_orders]
     orders = [order for order in orders if order.matched_rolls]
     def order_sort_key(order: WS3UnrollingOrderResponse) -> tuple[bool, int, tuple[tuple[int, object], ...]]:
+        """Sort pending orders first, then by production date and PKP code."""
         # Pending orders first; within a date, PKP sequence increases naturally.
         date_ordinal = date.fromisoformat(order.production_date).toordinal()
         pk_parts = tuple(
@@ -198,6 +276,22 @@ def record_unrolling_roll_action(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> WS3UnrollingActionResponse:
+    """
+    Record one idempotent roll collection, transfer or undo action.
+
+    Args:
+        payload: Roll identifier, action and mandatory worker details.
+        db: Database session used to validate and append the movement event.
+        user: Assigned Unrolling operator recording the action.
+
+    Returns:
+        Current roll status and whether a new event was written.
+
+    Raises:
+        HTTPException: 403 for unauthorized operators, 404 for stale rolls,
+            409 for invalid movement order or concurrent changes, and 422 for
+            incomplete worker data.
+    """
     _require_unrolling_write(user)
     worker_name = (payload.worker_name or "").strip()
     worker_id = (payload.worker_id or "").strip()

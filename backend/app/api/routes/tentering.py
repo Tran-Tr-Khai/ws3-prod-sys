@@ -16,34 +16,53 @@ from app.models.user import User
 from app.models.ws3_production import WS3MachineWS2Record, WS3ProductionOrder, WS3WorkerRecord
 from app.schemas.tentering import TenteringOrderInput, TenteringOrderResponse
 from app.security.auth import get_current_user, role_codes
+from app.security.authorization import require_machine_access
 from app.services.machine_order_progress import activate_machine_order
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_sop_code
 from app.services.snapshot_report import build_report
 
 
 router = APIRouter(prefix="/tentering", tags=["tentering"])
-MANAGER_ROLES = {"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}
-
-
 SUPPORTED_MACHINES = {"TE-01", "TE-02"}
 
-
 def _authorize(user: User, machine_id: str) -> None:
-    normalized_machine = machine_id.strip().upper()
-    if normalized_machine not in SUPPORTED_MACHINES:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tentering machine was not found")
-    if MANAGER_ROLES.intersection(role_codes(user)):
-        return
-    if "OPERATOR" in role_codes(user) and normalized_machine in (user.machine_ids or []):
-        return
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tentering access is required")
+    """
+    Enforce Tentering machine access for a request.
 
+    Args:
+        user: Authenticated MES user.
+        machine_id: Requested Tenter identifier.
+
+    Raises:
+        HTTPException: 403 for an unassigned user or 404 for a non-Tenter ID.
+    """
+    require_machine_access(
+        user,
+        machine_id,
+        supported_machines=SUPPORTED_MACHINES,
+        not_found_detail="Tentering machine was not found",
+    )
 
 def _order_query():
+    """
+    Build the standard Tentering order query.
+
+    Returns:
+        SQLAlchemy statement that eagerly loads roll entries, avoiding a query
+        for every order row in a list or export.
+    """
     return select(TenteringOrder).options(selectinload(TenteringOrder.entries))
 
-
 def _single_value(values: list[str | None]) -> str | None:
+    """
+    Return a source value only when all non-empty values agree.
+
+    Args:
+        values: Optional values collected from MES source rows.
+
+    Returns:
+        Shared value, or `None` when values are missing or conflicting.
+    """
     distinct = {value.strip().casefold(): value.strip() for value in values if value and value.strip()}
     return next(iter(distinct.values())) if len(distinct) == 1 else None
 
@@ -55,7 +74,25 @@ def get_tentering_order_source(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict[str, object] | None:
-    """Look up safe, unambiguous order fields from the existing production snapshot."""
+    """
+    Build a safe Tentering draft from the existing MES snapshot.
+
+    The source lookup deliberately returns only unambiguous production fields;
+    it never invents a roll or worker assignment when source data conflicts.
+
+    Args:
+        sop_no: SOP entered by the operator.
+        machine_id: Tenter machine where the SOP will run.
+        db: Database session containing the MES snapshot.
+        user: Authenticated user requesting the lookup.
+
+    Returns:
+        Normalized product/customer/roll data, or None when no SOP is found.
+
+    Raises:
+        HTTPException: 403/404 for unauthorized machine access or 409 for an
+            ambiguous SOP code.
+    """
     _authorize(user, machine_id)
     normalized_sop = sop_no.strip().upper()
     if not normalized_sop:
@@ -72,7 +109,13 @@ def get_tentering_order_source(
     worker_rows = db.scalars(
         select(WS3WorkerRecord).where(func.upper(func.trim(WS3WorkerRecord.sop_no)) == normalized_sop)
     ).all()
-    machines = db.scalars(select(WS3MachineWS2Record)).all()
+    # A source lookup is called while an operator types an SOP. Reading every
+    # imported roll makes that interaction slower as the warehouse grows.
+    machines = db.scalars(
+        select(WS3MachineWS2Record).where(
+            func.upper(func.trim(WS3MachineWS2Record.out_dyeing_sop)) == normalized_sop
+        )
+    ).all()
     report = build_report(rows, machines, worker_rows, None)
     report_orders = report["orders"]
     source_rolls = report_orders[0]["rolls"] if report_orders else []
@@ -101,6 +144,19 @@ def list_tentering_orders(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[TenteringOrder]:
+    """
+    Return a bounded, newest-first SOP history for one Tenter.
+
+    Args:
+        machine_id: Tenter machine used to scope the history.
+        q: Optional SOP search text.
+        limit: Maximum number of orders returned.
+        db: Database session.
+        user: Authenticated user requesting the history.
+
+    Returns:
+        Matching SOP orders with their roll entries.
+    """
     _authorize(user, machine_id)
     statement = _order_query().where(TenteringOrder.machine_id == machine_id.strip().upper())
     if q.strip():
@@ -118,6 +174,20 @@ def export_tentering_orders(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> StreamingResponse:
+    """
+    Export authorized Tentering SOP records and roll details to Excel.
+
+    Args:
+        machine_id: Tenter machine used to scope the export.
+        saved_date: Optional local date of the saved SOP record.
+        q: Optional search across SOP, production fields and roll details.
+        language: Workbook labels in Vietnamese or English.
+        db: Database session used to load orders and roll entries.
+        user: Authenticated user requesting the export.
+
+    Returns:
+        Streaming XLSX response with summary and roll-detail sheets.
+    """
     _authorize(user, machine_id)
     normalized_machine = machine_id.strip().upper()
     statement = _order_query().where(TenteringOrder.machine_id == normalized_machine)
@@ -293,6 +363,22 @@ def get_tentering_order(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TenteringOrder:
+    """
+    Return one saved Tentering SOP sheet and its roll set.
+
+    Args:
+        sop_no: SOP identity from the URL.
+        machine_id: Tenter machine that owns the sheet.
+        db: Database session used for the lookup.
+        user: Authenticated user requesting the sheet.
+
+    Returns:
+        Saved order including the current roll entries.
+
+    Raises:
+        HTTPException: 403 for access violations, 404 when the SOP does not
+            exist, or 422 when a PKP code is supplied instead of an SOP.
+    """
     _authorize(user, machine_id)
     if is_pkp_order_code(sop_no):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Vui lòng nhập mã SOP, không nhập mã PKP.")
@@ -313,6 +399,22 @@ def save_tentering_order(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TenteringOrder:
+    """
+    Replace one Tentering SOP sheet and synchronize its complete roll set.
+
+    Args:
+        sop_no: SOP identity from the URL.
+        payload: Complete production sheet submitted by the UI.
+        machine_id: Tenter machine that owns the sheet.
+        db: Database session used for the transactional save.
+        user: Authenticated user recording the sheet.
+
+    Returns:
+        Saved order including the current roll entries.
+
+    Raises:
+        HTTPException: 403 for access violations or 422 for invalid SOP input.
+    """
     _authorize(user, machine_id)
     normalized_sop = sop_no.strip().upper()
     normalized_machine = machine_id.strip().upper()
@@ -341,13 +443,10 @@ def save_tentering_order(
         for field, value in order_values.items():
             setattr(order, field, value)
 
+        existing_entries = {entry.roll_number: entry for entry in order.entries}
+        submitted_roll_numbers = {entry.roll_number for entry in payload.entries}
         for entry_data in payload.entries:
-            entry = db.scalar(
-                select(TenteringRollEntry).where(
-                    TenteringRollEntry.order_id == order.id,
-                    TenteringRollEntry.roll_number == entry_data.roll_number,
-                )
-            )
+            entry = existing_entries.get(entry_data.roll_number)
             values = entry_data.model_dump(exclude={"roll_number"})
             if entry is None:
                 entry = TenteringRollEntry(
@@ -363,6 +462,12 @@ def save_tentering_order(
                     setattr(entry, field, value)
                 entry.recorded_by_id = user.id
                 entry.recorded_by_name = user.full_name or user.username
+
+        # PUT represents the whole SOP sheet. Removing a row in the UI must
+        # remove its old roll entry rather than leaving a hidden stale record.
+        for roll_number, entry in existing_entries.items():
+            if roll_number not in submitted_roll_numbers:
+                db.delete(entry)
 
         activate_machine_order(db, normalized_machine, normalized_sop, progress=progress)
         order.order_progress = progress

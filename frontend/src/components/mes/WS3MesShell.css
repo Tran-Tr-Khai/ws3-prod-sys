@@ -1,0 +1,43 @@
+.ws3-mes-shell {
+  --mes-font: "Segoe UI", "Noto Sans", Arial, sans-serif;
+  --mes-mono: "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f5f7f8;
+  color: #293d47;
+  font-family: var(--mes-font);
+  font-size: 12px;
+  font-synthesis: none;
+  letter-spacing: 0;
+}
+
+/* MES pages intentionally use one text system. Older HMI components inherit
+   these values so dense labels, controls and table data no longer look mixed. */
+.ws3-mes-shell :is(button, input, select, textarea) { font-family: var(--mes-font); letter-spacing: 0; }
+.ws3-mes-shell :is(h1, h2, h3, h4, p, label, th, td, dt, dd) { font-family: var(--mes-font); }
+.ws3-mes-shell .hmi-condensed { font-family: var(--mes-font); }
+.ws3-mes-shell :is(.font-mono, time, .ws3-dashboard__numeric) { font-family: var(--mes-mono); font-variant-numeric: tabular-nums lining-nums; letter-spacing: 0; }
+.ws3-mes-shell__topbar { display: flex; min-height: 36px; align-items: center; gap: 0; border-bottom: 1px solid rgb(65, 94, 109); background: rgb(84, 117, 135); padding: 0 14px; color: #f6fafb; }
+.ws3-mes-shell__brand { display: inline-flex; min-height: 20px; align-items: center; gap: 5px; border-right: 1px solid rgb(255 255 255 / .24); padding-right: 12px; color: inherit; text-decoration: none; }
+.ws3-mes-shell__brand strong { font-size: 13px; font-weight: 700; letter-spacing: .03em; }
+.ws3-mes-shell__brand span { color: #d5e2e7; font-size: 9px; font-weight: 600; letter-spacing: .09em; }
+.ws3-mes-shell__module { padding-left: 12px; color: #edf4f6; font-size: 11px; }
+.ws3-mes-shell__account { display: flex; min-width: 0; align-items: center; gap: 0; margin-left: auto; white-space: nowrap; }
+.ws3-mes-shell__account time, .ws3-mes-shell__account > span { padding: 0 9px; color: #f4f8f9; font-size: 10px; font-variant-numeric: tabular-nums; }
+.ws3-mes-shell__account > span { max-width: 180px; overflow: hidden; border-left: 1px solid rgb(255 255 255 / .24); color: #e8f0f2; font-weight: 600; text-overflow: ellipsis; }
+.ws3-mes-shell__account button { border: 0; border-left: 1px solid rgb(255 255 255 / .24); background: transparent; padding: 1px 0 1px 9px; color: #f1f7f8; cursor: pointer; font-size: 9px; font-weight: 700; }
+.ws3-mes-shell__account button + button { margin-left: 9px; }
+.ws3-mes-shell__account button:hover { color: #fff; text-decoration: underline; }
+.ws3-mes-shell__context { display: flex; min-height: 31px; align-items: stretch; border-bottom: 1px solid #dce4e7; background: #f8fafb; padding: 0 14px; }
+.ws3-mes-shell__breadcrumb { display: flex; min-width: 0; align-items: center; color: #8798a0; font-size: 10px; white-space: nowrap; }
+.ws3-mes-shell__crumb { display: inline-flex; align-items: center; gap: 6px; }
+.ws3-mes-shell__crumb i { color: #b1bfc4; font-size: 12px; font-style: normal; }
+.ws3-mes-shell__crumb a { display: inline-flex; min-height: 30px; align-items: center; color: inherit; font-weight: 500; text-decoration: none; }
+.ws3-mes-shell__crumb a:hover { color: #547587; text-decoration: underline; }
+.ws3-mes-shell__navigation { display: flex; min-width: 0; flex: 1; margin-left: auto; }
+.ws3-mes-shell__main { display: flex; min-height: 0; flex: 1; overflow: hidden; }
+@media (max-width: 640px) { .ws3-mes-shell__topbar { padding: 0 10px; } .ws3-mes-shell__module, .ws3-mes-shell__account time, .ws3-mes-shell__account > span { display: none; } .ws3-mes-shell__account button { padding-left: 8px; } .ws3-mes-shell__context { min-height: 30px; padding: 0 10px; } .ws3-mes-shell__breadcrumb .ws3-mes-shell__crumb:not(:last-child) { display: none; } }

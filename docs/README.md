@@ -4,9 +4,10 @@ Tài liệu mô tả mã nguồn hiện có và cách vận hành đã đối ch
 
 | Tài liệu | Nội dung |
 |---|---|
+| [API contract](api-conventions.md) | API `/api`, quy ước đặt tên và thay đổi tương thích |
 | [Kiến trúc](architecture.md) | Thành phần hệ thống, nơi lưu dữ liệu, request và quy tắc thiết kế |
 | [Phát triển local](development.md) | Cài dependencies, cấu hình môi trường, chạy frontend/backend, kiểm tra |
-| [Luồng sản xuất và MES](production-workflows.md) | Snapshot Excel, Unrolling, Buffing, Scouring và quyền truy cập |
+| [Luồng sản xuất và MES](production-workflows.md) | Snapshot Excel, Unrolling, Buffing và phạm vi máy đang hỗ trợ |
 | [Deploy production](deployment/production.md) | Compose project chính `ws3`, backup, cập nhật website và kiểm tra |
 | [An toàn Alembic](deployment/alembic-safety.md) | Migration, phục hồi lỗi và rollout schema |
 | [Dọn dữ liệu ứng dụng](operations/clear-test-data.md) | Xóa dữ liệu test nhưng giữ tài khoản và bảng xác thực |

@@ -13,7 +13,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from PIL import Image as PillowImage
 from sqlalchemy import desc, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config.settings import get_settings
 from app.db.session import get_db
@@ -22,6 +22,7 @@ from app.services.machine_order_progress import activate_machine_order
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code, resolve_ws3_sop_code
 from app.schemas.buffing import BuffingCheckCreate, BuffingCheckResponse, BuffingImageResponse
 from app.security.auth import get_current_user, role_codes
+from app.security.authorization import require_machine_access
 
 router = APIRouter(prefix="/buffing/checks", tags=["buffing"])
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -30,12 +31,27 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
 def media_root() -> Path:
+    """
+    Resolve and create the directory used for Buffing evidence images.
+
+    Returns:
+        Existing absolute media root path.
+    """
     root = Path(get_settings().media_root).resolve()
     root.mkdir(parents=True, exist_ok=True)
     return root
 
 
 def image_response(image: BuffingCheckImage) -> BuffingImageResponse:
+    """
+    Convert stored image metadata into the public API representation.
+
+    Args:
+        image: Image row belonging to a Buffing checklist record.
+
+    Returns:
+        Image metadata with its canonical authenticated download path.
+    """
     return BuffingImageResponse(
         id=image.id,
         original_name=image.original_name,
@@ -48,6 +64,15 @@ def image_response(image: BuffingCheckImage) -> BuffingImageResponse:
 
 
 def check_response(check: BuffingCheck) -> BuffingCheckResponse:
+    """
+    Convert a Buffing checklist model into its API response schema.
+
+    Args:
+        check: Checklist record with image relationships loaded.
+
+    Returns:
+        Checklist fields and ordered image metadata.
+    """
     return BuffingCheckResponse(
         id=check.id,
         machine_id=check.machine_id,
@@ -71,6 +96,22 @@ def check_response(check: BuffingCheck) -> BuffingCheckResponse:
 
 @router.post("", response_model=BuffingCheckResponse, status_code=201)
 def create_buffing_check(payload: BuffingCheckCreate, db: Session = Depends(get_db), user=Depends(get_current_user)) -> BuffingCheckResponse:
+    """
+    Save a new authorized Buffing checklist and update its MES order progress.
+
+    Args:
+        payload: Checklist values entered by the operator.
+        db: Database session used for the checklist and order update.
+        user: Authenticated user creating the record.
+
+    Returns:
+        Newly saved checklist without image files.
+
+    Raises:
+        HTTPException: 403 for machine access, 409 for ambiguous order codes,
+            or 422 when the MES order is unavailable.
+    """
+    payload.machine_id = require_machine_access(user, payload.machine_id)
     normalized_order = payload.order_number.strip()
     try:
         _order_rows, aliases = resolve_ws3_sop_code(db, normalized_order)
@@ -95,10 +136,30 @@ def list_buffing_checks(
     check_date: date | None = Query(default=None),
     machine_id: str = Query(default="BU-01", min_length=1, max_length=50),
     order_number: str | None = Query(default=None, max_length=160),
-    limit: int | None = Query(default=None, ge=1, le=500),
+    limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ) -> list[BuffingCheckResponse]:
-    statement = select(BuffingCheck).where(BuffingCheck.machine_id == machine_id)
+    """
+    Return the newest authorized Buffing checks with their images.
+
+    Args:
+        check_date: Optional local checklist date filter.
+        machine_id: Machine that owns the checklist records.
+        order_number: Optional MES order/SOP filter.
+        limit: Maximum checks to return.
+        db: Database session.
+        user: Authenticated user requesting the records.
+
+    Returns:
+        Newest-first checks with image metadata already loaded.
+    """
+    normalized_machine = require_machine_access(user, machine_id)
+    statement = (
+        select(BuffingCheck)
+        .options(selectinload(BuffingCheck.images))
+        .where(BuffingCheck.machine_id == normalized_machine)
+    )
     if check_date is not None:
         statement = statement.where(BuffingCheck.check_date == check_date)
     if order_number and order_number.strip():
@@ -109,9 +170,7 @@ def list_buffing_checks(
         aliases = aliases or {order_number.strip().upper()}
         statement = statement.where(func.upper(func.trim(BuffingCheck.order_number)).in_(aliases))
     statement = statement.order_by(desc(BuffingCheck.checked_at), desc(BuffingCheck.id))
-    if limit is not None:
-        statement = statement.limit(limit)
-    return [check_response(check) for check in db.scalars(statement).all()]
+    return [check_response(check) for check in db.scalars(statement.limit(limit)).all()]
 
 
 @router.get("/export")
@@ -120,10 +179,29 @@ def export_buffing_checks(
     machine_id: str = Query(default="BU-01", min_length=1, max_length=50),
     language: str = Query(default="vi", pattern="^(vi|en)$"),
     db: Session = Depends(get_db),
-    _user=Depends(get_current_user),
+    user=Depends(get_current_user),
     order_number: str | None = Query(default=None, max_length=100),
 ) -> StreamingResponse:
-    statement = select(BuffingCheck).where(BuffingCheck.machine_id == machine_id)
+    """
+    Export authorized Buffing checks as an Excel report.
+
+    Args:
+        check_date: Optional date included in the report filter.
+        machine_id: Machine that owns the exported records.
+        language: `vi` or `en` workbook labels.
+        db: Database session.
+        user: Authenticated user requesting the export.
+        order_number: Optional MES order/SOP filter.
+
+    Returns:
+        Streaming XLSX response with checklist rows and primary images.
+    """
+    normalized_machine = require_machine_access(user, machine_id)
+    statement = (
+        select(BuffingCheck)
+        .options(selectinload(BuffingCheck.images))
+        .where(BuffingCheck.machine_id == normalized_machine)
+    )
     if check_date is not None:
         statement = statement.where(BuffingCheck.check_date == check_date)
     if order_number and order_number.strip():
@@ -246,6 +324,19 @@ def export_buffing_checks(
 
 
 def get_check(check_id: int, db: Session) -> BuffingCheck:
+    """
+    Load one Buffing checklist or raise a consistent not-found error.
+
+    Args:
+        check_id: Primary key of the checklist record.
+        db: Database session used for the lookup.
+
+    Returns:
+        Matching checklist model.
+
+    Raises:
+        HTTPException: 404 when the checklist does not exist.
+    """
     check = db.get(BuffingCheck, check_id)
     if check is None:
         raise HTTPException(status_code=404, detail="Buffing check not found")
@@ -254,7 +345,19 @@ def get_check(check_id: int, db: Session) -> BuffingCheck:
 
 @router.delete("/{check_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_buffing_check(check_id: int, db: Session = Depends(get_db), _user=Depends(get_current_user)) -> Response:
+    """
+    Delete one authorized checklist and its managed evidence image files.
+
+    Args:
+        check_id: Primary key of the checklist to remove.
+        db: Database session used for deletion.
+        _user: Authenticated user authorized for the checklist machine.
+
+    Returns:
+        Empty HTTP 204 response.
+    """
     check = get_check(check_id, db)
+    require_machine_access(_user, check.machine_id)
     file_paths = [image.file_path for image in check.images]
     db.delete(check)
     db.commit()
@@ -280,7 +383,23 @@ async def upload_buffing_images(
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ) -> list[BuffingImageResponse]:
+    """
+    Validate and attach evidence images to an authorized Buffing checklist.
+
+    Args:
+        check_id: Primary key of the checklist receiving the images.
+        files: JPEG, PNG or WebP uploads from the browser.
+        db: Database session used to save image metadata.
+        _user: Authenticated user authorized for the checklist machine.
+
+    Returns:
+        Newly created image metadata in display order.
+
+    Raises:
+        HTTPException: 400 for invalid image count, type or size.
+    """
     check = get_check(check_id, db)
+    require_machine_access(_user, check.machine_id)
     if not files or len(check.images) + len(files) > MAX_IMAGES_PER_CHECK:
         raise HTTPException(status_code=400, detail=f"A Buffing check can contain at most {MAX_IMAGES_PER_CHECK} images")
 
@@ -324,6 +443,20 @@ async def upload_buffing_images(
 
 @router.get("/{check_id}/images/{image_id}/file", response_class=FileResponse)
 def get_buffing_image(check_id: int, image_id: int, db: Session = Depends(get_db), _user=Depends(get_current_user)) -> FileResponse:
+    """
+    Return one authorized evidence image from managed media storage.
+
+    Args:
+        check_id: Checklist expected to own the image.
+        image_id: Primary key of the requested image.
+        db: Database session used for ownership lookup.
+        _user: Authenticated user authorized for the checklist machine.
+
+    Returns:
+        Image file response with the stored media type.
+    """
+    check = get_check(check_id, db)
+    require_machine_access(_user, check.machine_id)
     image = db.scalar(select(BuffingCheckImage).where(BuffingCheckImage.id == image_id, BuffingCheckImage.buffing_check_id == check_id))
     if image is None:
         raise HTTPException(status_code=404, detail="Buffing image not found")
@@ -336,6 +469,20 @@ def get_buffing_image(check_id: int, image_id: int, db: Session = Depends(get_db
 
 @router.patch("/{check_id}/images/{image_id}/primary", response_model=BuffingImageResponse)
 def set_primary_buffing_image(check_id: int, image_id: int, db: Session = Depends(get_db), _user=Depends(get_current_user)) -> BuffingImageResponse:
+    """
+    Mark one authorized evidence image as the checklist cover image.
+
+    Args:
+        check_id: Checklist expected to own the image.
+        image_id: Primary key of the image selected as primary.
+        db: Database session used to update image flags.
+        _user: Authenticated user authorized for the checklist machine.
+
+    Returns:
+        Updated primary image metadata.
+    """
+    check = get_check(check_id, db)
+    require_machine_access(_user, check.machine_id)
     image = db.scalar(select(BuffingCheckImage).where(BuffingCheckImage.id == image_id, BuffingCheckImage.buffing_check_id == check_id))
     if image is None:
         raise HTTPException(status_code=404, detail="Buffing image not found")

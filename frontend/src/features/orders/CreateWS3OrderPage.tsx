@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { HMIButton } from '../../components/hmi/HMIButton';
 import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { archiveWS3WarehouseRow, confirmWS3Order, createWS3ImportBatch, createWS3Order, getWS3ImportWarehouse, parseWS3SourceFile, updateWS3WarehouseRow, type ImportedRow, type WS3Order } from './ws3OrderApi';
+
+/*
+ * The two inline table handlers below use ternaries to select one imperative
+ * action. They are deliberately scoped to this legacy screen while it is
+ * incrementally split into smaller components.
+ */
+/* eslint-disable @typescript-eslint/no-unused-expressions */
 
 const orderFields = [
   ['roll_id', 'Roll ID / mã cuộn'], ['item_code', 'Item Code'], ['item_name', 'Item Name / tên vải'],
@@ -73,7 +80,7 @@ function compareTableValues(left: string, right: string): number {
 function guessMapping(columns: string[]): Record<string, string> {
   const normalized = columns.map((column) => [column, column.toLowerCase()] as const);
   const result: Record<string, string> = {};
-  for (const [field, label] of orderFields) {
+  for (const [field] of orderFields) {
     const match = normalized.find(([, value]) => {
       if (field === 'roll_id') return value.includes('roll') || value.includes('cuộn') || value.includes('qr');
       if (field === 'item_code') return value.includes('item code') || value.includes('item no') || value === 'item';
@@ -104,10 +111,9 @@ function printOrder(order: WS3Order, language: 'vi' | 'en') {
 export function CreateWS3OrderPage({ initialWorkflow = 'import' }: { initialWorkflow?: 'import' | 'order' }) {
   const { user } = useAuth();
   const { language } = useLanguage();
-  const tx = (vi: string, en: string) => language === 'vi' ? vi : en;
+  const tx = useCallback((vi: string, en: string) => language === 'vi' ? vi : en, [language]);
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [sourceText, setSourceText] = useState('');
   const [sourceFilename, setSourceFilename] = useState<string | null>(null);
   const [sourceFormat, setSourceFormat] = useState('PASTE');
   const [columns, setColumns] = useState<string[]>([]);
@@ -133,24 +139,27 @@ export function CreateWS3OrderPage({ initialWorkflow = 'import' }: { initialWork
   const [incompleteIndexes, setIncompleteIndexes] = useState<Set<number>>(new Set());
   const pageSize = 50;
 
-  const openWarehouse = async (forOrder = false) => {
+  const openWarehouse = useCallback(async (forOrder = false) => {
     setProcessing('loadingWarehouse');
     try {
       const warehouse = await getWS3ImportWarehouse();
       const available = warehouse.rows.flatMap((row, index) => row.status === 'AVAILABLE' ? [index] : []);
       const dateColumn = warehouse.columns.find((column) => column.trim().toUpperCase() === 'DATE');
-      setColumns(warehouse.columns); setRows(warehouse.rows.map((row) => row.raw_data)); setMapping(guessMapping(warehouse.columns)); setSelected(forOrder ? new Set() : new Set(available)); setImportBatchId(null); setImportRowIds(warehouse.rows.map((row) => row.id)); setSourceFilename(null); setSourceFormat('WAREHOUSE'); setSourceText(''); setOrder(null); setSortConfig(dateColumn ? { column: dateColumn, direction: 'desc' } : null); setPage(1);
+    setColumns(warehouse.columns); setRows(warehouse.rows.map((row) => row.raw_data)); setMapping(guessMapping(warehouse.columns)); setSelected(forOrder ? new Set() : new Set(available)); setImportBatchId(null); setImportRowIds(warehouse.rows.map((row) => row.id)); setSourceFilename(null); setSourceFormat('WAREHOUSE'); setOrder(null); setSortConfig(dateColumn ? { column: dateColumn, direction: 'desc' } : null); setPage(1);
       setImportStats({ duplicate: 0, newRows: available.length, incomplete: warehouse.rows.filter((row) => row.status === 'INCOMPLETE').length });
       setDuplicateIndexes(new Set()); setIncompleteIndexes(new Set(warehouse.rows.flatMap((row, index) => row.status === 'INCOMPLETE' ? [index] : [])));
       setMessage(tx('Đã mở Kho dữ liệu.', 'Data warehouse loaded.'));
     } catch (error) { setMessage(error instanceof Error ? error.message : tx('Không thể mở Kho dữ liệu.', 'Unable to load data warehouse.')); }
     finally { setProcessing(null); }
-  };
+  }, [tx]);
 
-  useEffect(() => { setWorkflowMode(initialWorkflow); void openWarehouse(initialWorkflow === 'order'); }, [initialWorkflow]);
+  useEffect(() => {
+    setWorkflowMode(initialWorkflow);
+    void openWarehouse(initialWorkflow === 'order');
+  }, [initialWorkflow, openWarehouse]);
 
-  const loadParsed = (parsed: { columns: string[]; rows: ImportedRow[] }, format = 'PASTE', filename: string | null = null, text = '', notice = '', selectedIndexes?: number[], stats?: { duplicate: number; newRows: number; incomplete: number }, duplicateRows?: number[], incompleteRows?: number[]) => {
-    setSourceText(text); setSourceFormat(format); setSourceFilename(filename);
+  const loadParsed = (parsed: { columns: string[]; rows: ImportedRow[] }, format = 'PASTE', filename: string | null = null, sourceText = '', notice = '', selectedIndexes?: number[], stats?: { duplicate: number; newRows: number; incomplete: number }, duplicateRows?: number[], incompleteRows?: number[]) => {
+    setSourceFormat(format); setSourceFilename(filename ?? (sourceText ? 'Pasted MES data' : null));
     setColumns(parsed.columns); setRows(parsed.rows); setMapping(guessMapping(parsed.columns)); setSelected(new Set(selectedIndexes ?? parsed.rows.map((_, index) => index))); setMessage(notice); setImportStats(stats ?? null); setDuplicateIndexes(new Set(duplicateRows ?? [])); setIncompleteIndexes(new Set(incompleteRows ?? [])); setImportBatchId(null); setImportRowIds(parsed.rows.map(() => null)); setOrder(null);
   };
   const loadText = (text: string, format = 'PASTE', filename: string | null = null) => {
@@ -199,7 +208,7 @@ export function CreateWS3OrderPage({ initialWorkflow = 'import' }: { initialWork
     if (!mapping.roll_id) messages.push(tx('Chưa chọn cột Mã cuộn.', 'Roll ID column has not been selected.'));
     if (!mapping.length_meters) messages.push(tx('Chưa chọn cột MTS, tổng sản lượng sẽ bằng 0.', 'MTS column has not been selected, so total meters will be 0.'));
     return messages;
-  }, [mapping.length_meters, mapping.roll_id, selectedRows]);
+  }, [mapping.length_meters, mapping.roll_id, tx]);
 
   const saveOrder = async () => {
     if (!columns.length || !rows.length || (workflowMode === 'order' && !selectedRows.length)) { setMessage(workflowMode === 'import' ? tx('Hãy nhập dữ liệu trước khi lưu.', 'Enter data before saving.') : tx('Hãy chọn ít nhất một dòng để tạo đơn.', 'Select at least one row to create an order.')); return; }

@@ -57,7 +57,7 @@ export async function getTenteringOrders(machineId: string, query = '', options:
   const params = new URLSearchParams({ limit: '100' });
   params.set('machine_id', machineId);
   if (query.trim()) params.set('q', query.trim());
-  const response = await fetch(`${apiBaseUrl}/api/tentering/orders?${params}`, { credentials: 'include', signal: options.signal });
+    const response = await fetch(`${apiBaseUrl}/api/tentering/orders?${params}`, { credentials: 'include', signal: options.signal });
   if (!response.ok) throw new Error(await readError(response));
   return await response.json() as TenteringOrder[];
 }
@@ -66,14 +66,14 @@ export async function downloadTenteringReport(filters: { machineId: string; save
   const params = new URLSearchParams({ machine_id: filters.machineId, language: filters.language });
   if (filters.savedDate) params.set('saved_date', filters.savedDate);
   if (filters.query?.trim()) params.set('q', filters.query.trim());
-  const response = await fetch(`${apiBaseUrl}/api/tentering/orders/export?${params.toString()}`, { credentials: 'include' });
+    const response = await fetch(`${apiBaseUrl}/api/tentering/orders/export?${params.toString()}`, { credentials: 'include' });
   if (!response.ok) throw new Error(await readError(response));
   return response.blob();
 }
 
 export async function getTenteringOrder(machineId: string, sopNo: string): Promise<TenteringOrder | null> {
   const params = new URLSearchParams({ machine_id: machineId });
-  const response = await fetch(`${apiBaseUrl}/api/tentering/orders/${encodeURIComponent(sopNo.trim())}?${params}`, { credentials: 'include' });
+    const response = await fetch(`${apiBaseUrl}/api/tentering/orders/${encodeURIComponent(sopNo.trim())}?${params}`, { credentials: 'include' });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(await readError(response));
   return await response.json() as TenteringOrder;
@@ -81,14 +81,14 @@ export async function getTenteringOrder(machineId: string, sopNo: string): Promi
 
 export async function getTenteringOrderSource(machineId: string, sopNo: string): Promise<TenteringOrderSource | null> {
   const params = new URLSearchParams({ machine_id: machineId });
-  const response = await fetch(`${apiBaseUrl}/api/tentering/orders/${encodeURIComponent(sopNo.trim())}/source?${params}`, { credentials: 'include' });
+    const response = await fetch(`${apiBaseUrl}/api/tentering/orders/${encodeURIComponent(sopNo.trim())}/source?${params}`, { credentials: 'include' });
   if (!response.ok) throw new Error(await readError(response));
   return await response.json() as TenteringOrderSource | null;
 }
 
 export async function saveTenteringOrder(machineId: string, sopNo: string, payload: TenteringOrderInput): Promise<TenteringOrder> {
   const params = new URLSearchParams({ machine_id: machineId });
-  const response = await fetch(`${apiBaseUrl}/api/tentering/orders/${encodeURIComponent(sopNo.trim())}?${params}`, {
+    const response = await fetch(`${apiBaseUrl}/api/tentering/orders/${encodeURIComponent(sopNo.trim())}?${params}`, {
     method: 'PUT',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },

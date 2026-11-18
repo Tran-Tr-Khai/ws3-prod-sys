@@ -1,0 +1,157 @@
+.mes-data-table {
+  border-collapse: collapse;
+  color: #3e5967;
+  font-size: 11px;
+}
+
+.mes-resizable-table {
+  table-layout: fixed;
+}
+
+.mes-resizable-table th,
+.mes-resizable-table td {
+  border-right: 1px solid #dce5e8;
+}
+
+.mes-resizable-table th:last-child,
+.mes-resizable-table td:last-child {
+  border-right: 0;
+}
+
+.mes-resizable-header {
+  position: relative;
+  text-align: left !important;
+}
+
+.mes-resizable-header__label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 10px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mes-resizable-header__handle {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.mes-resizable-header__handle::after {
+  position: absolute;
+  top: 7px;
+  right: 3px;
+  bottom: 7px;
+  width: 1px;
+  background: transparent;
+  content: '';
+}
+
+.mes-resizable-header__handle:hover::after,
+.mes-resizable-header__handle:active::after {
+  background: #547587;
+}
+
+body.mes-is-resizing-column,
+body.mes-is-resizing-column * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+.mes-data-table th {
+  border-right: 1px solid #d8e2e5;
+  border-bottom: 1px solid #d8e2e5;
+  background: #f2f6f7;
+  color: #536e7a;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mes-data-table td {
+  overflow: hidden;
+  border-right: 1px solid #e1e8ea;
+  border-bottom: 1px solid #edf1f2;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.mes-data-table th:last-child,
+.mes-data-table td:last-child {
+  border-right: 0;
+}
+
+.mes-data-table tbody tr:nth-child(even) {
+  background: #fafbfb;
+}
+
+.mes-data-table tbody tr:hover {
+  background: #edf4f6;
+}
+
+.mes-data-table .is-mono {
+  color: #486c7a;
+  font-family: var(--mes-mono);
+  font-weight: 650;
+}
+
+.mes-data-table .is-number {
+  color: #365766;
+  font-family: var(--mes-mono);
+  text-align: right;
+}
+
+.mes-data-cell {
+  position: relative;
+}
+
+.mes-data-cell__content {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mes-data-cell.is-truncated {
+  overflow: visible;
+}
+
+.mes-data-cell__tooltip {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 5px);
+  left: 8px;
+  display: block;
+  width: max-content;
+  max-width: min(320px, 42vw);
+  border: 1px solid #c9d8dc;
+  border-radius: 3px;
+  background: #f7fbfc;
+  padding: 6px 8px;
+  box-shadow: 0 8px 20px rgb(42 64 72 / .14);
+  color: #344f5d;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.35;
+  pointer-events: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+
+.mes-data-cell.is-truncated:hover .mes-data-cell__tooltip,
+.mes-data-cell.is-truncated:focus-within .mes-data-cell__tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}

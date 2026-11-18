@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     auth_session_ttl_hours: int = Field(default=8, validation_alias="AUTH_SESSION_TTL_HOURS")
     auth_cookie_secure: bool = Field(default=False, validation_alias="AUTH_COOKIE_SECURE")
     media_root: str = Field(default="backend/media", validation_alias="MEDIA_ROOT")
+    tenter_realtime_ws_url: str = Field(default="", validation_alias="TENTER_REALTIME_WS_URL")
 
     database_url: str = Field(
         default="postgresql+psycopg://ws3:ws3_password@localhost:5432/ws3",

@@ -26,12 +26,13 @@ const productionFields: Record<string, string[]> = {
   'PR-01': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
 };
 
-export function useMachineOverview(activeTenteringMachine: string) {
+export function useMachineOverview() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const buffing = useProgressiveMachineOverview('BU-01');
   const scouring = useProgressiveMachineOverview('SC-01');
-  const tentering = useProgressiveMachineOverview(activeTenteringMachine);
+  const tentering01 = useProgressiveMachineOverview('TE-01');
+  const tentering02 = useProgressiveMachineOverview('TE-02');
   const transfer = useProgressiveMachineOverview('TR-01');
   const print = useProgressiveMachineOverview('PR-01');
   const canViewMesOrders = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
@@ -107,7 +108,8 @@ export function useMachineOverview(activeTenteringMachine: string) {
   const summaries: Record<string, MachineOverviewSummary> = {
     'BU-01': summarize('BU-01', buffing),
     'SC-01': summarize('SC-01', scouring),
-    [activeTenteringMachine]: summarize(activeTenteringMachine, tentering),
+    'TE-01': summarize('TE-01', tentering01),
+    'TE-02': summarize('TE-02', tentering02),
     'TR-01': summarize('TR-01', transfer),
     'PR-01': summarize('PR-01', print),
     'UN-01': {

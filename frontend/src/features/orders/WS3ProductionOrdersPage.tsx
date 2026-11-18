@@ -1,23 +1,142 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { HMIButton } from '../../components/hmi/HMIButton';
-import { WS3Shell } from '../../components/hmi/WS3Shell';
 import { useAuth } from '../../auth/AuthContext';
-import { getWS3ProductionReport, type WS3ProductionReport } from './ws3OrderApi';
-import { WS3SupervisorNav } from './WS3SupervisorNav';
 import { useLanguage } from '../../i18n/LanguageContext';
-
+import { WS3MesShell } from '../../components/mes/WS3MesShell';
+import { getWS3ProductionReport, type WS3ProductionReport } from './ws3OrderApi';
 import { printProductionOrder } from './printProductionOrder';
+import { WS3DataFlowNav } from './WS3DataFlowNav';
+import './WS3ProductionOrdersPage.css';
+
+function statusLabel(status: 'READY' | 'CHECK', language: 'vi' | 'en') {
+  if (status === 'READY') return language === 'vi' ? 'Đủ thông tin' : 'Ready';
+  return language === 'vi' ? 'Cần kiểm tra' : 'Needs review';
+}
 
 export function WS3ProductionOrdersPage() {
-  const { user } = useAuth(); const { language } = useLanguage(); const tx = useCallback((vi: string, en: string) => language === 'vi' ? vi : en, [language]); const [date, setDate] = useState(new Date().toISOString().slice(0, 10)); const [report, setReport] = useState<WS3ProductionReport | null>(null); const [selected, setSelected] = useState(''); const [message, setMessage] = useState(''); const [loading, setLoading] = useState(false);
-  const order = useMemo(() => report?.orders.find((item) => item.pk_no === selected) ?? report?.orders[0] ?? null, [report, selected]);
-  const load = useCallback(async () => { setLoading(true); setMessage(''); try { const result = await getWS3ProductionReport(date); setReport(result); setSelected(result.orders[0]?.pk_no ?? ''); if (!result.orders.length) setMessage(tx('Không có đơn trong ngày đã chọn.', 'No orders found for the selected date.')); } catch (error) { setMessage(error instanceof Error ? error.message : tx('Không thể tải báo cáo đơn.', 'Unable to load the production report.')); } finally { setLoading(false); } }, [date, tx]);
+  const { user } = useAuth();
+  const { language } = useLanguage();
+  const tx = useCallback((vi: string, en: string) => language === 'vi' ? vi : en, [language]);
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [report, setReport] = useState<WS3ProductionReport | null>(null);
+  const [selected, setSelected] = useState('');
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const allowed = Boolean(user && ['ADMIN', 'SUPERVISOR', 'PRODUCTION_MANAGER'].includes(user.role));
+  const order = useMemo(() => report?.orders.find((item) => item.pk_no === selected) ?? null, [report, selected]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const result = await getWS3ProductionReport(date);
+      setReport(result);
+      setSelected((current) => result.orders.some((item) => item.pk_no === current) ? current : '');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : tx('Không thể tải báo cáo đơn.', 'Unable to load the production report.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [date, tx]);
+
   useEffect(() => { void load(); }, [load]);
-  if (!user || !['ADMIN', 'SUPERVISOR', 'PRODUCTION_MANAGER'].includes(user.role)) return <WS3Shell title="WS3 / PRODUCTION ORDERS"><div className="p-6 text-sm font-semibold">{tx('Bạn không có quyền xem báo cáo này.', 'You are not allowed to view this report.')}</div></WS3Shell>;
-  return <WS3Shell showGlobalNavigation={false} showMachineNavigation={false} navigation={<WS3SupervisorNav />} title="WS3 / UNROLLING" subtitle={tx('Đơn sản xuất và cuộn được cấp trực tiếp từ dữ liệu MES', 'Production orders and rolls supplied directly from MES')} status="info" time={new Date().toLocaleTimeString(language === 'vi' ? 'vi-VN' : 'en-GB')}>
-    <main className="flex h-full min-h-0 flex-col gap-2 overflow-hidden bg-hmiConsole p-2 sm:p-3"><div className="scouring-screen-frame scouring-full-width-frame flex min-h-0 flex-1 flex-col gap-2 overflow-hidden bg-hmiConsole"><div className="flex shrink-0 items-end justify-between gap-3 border-2 border-industrialDark bg-hmiSection p-3"><label className="text-[10px] font-bold uppercase tracking-wide text-industrialDark">{tx('Ngày sản xuất', 'Production date')}<input aria-label={tx('Ngày sản xuất', 'Production date')} type="date" value={date} onChange={(event) => setDate(event.target.value)} className="ml-3 h-8 border-2 border-line bg-white px-2 text-xs font-semibold" /></label><HMIButton variant="primary" size="compact" onClick={() => void load()} disabled={loading}>{loading ? tx('ĐANG TẢI...', 'LOADING...') : tx('XEM ĐƠN', 'VIEW ORDERS')}</HMIButton></div>
-      {report && <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[285px_minmax(0,1fr)]"><aside className="flex min-h-0 flex-col overflow-hidden border-2 border-industrialDark bg-white"><div className="grid shrink-0 grid-cols-3 border-b-2 border-industrialDark text-center text-[10px] font-bold uppercase"><span className="p-2 text-slate-700">{tx('ĐƠN', 'ORDERS')}<strong className="block text-sm">{report.summary.orders}</strong></span><span className="p-2 text-success">{tx('ĐỦ', 'READY')}<strong className="block text-sm">{report.summary.ready}</strong></span><span className="p-2 text-warning">{tx('BỔ SUNG', 'PENDING')}<strong className="block text-sm">{report.summary.check}</strong></span></div><div className="min-h-0 flex-1 overflow-auto">{report.orders.map((item) => <button type="button" key={item.pk_no} onClick={() => setSelected(item.pk_no)} className={`flex w-full items-center justify-between border-b border-line px-3 py-3 text-left ${order?.pk_no === item.pk_no ? 'bg-industrialDark text-white' : 'bg-white text-industrialDark hover:bg-slate-100'}`}><span><b className="block text-xs">{item.pk_no}</b><small className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] font-normal leading-4"><span className={order?.pk_no === item.pk_no ? 'text-slate-200' : 'text-slate-500'}>{item.item_code}</span><span className={item.status === 'READY' ? 'font-medium text-success' : 'font-medium text-warning'}>{item.status === 'READY' ? tx('Đủ thông tin', 'Ready') : tx('Cần kiểm tra', 'Needs review')}</span></small></span><strong className="text-xs">{item.matched_rolls}/{item.expected_rolls}</strong></button>)}</div></aside><section className="flex min-h-0 flex-col overflow-hidden border-2 border-industrialDark bg-white">{order && <><div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-white p-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1 className="text-lg font-bold tracking-wide text-industrialDark">{order.pk_no}</h1><span className={`border px-2 py-1 text-[9px] font-semibold normal-case ${order.status === 'READY' ? 'border-[#83b992] bg-[#e4f2e7] text-[#26723a]' : 'border-amber-300 bg-amber-100 text-amber-800'}`}>{order.status === 'READY' ? tx('Đủ thông tin', 'Ready') : tx('Cần kiểm tra', 'Needs review')}</span></div><p className="mt-1 truncate text-[11px] font-medium tracking-wide text-slate-500">{order.production_date} · SOP: {order.sop_no ?? '—'}</p><p className="mt-0.5 truncate text-[10px] tracking-wide text-slate-500">{order.item_name ?? '—'}</p></div><HMIButton variant="primary" size="compact" disabled={order.matched_rolls === 0} onClick={() => printProductionOrder(order, language)}>{tx('IN PHIẾU', 'PRINT SLIPS')}</HMIButton></div><div className="min-h-0 flex-1 overflow-auto bg-white p-3">{order.warnings.length > 0 && <div role="status" className="mb-3 border border-warning bg-amber-50 p-3 text-xs"><p className="font-bold">{tx('Cần kiểm tra dữ liệu nguồn', 'Source data needs review')}</p><ul className="mt-2 list-disc pl-4">{order.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}<div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{order.rolls.map((roll, index) => <article key={`${roll.out_no}-${index}`} className="overflow-hidden border-2 border-line bg-white"><header className={`flex min-h-9 items-center justify-between border-b border-line px-3 ${roll.roll_id ? 'bg-hmiSection' : 'bg-white'}`}><b className={`text-xs font-bold tracking-wide ${roll.roll_id ? 'text-industrialDark' : 'text-warning'}`}>{tx('ROLL', 'ROLL')} {index + 1}</b><span className={`text-xs font-bold ${roll.roll_id ? 'text-slate-600' : 'text-warning'}`}>{roll.remarks ?? '—'}</span></header><dl className="divide-y divide-line px-3"><div className="grid min-h-8 grid-cols-[88px_minmax(0,1fr)] items-center gap-2"><dt className="text-[10px] font-semibold uppercase text-slate-500">{tx('Mã hàng', 'Item Code')}</dt><dd className="text-xs font-bold">{roll.item_code ?? '—'}</dd></div><div className="grid min-h-8 grid-cols-[88px_minmax(0,1fr)] items-center gap-2"><dt className="text-[10px] font-semibold uppercase text-slate-500">{tx('Ghi chú', 'Remarks')}</dt><dd className="text-xs font-bold">{roll.remarks ?? '—'}</dd></div><div className="grid min-h-8 grid-cols-[88px_minmax(0,1fr)] items-center gap-2"><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{tx('Mã roll', 'Roll ID')}</dt><dd className="truncate text-xs font-bold text-industrialDark">{roll.roll_id ?? '—'}</dd></div><div className="grid min-h-8 grid-cols-[88px_minmax(0,1fr)] items-center gap-2"><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{tx('Máy', 'Machine')}</dt><dd className="text-xs font-bold text-industrialDark">{roll.machine_no ?? '—'}</dd></div><div className="grid min-h-8 grid-cols-[88px_minmax(0,1fr)] items-center gap-2"><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{tx('Ca', 'Shift')}</dt><dd className="text-xs font-bold text-industrialDark">{roll.shift ?? '—'}</dd></div><div className="grid min-h-8 grid-cols-[88px_minmax(0,1fr)] items-center gap-2"><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{tx('Công nhân', 'Worker')}</dt><dd className="truncate text-xs font-bold text-industrialDark">{roll.worker ?? '—'}</dd></div><div className="grid min-h-8 grid-cols-[88px_minmax(0,1fr)] items-center gap-2"><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{tx('Mét', 'Meters')}</dt><dd className="text-right text-xs font-bold tabular-nums text-industrialDark">{roll.length_meters ?? '—'}</dd></div></dl></article>)}</div></div></>}</section></div>}
-      {!report && <div className="flex flex-1 items-center justify-center bg-white text-xs text-slate-500">{tx('Chọn ngày sản xuất để xem các đơn đã ghép.', 'Select a date to view the joined orders.')}</div>}{message && <p className="mt-2 border border-alarm bg-red-50 p-2 text-xs text-alarm">{message}</p>}</div>
-    </main>
-  </WS3Shell>;
+
+  return <WS3MesShell module={tx('Đơn Unrolling', 'Unrolling orders')} breadcrumbs={[]} navigation={<WS3DataFlowNav />}>
+    <div className="unrolling-mes">
+      {!allowed ? <section className="unrolling-mes__empty" role="alert">
+        {tx('Bạn không có quyền xem thông tin đơn Unrolling.', 'You are not allowed to view Unrolling order information.')}
+      </section> : <div className="unrolling-mes__content">
+        <section className="unrolling-mes__controlbar" aria-label={tx('Điều khiển danh sách đơn', 'Order-list controls')}>
+          <div className="unrolling-mes__overview" aria-label={tx('Tổng quan đơn sản xuất', 'Production-order overview')}>
+            <span className="unrolling-mes__view-label">{tx('Lệnh sản xuất', 'Production orders')}</span>
+            <span><small>{tx('Tổng', 'Total')}</small><strong>{report?.summary.orders ?? '—'}</strong></span>
+            <span data-tone="success"><small>{tx('Sẵn sàng', 'Ready')}</small><strong>{report?.summary.ready ?? '—'}</strong></span>
+            <span data-tone={report?.summary.check ? 'warning' : 'normal'}><small>{tx('Rà soát', 'Review')}</small><strong>{report?.summary.check ?? '—'}</strong></span>
+          </div>
+          <div className="unrolling-mes__filters">
+            <label><span>{tx('Ngày', 'Date')}</span><input type="date" value={date} disabled={loading} onChange={(event) => setDate(event.target.value)} /></label>
+            <button type="button" className="is-primary" onClick={() => void load()} disabled={loading}>
+              {loading ? tx('Đang tải…', 'Loading…') : tx('Làm mới', 'Refresh')}
+            </button>
+          </div>
+        </section>
+
+        {message && <p className="unrolling-mes__error" role="alert">{message}</p>}
+
+        <div className="unrolling-mes__workspace" data-detail={order ? 'open' : undefined}>
+          <section className="unrolling-mes__orders" aria-label={tx('Danh sách đơn', 'Order list')} aria-busy={loading}>
+            <table>
+              <caption>{tx('Danh sách đơn Unrolling', 'Unrolling order list')}</caption>
+              <thead><tr>
+                <th>{tx('Mã đơn', 'Order')}</th>
+                <th>{tx('Ngày', 'Date')}</th>
+                <th>{tx('Mã hàng', 'Item code')}</th>
+                <th>LOT</th>
+                <th className="is-number">{tx('Cuộn khớp', 'Matched rolls')}</th>
+                <th>{tx('Trạng thái', 'Status')}</th>
+                <th aria-label={tx('Thao tác', 'Action')} />
+              </tr></thead>
+              <tbody>
+                {report?.orders.map((item) => <tr key={item.pk_no} data-selected={order?.pk_no === item.pk_no || undefined}>
+                  <td><button className="unrolling-mes__order-link" type="button" onClick={() => setSelected(item.pk_no)}>{item.pk_no}</button></td>
+                  <td>{item.production_date}</td>
+                  <td>{item.item_code || '—'}</td>
+                  <td>{item.lot_no || '—'}</td>
+                  <td className="is-number">{item.matched_rolls}/{item.expected_rolls}</td>
+                  <td><span className="unrolling-mes__status" data-tone={item.status === 'READY' ? 'success' : 'warning'}>{statusLabel(item.status, language)}</span></td>
+                  <td><button className="unrolling-mes__open-detail" type="button" onClick={() => setSelected(item.pk_no)}>{tx('Chi tiết', 'Details')}</button></td>
+                </tr>)}
+              </tbody>
+            </table>
+            {loading && <p className="unrolling-mes__table-empty">{tx('Đang tải dữ liệu đơn…', 'Loading orders…')}</p>}
+            {!loading && !report?.orders.length && <p className="unrolling-mes__table-empty">{tx('Không có đơn theo ngày đã chọn.', 'No orders for the selected date.')}</p>}
+          </section>
+
+          {order && <aside className="unrolling-mes__detail" aria-live="polite" aria-label={tx('Chi tiết đơn sản xuất', 'Production-order details')}>
+            <header className="unrolling-mes__detail-header">
+              <div>
+                <h1>{order.pk_no}</h1>
+                <p>{order.production_date} <span>·</span> SOP: {order.sop_no || '—'}</p>
+              </div>
+              <div className="unrolling-mes__detail-actions">
+                <span data-tone={order.status === 'READY' ? 'success' : 'warning'}>{statusLabel(order.status, language)}</span>
+                <button type="button" disabled={order.matched_rolls === 0} onClick={() => printProductionOrder(order, language)}>{tx('In phiếu', 'Print slips')}</button>
+                <button className="unrolling-mes__close-detail" type="button" onClick={() => setSelected('')} aria-label={tx('Đóng chi tiết', 'Close details')}>×</button>
+              </div>
+            </header>
+
+            <dl className="unrolling-mes__order-context">
+              <div><dt>{tx('Mã hàng', 'Item code')}</dt><dd>{order.item_code || '—'}</dd></div>
+              <div><dt>{tx('Tên hàng', 'Item name')}</dt><dd>{order.item_name || '—'}</dd></div>
+              <div><dt>LOT</dt><dd>{order.lot_no || '—'}</dd></div>
+              <div><dt>{tx('Cuộn khớp', 'Matched rolls')}</dt><dd>{order.matched_rolls}/{order.expected_rolls}</dd></div>
+            </dl>
+
+            {order.warnings.length > 0 && <div className="unrolling-mes__warning" role="status">
+              <strong>{tx('Cần kiểm tra dữ liệu nguồn', 'Source data needs review')}</strong>
+              <ul>{order.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+            </div>}
+
+            <div className="unrolling-mes__rolls">
+              <table>
+                <caption>{tx('Danh sách cuộn theo đơn', 'Order roll list')}</caption>
+                <thead><tr>
+                  <th>{tx('Mã cuộn', 'Roll ID')}</th>
+                  <th>{tx('Máy', 'Machine')}</th>
+                  <th>{tx('Ca', 'Shift')}</th>
+                  <th className="is-number">{tx('Mét', 'Meters')}</th>
+                </tr></thead>
+                <tbody>{order.rolls.map((roll, index) => <tr key={`${roll.out_no}-${index}`}>
+                  <td className="is-strong">{roll.roll_id || '—'}</td>
+                  <td>{roll.machine_no || '—'}</td>
+                  <td>{roll.shift || '—'}</td>
+                  <td className="is-number">{roll.length_meters?.toLocaleString(language === 'vi' ? 'vi-VN' : 'en-GB') ?? '—'}</td>
+                </tr>)}</tbody>
+              </table>
+              {!order.rolls.length && <p className="unrolling-mes__table-empty">{tx('Đơn chưa có dữ liệu cuộn.', 'This order has no roll data.')}</p>}
+            </div>
+          </aside>}
+        </div>
+      </div>}
+    </div>
+  </WS3MesShell>;
 }

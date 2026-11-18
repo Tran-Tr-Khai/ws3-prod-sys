@@ -30,22 +30,23 @@ Compose production có ba service: `web`, `backend`, `postgres`. Backend chờ P
 |---|---|---|
 | Tài khoản, vai trò, phiên | PostgreSQL | Mật khẩu dạng hash; xóa phiên khiến user đăng nhập lại |
 | Snapshot MES, đơn hàng | PostgreSQL | Nguồn cho tổng quan, đơn và Unrolling |
-| Scouring/Buffing, lịch sử | PostgreSQL | Ảnh Buffing có metadata DB và file trong media volume |
+| Buffing, lịch sử | PostgreSQL | Ảnh Buffing có metadata DB và file trong media volume |
 | Ticket/thông báo | PostgreSQL | Cần backup cùng database |
 | Ảnh đính kèm | `MEDIA_ROOT` trên media volume | Backup/restore riêng với dump PostgreSQL |
 | Cấu hình | Environment/`.env.production` | Không commit secret |
 
 ## API cấp cao
 
-Production mặc định dùng prefix `/api`; healthcheck tại `/health`.
+API HTTP duy nhất dùng prefix `/api`; healthcheck tại `/health`.
+Xem [API contract](api-conventions.md) trước khi đổi hoặc xoá route.
 
 - `/api/auth/*`: đăng nhập, đăng xuất, phiên hiện tại.
 - `/api/ws3/data-snapshot`, `/api/ws3/production-orders`, `/api/ws3/unrolling/*`: dữ liệu MES, đơn và Unrolling.
-- `/api/scouring/*`, `/api/buffing/checks/*`: bản ghi và lịch sử máy.
+- `/api/buffing/checks/*`: bản ghi và lịch sử checklist Buffing.
 - `/api/support/*`: ticket, tin nhắn và thông báo vận hành.
 - `/api/machine-orders/progress`: tiến độ đơn theo máy.
 
-`API_PREFIX` điều chỉnh prefix nhóm API chung; Scouring, Buffing, Support và Auth được mount tại `/api`. Không đổi prefix production nếu chưa kiểm tra đồng bộ Nginx/frontend.
+`API_PREFIX` điều chỉnh prefix API HTTP. Không đổi prefix production nếu chưa kiểm tra đồng bộ Nginx/frontend.
 
 ## Ranh giới tin cậy
 

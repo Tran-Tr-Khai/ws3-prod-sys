@@ -21,6 +21,7 @@ ORDER_RECORDS = {
 
 
 def _aliases_for_order(db: Session, order_number: str) -> set[str]:
+    """Return every known PKP/SOP alias for one persisted order identifier."""
     try:
         _rows, aliases = resolve_ws3_order_code(db, order_number)
     except AmbiguousWS3OrderCode:
@@ -29,6 +30,18 @@ def _aliases_for_order(db: Session, order_number: str) -> set[str]:
 
 
 def set_order_progress(db: Session, machine_id: str, order_number: str, progress: str) -> MachineOrderState:
+    """
+    Create or update the canonical progress state of one machine order.
+
+    Args:
+        db: Database session used to persist the machine state.
+        machine_id: Machine owning the production order.
+        order_number: Canonical order or SOP identifier.
+        progress: Target progress code.
+
+    Returns:
+        Created or updated machine-order state.
+    """
     normalized = order_number.strip().upper()
     state = db.scalar(
         select(MachineOrderState).where(

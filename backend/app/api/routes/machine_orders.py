@@ -13,17 +13,19 @@ from app.models.tentering import TenteringOrder
 from app.models.transfer import TransferRecord
 from app.models.print import PrintRecord
 from app.models.user import User
-from app.security.auth import get_current_user, role_codes
+from app.security.auth import get_current_user
+from app.security.authorization import MACHINE_IDS, require_machine_access
 from app.services.machine_order_progress import set_order_progress
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_order_code, resolve_ws3_sop_code
 
 
 router = APIRouter(prefix="/machine-orders", tags=["machine-orders"])
-MANAGER_ROLES = {"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}
-MACHINES = {"BU-01", "SC-01", "TE-01", "TE-02", "TR-01", "PR-01"}
+MACHINES = MACHINE_IDS
 
 
 class OrderProgressUpdate(BaseModel):
+    """Request body used to advance one machine's active production order."""
+
     model_config = ConfigDict(extra="forbid")
 
     machine_id: Literal["BU-01", "SC-01", "TE-01", "TE-02", "TR-01", "PR-01"]
@@ -31,14 +33,8 @@ class OrderProgressUpdate(BaseModel):
     order_progress: Literal["IN_PROGRESS", "COMPLETED"]
 
 
-def _authorize_machine(user: User, machine_id: str) -> None:
-    if machine_id not in MACHINES:
-        raise HTTPException(status_code=400, detail="Unsupported machine")
-    if not role_codes(user).intersection(MANAGER_ROLES) and machine_id not in (user.machine_ids or []):
-        raise HTTPException(status_code=403, detail=f"{machine_id} access is required")
-
-
 def state_response(state: MachineOrderState) -> dict[str, str | int]:
+    """Serialize a persisted machine-order progress state for the API."""
     return {
         "id": state.id,
         "machine_id": state.machine_id,
@@ -55,7 +51,29 @@ def get_order_progress(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict[str, str | int] | None:
-    _authorize_machine(user, machine_id)
+    """
+    Read the current progress for one order on an authorized machine.
+
+    Args:
+        machine_id: Production machine identifier.
+        order_number: SOP/order code entered by the operator.
+        db: Database session used for canonical state and Tenter fallback data.
+        user: Authenticated MES user.
+
+    Returns:
+        Current progress state, or `None` when no state has been recorded yet.
+
+    Raises:
+        HTTPException: 400 for an unsupported machine, 403 for an unassigned
+            user, or 409 when the order code is ambiguous.
+    """
+    machine_id = require_machine_access(
+        user,
+        machine_id,
+        supported_machines=MACHINES,
+        not_found_detail="Unsupported machine",
+        not_found_status=status.HTTP_400_BAD_REQUEST,
+    )
     normalized = order_number.strip().upper()
     if not normalized:
         raise HTTPException(status_code=422, detail="Order number is required")
@@ -94,7 +112,29 @@ def update_order_progress(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict[str, str | int]:
-    _authorize_machine(user, payload.machine_id)
+    """
+    Persist an order progress transition and synchronize its machine record.
+
+    Args:
+        payload: Machine, SOP/order code and target progress state.
+        db: Database session used for the canonical state and source records.
+        user: Authenticated MES user authorized for the target machine.
+
+    Returns:
+        The canonical machine-order progress state after synchronization.
+
+    Raises:
+        HTTPException: 400 for unsupported or invalid order input, 403 for an
+            unassigned user, 409 for an ambiguous order code, or 422 when the
+            SOP does not exist in the MES snapshot.
+    """
+    machine_id = require_machine_access(
+        user,
+        payload.machine_id,
+        supported_machines=MACHINES,
+        not_found_detail="Unsupported machine",
+        not_found_status=status.HTTP_400_BAD_REQUEST,
+    )
     normalized = payload.order_number.strip().upper()
     if not normalized:
         raise HTTPException(status_code=422, detail="Order number is required")
@@ -108,7 +148,7 @@ def update_order_progress(
         raise HTTPException(status_code=422, detail="Không tìm thấy mã SOP trong dữ liệu MES.")
 
     try:
-        state = set_order_progress(db, payload.machine_id, normalized, payload.order_progress)
+        state = set_order_progress(db, machine_id, normalized, payload.order_progress)
         try:
             _rows, aliases = resolve_ws3_order_code(db, normalized)
         except AmbiguousWS3OrderCode as exc:
@@ -116,34 +156,34 @@ def update_order_progress(
         if aliases:
             db.execute(
                 update(MachineOrderState)
-                .where(MachineOrderState.machine_id == payload.machine_id, func.upper(MachineOrderState.order_number).in_(aliases))
+                .where(MachineOrderState.machine_id == machine_id, func.upper(MachineOrderState.order_number).in_(aliases))
                 .values(order_progress=payload.order_progress)
             )
-        if payload.machine_id == "BU-01":
+        if machine_id == "BU-01":
             db.execute(
                 update(BuffingCheck)
-                .where(BuffingCheck.machine_id == payload.machine_id, func.upper(func.trim(BuffingCheck.order_number)).in_(aliases or {normalized}))
+                .where(BuffingCheck.machine_id == machine_id, func.upper(func.trim(BuffingCheck.order_number)).in_(aliases or {normalized}))
                 .values(order_progress=payload.order_progress)
             )
-        elif payload.machine_id == "SC-01":
+        elif machine_id == "SC-01":
             db.execute(
                 update(ScouringRecord)
-                .where(ScouringRecord.machine_id == payload.machine_id, func.upper(func.trim(ScouringRecord.order_number)).in_(aliases or {normalized}))
+                .where(ScouringRecord.machine_id == machine_id, func.upper(func.trim(ScouringRecord.order_number)).in_(aliases or {normalized}))
                 .values(order_progress=payload.order_progress)
             )
-        elif payload.machine_id in {"TE-01", "TE-02"}:
+        elif machine_id in {"TE-01", "TE-02"}:
             db.execute(
                 update(TenteringOrder)
                 .where(
-                    TenteringOrder.machine_id == payload.machine_id,
+                    TenteringOrder.machine_id == machine_id,
                     func.upper(func.trim(TenteringOrder.sop_no)).in_(aliases or {normalized}),
                 )
                 .values(order_progress=payload.order_progress)
             )
-        elif payload.machine_id == "TR-01":
+        elif machine_id == "TR-01":
             db.execute(
                 update(TransferRecord)
-                .where(TransferRecord.machine_id == payload.machine_id, TransferRecord.order_number.in_(aliases or {normalized}))
+                .where(TransferRecord.machine_id == machine_id, TransferRecord.order_number.in_(aliases or {normalized}))
                 .values(order_progress=payload.order_progress)
             )
         else:

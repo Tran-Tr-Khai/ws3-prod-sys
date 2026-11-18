@@ -1,64 +1,58 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import { WS3Shell } from '../../components/hmi/WS3Shell';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { WS3MesShell } from '../../components/mes/WS3MesShell';
+import { formatShiftLabel } from '../../components/hmi/ShiftSelect';
 import { useAuth } from '../../auth/AuthContext';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { TenteringMachineSelect, TenteringNavigation, TENTERING_MACHINES } from './TenteringNavigation';
-import { HMIButton } from '../../components/hmi/HMIButton';
 import { downloadTenteringReport, getTenteringOrders, type TenteringOrder } from './tenteringApi';
+import { TENTERING_MACHINES, TenteringNavigation } from './TenteringNavigation';
+import { MesDataCell } from '../../components/mes/MesDataCell';
+import { MesResizableHeaderCell, MesResizableTable } from '../../components/mes/MesResizableTable';
+import './TenteringPage.css';
+import '../../components/mes/MesDataTable.css';
 
-function dateText(value: string | null | undefined, locale: string): string {
+function dateText(value: string | null | undefined, locale: string) {
   if (!value) return '—';
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleDateString(locale);
 }
 
-function dateTimeText(value: string | null | undefined, locale: string): string {
+function dateTimeText(value: string | null | undefined, locale: string) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return value;
-  const parts = new Intl.DateTimeFormat(locale, {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  }).formatToParts(date);
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '00';
-  return `${part('day')}/${part('month')}/${part('year')} - ${part('hour')}:${part('minute')}`;
+  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date).replace(',', ' -');
 }
 
-function quantityText(entries: TenteringOrder['entries'], field: 'planned_quantity' | 'actual_quantity', locale: string): string {
+function quantityText(entries: TenteringOrder['entries'], field: 'planned_quantity' | 'actual_quantity', locale: string) {
   const values = entries.map((entry) => entry[field]).filter((value): value is number => value !== null);
-  if (!values.length) return '—';
-  return values.reduce((total, value) => total + value, 0).toLocaleString(locale, { maximumFractionDigits: 3 });
+  return values.length ? values.reduce((total, value) => total + value, 0).toLocaleString(locale, { maximumFractionDigits: 3 }) : '—';
 }
 
-function savedDateKey(value: string): string {
+function savedDateKey(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? '' : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
 
-function factoryToday(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-}
-
-function numberText(value: number | null, locale: string): string {
+function numberText(value: number | null, locale: string) {
   return value === null ? '—' : value.toLocaleString(locale, { maximumFractionDigits: 3 });
 }
 
-function widthText(value: number | null, locale: string): string {
+function widthText(value: number | null, locale: string) {
   if (value === null) return '—';
-  const inches = value.toLocaleString(locale, { maximumFractionDigits: 2 });
-  const centimeters = (value * 2.54).toLocaleString(locale, { maximumFractionDigits: 1 });
-  return `${inches} IN · ${centimeters} CM`;
+  return `${value.toLocaleString(locale, { maximumFractionDigits: 2 })} in · ${(value * 2.54).toLocaleString(locale, { maximumFractionDigits: 1 })} cm`;
 }
 
 export function TenteringHistoryPage({ machineId: routeMachineId = 'TE-01' }: { machineId?: string }) {
   const { user } = useAuth();
   const { language } = useLanguage();
   const vi = language === 'vi';
+  const tx = useCallback((vietnamese: string, english: string) => vi ? vietnamese : english, [vi]);
   const locale = vi ? 'vi-VN' : 'en-GB';
   const machineId = TENTERING_MACHINES.some((machine) => machine.id === routeMachineId.toUpperCase()) ? routeMachineId.toUpperCase() : 'TE-01';
-  const machine = TENTERING_MACHINES.find((item) => item.id === machineId)!;
   const [orders, setOrders] = useState<TenteringOrder[]>([]);
   const [query, setQuery] = useState('');
-  const [savedDate, setSavedDate] = useState(factoryToday);
+  const [savedDate, setSavedDate] = useState('');
+  const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -70,18 +64,22 @@ export function TenteringHistoryPage({ machineId: routeMachineId = 'TE-01' }: { 
     setLoading(true);
     setError('');
     void getTenteringOrders(machineId).then((items) => { if (active) setOrders(items); })
-      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : (vi ? 'Không tải được lịch sử Tentering.' : 'Unable to load Tentering history.')); })
+      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : tx('Không tải được lịch sử Tentering.', 'Unable to load Tentering history.')); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [machineId, vi]);
+  }, [machineId, tx]);
 
   const filteredOrders = useMemo(() => orders.filter((order) => {
     const text = `${order.sop_no} ${order.customer ?? ''} ${order.item_description ?? ''} ${order.entries.map((entry) => `${entry.roll_id ?? ''} ${entry.note ?? ''}`).join(' ')}`;
-    const matchesQuery = !query.trim() || text.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
-    return matchesQuery && (!savedDate || savedDateKey(order.updated_at) === savedDate);
-  }), [orders, query, savedDate]);
+    return (!query.trim() || text.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) && (!savedDate || savedDateKey(order.updated_at) === savedDate);
+  }).sort((left, right) => {
+    const leftTime = Date.parse(left.updated_at);
+    const rightTime = Date.parse(right.updated_at);
+    const safeLeft = Number.isNaN(leftTime) ? 0 : leftTime;
+    const safeRight = Number.isNaN(rightTime) ? 0 : rightTime;
+    return sortDirection === 'desc' ? safeRight - safeLeft : safeLeft - safeRight;
+  }), [orders, query, savedDate, sortDirection]);
 
-  const fieldClass = 'min-h-9 w-full border-2 border-line bg-white px-2 font-sans text-xs font-medium text-industrialDark outline-none focus:border-industrial';
   const exportExcel = async () => {
     if (loading || exporting || !filteredOrders.length) return;
     setExporting(true);
@@ -97,116 +95,48 @@ export function TenteringHistoryPage({ machineId: routeMachineId = 'TE-01' }: { 
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (reason) {
-      setExportError(reason instanceof Error ? reason.message : (vi ? 'Không thể tải báo cáo Excel.' : 'Unable to download Excel report.'));
+      setExportError(reason instanceof Error ? reason.message : tx('Không thể xuất báo cáo Excel.', 'Unable to download Excel report.'));
     } finally {
       setExporting(false);
     }
   };
-  const headers = [
-    vi ? 'CẬP NHẬT GẦN NHẤT' : 'LAST UPDATED', vi ? 'MÃ SOP' : 'SOP',
-    vi ? 'KHÁCH HÀNG' : 'CUSTOMER', vi ? 'LOẠI MẶT HÀNG' : 'ITEM',
-    vi ? 'SỐ CUỘN ĐÃ GHI' : 'ROLLS RECORDED', vi ? 'SL THEO ĐƠN' : 'PLANNED TOTAL',
-    vi ? 'SL THỰC TẾ' : 'ACTUAL TOTAL', vi ? 'NGƯỜI VẬN HÀNH' : 'OPERATOR',
-    vi ? 'CA' : 'SHIFT', vi ? 'CHI TIẾT' : 'DETAILS', vi ? 'TIẾN ĐỘ' : 'PROGRESS',
-  ];
-  const detailHeaders = [
-    vi ? 'CUỘN' : 'ROLL', vi ? 'MÃ ROLL' : 'ROLL ID', vi ? 'NGÀY DỆT' : 'WEAVING DATE',
-    vi ? 'SL THEO ĐƠN' : 'PLANNED QTY', vi ? 'SL THỰC TẾ' : 'ACTUAL QTY', vi ? 'GHI CHÚ' : 'NOTE',
-  ];
 
-  return <WS3Shell title="WS3 / TENTERING" subtitle={machine.label} machineId={machineId} machineLabel="Tentering" status="info" showGlobalNavigation={false} showMachineNavigation={false} showSupportWidget={user?.role !== 'OPERATOR'}>
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
-      <TenteringNavigation machineId={machineId} history showMachineSelector={false} />
-      <main className="min-h-0 flex-1 overflow-auto p-2">
-        <section className="flex min-h-full flex-col border-2 border-industrialDark bg-white">
-          <header className="machine-primary-header flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-            <h1 className="text-xs font-bold uppercase tracking-wider">{vi ? 'LỊCH SỬ' : 'HISTORY'}</h1>
-            <div className="flex items-center gap-2"><span className="text-[10px] font-mono">{filteredOrders.length} {vi ? 'đơn' : 'orders'}</span><HMIButton size="compact" variant="secondary" onClick={() => void exportExcel()} disabled={loading || exporting || !filteredOrders.length}>{exporting ? (vi ? 'ĐANG XUẤT…' : 'EXPORTING…') : `${vi ? 'BÁO CÁO' : 'REPORT'} EXCEL`}</HMIButton></div>
-          </header>
-          <div className="flex flex-wrap items-end gap-3 border-b border-line bg-hmiSection p-3">
-            <TenteringMachineSelect machineId={machineId} history visibleLabel className="min-h-9 w-36 appearance-none border-2 border-line bg-white px-2 pr-8 font-sans text-xs font-medium text-industrialDark outline-none focus:border-industrial focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-hmiSection" />
-            <label className="grid min-w-40 gap-1 text-[9px] font-bold uppercase tracking-wide text-slate-600">{vi ? 'NGÀY CẬP NHẬT ĐƠN' : 'ORDER UPDATED DATE'}
-              <input type="date" value={savedDate} onChange={(event) => setSavedDate(event.target.value)} className={fieldClass} />
-            </label>
-            <label className="grid min-w-[min(100%,18rem)] flex-1 gap-1 text-[9px] font-bold uppercase tracking-wide text-slate-600">{vi ? 'TÌM SOP / KHÁCH HÀNG / MẶT HÀNG / MÃ ROLL' : 'SEARCH SOP / CUSTOMER / ITEM / ROLL ID'}
-              <input value={query} onChange={(event) => setQuery(event.target.value)} className={fieldClass} placeholder={vi ? 'Nhập mã SOP hoặc từ khóa…' : 'Enter SOP or keyword…'} />
-            </label>
-          </div>
-          {exportError && <p role="alert" className="border-b border-alarm bg-hmiWarning px-3 py-2 text-[10px] font-semibold text-alarm">{vi ? 'Không thể xuất báo cáo Excel:' : 'Unable to export Excel report:'} {exportError}</p>}
-          {error && <p role="alert" className="m-3 border border-alarm bg-hmiAlarm p-3 text-xs font-semibold text-alarm">{error}</p>}
-          {loading ? <p className="p-6 text-center text-xs text-slate-500">{vi ? 'ĐANG TẢI LỊCH SỬ…' : 'LOADING HISTORY…'}</p>
-            : !error && !filteredOrders.length ? <p className="p-6 text-center text-xs text-slate-500">{vi ? 'CHƯA CÓ BẢN GHI TENTERING.' : 'NO TENTERING RECORDS YET.'}</p>
-              : !error && <div className="min-w-0 flex-1 overflow-auto">
-                <table className="w-full min-w-[1050px] border-collapse text-left text-[10px]">
-                  <thead className="sticky top-0 z-10 bg-industrial text-[9px] uppercase tracking-wide text-white"><tr>
-                    {headers.map((label) => <th key={label} className="border-r border-line px-2 py-2">{label}</th>)}
-                  </tr></thead>
-                  <tbody>{filteredOrders.map((order) => {
-                    const expanded = expandedOrders.has(order.id);
-                    return <Fragment key={order.id}>
-                      <tr key={order.id} className="border-b border-line bg-white hover:bg-slate-50">
-                        <td className="whitespace-nowrap px-2 py-2">{dateTimeText(order.updated_at, locale)}</td>
-                        <td className="whitespace-nowrap px-2 py-2 font-mono font-bold text-industrialDark">{order.sop_no}</td>
-                        <td className="px-2 py-2">{order.customer || '—'}</td>
-                        <td className="max-w-56 px-2 py-2">{order.item_description || '—'}</td>
-                        <td className="px-2 py-2 text-center font-mono">{order.entries.length}</td>
-                        <td className="px-2 py-2 text-right font-mono">{quantityText(order.entries, 'planned_quantity', locale)}</td>
-                        <td className="px-2 py-2 text-right font-mono">{quantityText(order.entries, 'actual_quantity', locale)}</td>
-                        <td className="px-2 py-2">{order.operator_name || '—'}</td>
-                        <td className="px-2 py-2">{order.shift || '—'}</td>
-                        <td className="px-2 py-2"><button type="button" aria-expanded={expanded} onClick={() => setExpandedOrders((current) => {
-                          const next = new Set(current);
-                          if (next.has(order.id)) next.delete(order.id); else next.add(order.id);
-                          return next;
-                        })} className="whitespace-nowrap border border-industrial px-2 py-1 font-bold text-industrialDark hover:bg-hmiSection">{expanded ? (vi ? 'THU GỌN' : 'COLLAPSE') : (vi ? 'XEM CUỘN' : 'VIEW ROLLS')}</button></td>
-                        <td className="whitespace-nowrap px-2 py-2"><span className={`inline-flex border px-2 py-1 text-[9px] font-bold ${order.order_progress === 'COMPLETED' ? 'border-success bg-hmiNormal text-success' : 'border-info bg-sky-50 text-info'}`}>{order.order_progress === 'COMPLETED' ? (vi ? 'HOÀN THÀNH' : 'COMPLETED') : (vi ? 'ĐANG XỬ LÝ' : 'IN PROGRESS')}</span></td>
-                      </tr>
-                      {expanded && <tr key={`${order.id}-details`} className="border-b-2 border-industrial bg-hmiSection"><td colSpan={headers.length} className="p-2">
-                        <div className="mb-1 flex flex-wrap justify-between gap-1 text-[9px] font-bold uppercase text-slate-600"><span>{vi ? 'CHI TIẾT CUỘN' : 'ROLL DETAILS'} · {order.sop_no}</span></div>
-                        <div className="mb-2 grid gap-2 lg:grid-cols-3">
-                          <section className="border border-line bg-white p-2">
-                            <h3 className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase text-industrialDark">{vi ? 'ĐƠN HÀNG' : 'ORDER'}</h3>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              <div><div className="text-[8px] font-bold uppercase text-slate-500">{vi ? 'Khách hàng' : 'Customer'}</div><div className="text-[10px]">{order.customer || '—'}</div></div>
-                              <div><div className="text-[8px] font-bold uppercase text-slate-500">{vi ? 'Loại mặt hàng' : 'Item'}</div><div className="text-[10px]">{order.item_description || '—'}</div></div>
-                              <div><div className="text-[8px] font-bold uppercase text-slate-500">{vi ? 'Sợi dọc' : 'Warp yarn'}</div><div className="text-[10px]">{order.warp_yarn || '—'}</div></div>
-                              <div><div className="text-[8px] font-bold uppercase text-slate-500">{vi ? 'Sợi ngang' : 'Weft yarn'}</div><div className="text-[10px]">{order.weft_yarn || '—'}</div></div>
-                            </div>
-                          </section>
-                          <section className="border border-line bg-white p-2">
-                            <h3 className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase text-industrialDark">{vi ? 'MẬT ĐỘ' : 'DENSITY'}</h3>
-                            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                              <div><div className="text-[8px] font-bold uppercase text-slate-500">{vi ? 'Mật độ mộc' : 'Greige density'}</div><div className="text-[10px]">{order.greige_density_pick === null ? '—' : `${numberText(order.greige_density_pick, locale)} PICK`}</div></div>
-                              <div><div className="text-[8px] font-bold uppercase text-slate-500">{vi ? 'Mật độ thành phẩm' : 'Finish density'}</div><div className="text-[10px]">{order.finish_density_pick === null ? '—' : `${numberText(order.finish_density_pick, locale)} PICK`}</div></div>
-                              <div><div className="text-[8px] font-bold uppercase text-slate-500">{vi ? 'Co rút' : 'Shrinkage'}</div><div className="text-[10px]">{order.shrink_percent === null ? '—' : `${numberText(order.shrink_percent, locale)}%`}</div></div>
-                            </div>
-                          </section>
-                          <section className="border border-line bg-white p-2">
-                            <h3 className="mb-2 border-b border-line pb-1 text-[9px] font-bold uppercase text-industrialDark">{vi ? 'KHỔ RỘNG' : 'WIDTH'}</h3>
-                            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                              <div><div className="text-[8px] font-bold uppercase text-slate-500">{vi ? 'Khổ mộc' : 'Greige width'}</div><div className="text-[10px]">{widthText(order.greige_width_inch, locale)}</div></div>
-                              <div><div className="text-[8px] font-bold uppercase text-slate-500">{vi ? 'Khổ thành phẩm' : 'Finish width'}</div><div className="text-[10px]">{widthText(order.finish_width_inch, locale)}</div></div>
-                            </div>
-                          </section>
-                        </div>
-                        <div className="overflow-x-auto"><table className="w-full min-w-[650px] border-collapse text-left text-[9px]">
-                          <thead className="bg-slate-200 text-[9px] uppercase text-industrialDark"><tr>{detailHeaders.map((label) => <th key={label} className="border border-line px-2 py-1.5">{label}</th>)}</tr></thead>
-                          <tbody>{order.entries.map((entry) => <tr key={entry.id} className="bg-white">
-                            <td className="border border-line px-2 py-1.5 text-center font-mono">{entry.roll_number}</td>
-                            <td className="whitespace-nowrap border border-line px-2 py-1.5 font-mono">{entry.roll_id || '—'}</td>
-                            <td className="whitespace-nowrap border border-line px-2 py-1.5">{dateText(entry.weaving_date, locale)}</td>
-                            <td className="border border-line px-2 py-1.5 text-right font-mono">{entry.planned_quantity ?? '—'}</td>
-                            <td className="border border-line px-2 py-1.5 text-right font-mono">{entry.actual_quantity ?? '—'}</td>
-                            <td className="max-w-64 border border-line px-2 py-1.5">{entry.note || '—'}</td>
-                          </tr>)}</tbody>
-                        </table></div>
-                      </td></tr>}
-                    </Fragment>;
-                  })}</tbody>
-                </table>
-              </div>}
-        </section>
-      </main>
+  const headers = [
+    tx('Cập nhật gần nhất', 'Last updated'), tx('Mã SOP', 'SOP'), tx('Khách hàng', 'Customer'), tx('Loại mặt hàng', 'Item'),
+    tx('Số cuộn đã ghi', 'Rolls recorded'), tx('SL theo đơn', 'Planned total'), tx('SL thực tế', 'Actual total'),
+    tx('Người vận hành', 'Operator'), tx('Ca', 'Shift'), tx('Tiến độ', 'Progress'), tx('Chi tiết', 'Details'),
+  ];
+  const detailHeaders = [tx('Cuộn', 'Roll'), tx('Mã cuộn', 'Roll ID'), tx('Ngày dệt', 'Weaving date'), tx('Theo đơn', 'Planned'), tx('Thực tế', 'Actual'), tx('Ghi chú', 'Note')];
+
+  return <WS3MesShell
+    module={tx('Định hình', 'Tentering')}
+    breadcrumbs={[]}
+    navigation={<TenteringNavigation machineId={machineId} history showMachineSelector />}
+    showSupportWidget={user?.role !== 'OPERATOR'}
+  >
+    <div className="tentering-history-page">
+      <section className="tentering-history__filterbar">
+        <div className="tentering-history__filter-fields">
+          <label className="tentering-history__search-field"><span>{tx('Tìm kiếm', 'Search')}</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={tx('Nhập SOP, khách hàng, mặt hàng hoặc mã cuộn…', 'Enter SOP, customer, item or roll ID…')} /></label>
+          <label className="tentering-history__date-field"><span>{tx('Ngày', 'Date')}</span><input type="date" value={savedDate} onChange={(event) => setSavedDate(event.target.value)} /></label>
+          <label className="tentering-history__sort-field"><span>{tx('Sắp xếp', 'Sort')}</span><select value={sortDirection} onChange={(event) => setSortDirection(event.target.value as 'desc' | 'asc')}><option value="desc">{tx('Mới nhất', 'Newest')}</option><option value="asc">{tx('Cũ nhất', 'Oldest')}</option></select></label>
+        </div>
+        <div className="tentering-history__actions"><button type="button" className="tentering-history__export" onClick={() => void exportExcel()} disabled={loading || exporting || !filteredOrders.length}>{exporting ? tx('Đang xuất…', 'Exporting…') : tx('Xuất Excel', 'Export Excel')}</button></div>
+      </section>
+      {exportError && <p role="alert" className="tentering-history__error">{tx('Không thể xuất Excel:', 'Unable to export Excel:')} {exportError}</p>}
+      {error && <p role="alert" className="tentering-history__error">{error}</p>}
+      {loading ? <p className="tentering-history__message">{tx('Đang tải lịch sử…', 'Loading history…')}</p> : !error && !filteredOrders.length ? <p className="tentering-history__message">{tx('Chưa có bản ghi Tentering phù hợp.', 'No matching Tentering records.')}</p> : !error && <div className="tentering-history__table-wrap"><MesResizableTable initialWidths={[146, 118, 136, 150, 88, 106, 106, 122, 68, 108, 92]} storageKey={`tentering-history-v2-${machineId}`} className="tentering-history__table mes-data-table"><thead><tr>{headers.map((heading, index) => <MesResizableHeaderCell key={heading} index={index}>{heading}</MesResizableHeaderCell>)}</tr></thead><tbody>{filteredOrders.map((order) => {
+        const expanded = expandedOrders.has(order.id);
+        return <Fragment key={order.id}>
+          <tr><MesDataCell tooltip={dateTimeText(order.updated_at, locale)}>{dateTimeText(order.updated_at, locale)}</MesDataCell><MesDataCell className="is-mono" tooltip={order.sop_no}>{order.sop_no}</MesDataCell><MesDataCell tooltip={order.customer || '—'}>{order.customer || '—'}</MesDataCell><MesDataCell tooltip={order.item_description || '—'}>{order.item_description || '—'}</MesDataCell><MesDataCell className="is-number" tooltip={String(order.entries.length)}>{order.entries.length}</MesDataCell><MesDataCell className="is-number" tooltip={quantityText(order.entries, 'planned_quantity', locale)}>{quantityText(order.entries, 'planned_quantity', locale)}</MesDataCell><MesDataCell className="is-number" tooltip={quantityText(order.entries, 'actual_quantity', locale)}>{quantityText(order.entries, 'actual_quantity', locale)}</MesDataCell><MesDataCell tooltip={order.operator_name || '—'}>{order.operator_name || '—'}</MesDataCell><MesDataCell tooltip={formatShiftLabel(order.shift, language)}>{formatShiftLabel(order.shift, language) || '—'}</MesDataCell><MesDataCell tooltip={order.order_progress === 'COMPLETED' ? tx('Đã hoàn thành', 'Completed') : tx('Đang xử lý', 'In progress')}><span className={`tentering-history__progress ${order.order_progress === 'COMPLETED' ? 'is-completed' : 'is-progress'}`}>{order.order_progress === 'COMPLETED' ? tx('Đã hoàn thành', 'Completed') : tx('Đang xử lý', 'In progress')}</span></MesDataCell><td><button type="button" className="tentering-history__detail-button" aria-expanded={expanded} onClick={() => setExpandedOrders((current) => { const next = new Set(current); if (next.has(order.id)) next.delete(order.id); else next.add(order.id); return next; })}>{expanded ? tx('Thu gọn', 'Collapse') : tx('Xem cuộn', 'View rolls')}</button></td></tr>
+          {expanded && <tr className="tentering-history__detail-row"><td colSpan={headers.length}><div className="tentering-history__detail-grid">
+            <section className="tentering-history__detail-card"><h3>{tx('Đơn hàng', 'Order')}</h3><dl><div><dt>{tx('Khách hàng', 'Customer')}</dt><dd>{order.customer || '—'}</dd></div><div><dt>{tx('Loại mặt hàng', 'Item')}</dt><dd>{order.item_description || '—'}</dd></div><div><dt>{tx('Sợi dọc', 'Warp yarn')}</dt><dd>{order.warp_yarn || '—'}</dd></div><div><dt>{tx('Sợi ngang', 'Weft yarn')}</dt><dd>{order.weft_yarn || '—'}</dd></div></dl></section>
+            <section className="tentering-history__detail-card"><h3>{tx('Mật độ', 'Density')}</h3><dl><div><dt>{tx('Mật độ mộc', 'Greige density')}</dt><dd>{numberText(order.greige_density_pick, locale)} pick</dd></div><div><dt>{tx('Mật độ thành phẩm', 'Finish density')}</dt><dd>{numberText(order.finish_density_pick, locale)} pick</dd></div><div><dt>{tx('Co rút', 'Shrinkage')}</dt><dd>{order.shrink_percent === null ? '—' : `${numberText(order.shrink_percent, locale)}%`}</dd></div></dl></section>
+            <section className="tentering-history__detail-card"><h3>{tx('Khổ rộng', 'Width')}</h3><dl><div><dt>{tx('Khổ mộc', 'Greige width')}</dt><dd>{widthText(order.greige_width_inch, locale)}</dd></div><div><dt>{tx('Khổ thành phẩm', 'Finish width')}</dt><dd>{widthText(order.finish_width_inch, locale)}</dd></div></dl></section>
+          </div><div className="tentering-history__table-wrap"><MesResizableTable initialWidths={[72, 150, 116, 108, 108, 220]} storageKey={`tentering-rolls-${machineId}`} className="tentering-history__roll-table mes-data-table"><thead><tr>{detailHeaders.map((heading, index) => <MesResizableHeaderCell key={heading} index={index}>{heading}</MesResizableHeaderCell>)}</tr></thead><tbody>{order.entries.map((entry) => <tr key={entry.id}><td>{entry.roll_number}</td><MesDataCell tooltip={entry.roll_id || '—'}>{entry.roll_id || '—'}</MesDataCell><td>{dateText(entry.weaving_date, locale)}</td><MesDataCell className="is-number" tooltip={entry.planned_quantity === null ? '—' : String(entry.planned_quantity)}>{entry.planned_quantity ?? '—'}</MesDataCell><MesDataCell className="is-number" tooltip={entry.actual_quantity === null ? '—' : String(entry.actual_quantity)}>{entry.actual_quantity ?? '—'}</MesDataCell><MesDataCell tooltip={entry.note || '—'}>{entry.note || '—'}</MesDataCell></tr>)}</tbody></MesResizableTable></div></td></tr>}
+        </Fragment>;
+      })}</tbody></MesResizableTable></div>}
+      <footer className="tentering-history__footer">{filteredOrders.length} / {orders.length} {tx('bản ghi', 'records')}</footer>
     </div>
-  </WS3Shell>;
+  </WS3MesShell>;
 }

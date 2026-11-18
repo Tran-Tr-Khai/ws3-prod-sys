@@ -1,26 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { HMIButton } from '../../components/hmi/HMIButton';
-import { MachineNavigation } from '../../components/hmi/MachineNavigation';
-import { WS3Shell } from '../../components/hmi/WS3Shell';
+import { NavLink } from 'react-router-dom';
+import { WS3MesShell } from '../../components/mes/WS3MesShell';
+import { MesDataCell } from '../../components/mes/MesDataCell';
+import { MesResizableHeaderCell, MesResizableTable } from '../../components/mes/MesResizableTable';
+import { formatShiftLabel } from '../../components/hmi/ShiftSelect';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { downloadBuffingReport, getBuffingChecks, type BuffingCheck } from './scouringApi';
+import './BuffingPage.css';
+import '../../components/mes/MesDataTable.css';
 
 function OrderProgressBadge({ progress, language }: { progress: BuffingCheck['orderProgress']; language: string }) {
   if (!progress) return <span className="text-slate-400">—</span>;
   const completed = progress === 'COMPLETED';
-  return <span className={`inline-flex whitespace-nowrap border px-1.5 py-0.5 text-[9px] font-bold uppercase ${completed ? 'border-green-600 bg-green-100 text-green-800' : 'border-blue-500 bg-blue-100 text-blue-800'}`}>
+  return <span className={`buffing-history__progress ${completed ? 'is-completed' : 'is-progress'}`}>
     {completed ? (language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED') : (language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS')}
   </span>;
 }
 
 const dateForRecord = (record: BuffingCheck) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(record.checkedAt));
-const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+
+function BuffingHistoryNavigation({ language }: { language: string }) {
+  const tx = (vi: string, en: string) => language === 'vi' ? vi : en;
+  return <nav className="buffing-mes-nav" aria-label={tx('Điều hướng Buffing', 'Buffing navigation')}>
+    <NavLink end to="/ws3">{tx('Máy móc', 'Machinery')}</NavLink>
+    <NavLink end to="/machine/buffing/record">{tx('Vận hành', 'Operation')}</NavLink>
+    <NavLink to="/machine/buffing/history">{tx('Lịch sử', 'History')}</NavLink>
+  </nav>;
+}
 
 export function BuffingHistoryPage() {
-  const navigate = useNavigate();
   const { language, t } = useLanguage();
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
   const [imagePreview, setImagePreview] = useState<{ url: string; name: string } | null>(null);
   const [unavailableImages, setUnavailableImages] = useState<Set<number>>(() => new Set());
@@ -67,28 +77,23 @@ export function BuffingHistoryPage() {
       setExporting(false);
     }
   };
-  return <WS3Shell showGlobalNavigation={false} showMachineNavigation={false} title={`WS3 / ${language === 'vi' ? 'LỊCH SỬ BUFFING' : 'BUFFING HISTORY'}`} subtitle={`${t('periodicChecklist')} · Buffing`} machineId="BU-01" machineLabel="Buffing" status="info" time={new Date().toLocaleTimeString('vi-VN')}>
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-hmiConsole text-slate-800">
-      <MachineNavigation machineId="BU-01" machineLabel="Buffing" trailing={<HMIButton size="compact" onClick={() => navigate('/ws3')}>{t('home')}</HMIButton>} />
-      <div className="buffing-page-content min-h-0 flex-1 p-2">
-        <div className="mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden border-2 border-industrialDark bg-white">
-          <header className="machine-primary-header flex shrink-0 items-center justify-between gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wide"><h1>{t('history')}</h1><div className="flex items-center gap-2"><span className="hidden sm:inline">{language === 'vi' ? 'Mới nhất trước' : 'Newest first'}</span><HMIButton size="compact" variant="secondary" onClick={() => void exportExcel()} disabled={loading || exporting || filteredRecords.length === 0}>{exporting ? (language === 'vi' ? 'ĐANG XUẤT…' : 'EXPORTING…') : `${t('overview')} EXCEL`}</HMIButton></div></header>
-          <section className="shrink-0 border-b-2 border-industrialDark bg-hmiSection p-2"><div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px] items-end justify-start gap-2 sm:grid-cols-[minmax(0,360px)_minmax(0,420px)_40px]">
-            <label className="grid gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{language === 'vi' ? 'Ngày ghi' : 'Record date'}<input type="date" className="min-h-10 min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark" value={date} onChange={(event) => { setDate(event.target.value); setOrderNumber(''); }} /></label>
-            <label className="grid gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">SOP<select className="min-h-10 min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)}><option value="">{language === 'vi' ? 'TẤT CẢ SOP' : 'ALL SOPs'}</option>{orderOptions.map((order) => <option key={order} value={order}>{order}</option>)}</select></label>
-            <button type="button" aria-label={language === 'vi' ? 'Xóa ngày, xem tất cả' : 'Clear date, show all'} title={language === 'vi' ? 'Xóa ngày · Xem tất cả' : 'Clear date · Show all'} onClick={() => { setDate(''); setOrderNumber(''); }} className="inline-flex h-10 w-10 items-center justify-center border-2 border-line bg-white text-lg font-bold leading-none text-industrial hover:bg-hmiHover">×</button>
-          </div></section>
+  return <WS3MesShell module="Buffing" breadcrumbs={[]} navigation={<BuffingHistoryNavigation language={language} />}>
+    <div className="buffing-history-page">
+      <div className="buffing-history-page__workspace">
+          <section className="buffing-history-page__filters shrink-0 border-b-2 border-industrialDark bg-hmiSection p-2"><div className="buffing-history-page__filterbar"><div className="buffing-history-page__filter-fields">
+            <label>{language === 'vi' ? 'Ngày ghi' : 'Record date'}<input type="date" className="min-h-10 min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold text-industrialDark" value={date} onChange={(event) => { setDate(event.target.value); setOrderNumber(''); }} /></label>
+            <label>SOP<select className="min-h-10 min-w-0 border-2 border-line bg-white px-2 text-xs font-semibold normal-case text-industrialDark" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)}><option value="">{language === 'vi' ? 'Tất cả SOP' : 'All SOPs'}</option>{orderOptions.map((order) => <option key={order} value={order}>{order}</option>)}</select></label>
+          </div><button type="button" className="buffing-history-page__export-button" onClick={() => void exportExcel()} disabled={loading || exporting || filteredRecords.length === 0}>{exporting ? (language === 'vi' ? 'ĐANG XUẤT…' : 'EXPORTING…') : (language === 'vi' ? 'Xuất Excel' : 'Export Excel')}</button></div></section>
           <div className="flex min-h-0 flex-1">
             <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-              {loading ? <div className="p-8 text-center text-xs font-bold uppercase text-slate-500">{t('loadingHistory')}</div> : error ? <div className="p-8 text-center text-xs font-semibold text-alarm">{error}<div><HMIButton size="compact" className="mt-3" onClick={() => window.location.reload()}>{t('retry')}</HMIButton></div></div> : filteredRecords.length === 0 ? <div className="p-8 text-center text-xs font-semibold uppercase text-slate-500">{records.length === 0 ? (language === 'vi' ? 'Chưa có bản ghi Buffing.' : 'No Buffing records yet.') : (language === 'vi' ? 'Không có bản ghi khớp bộ lọc.' : 'No records match these filters.')}</div> : <div className="min-h-0 flex-1 overflow-auto"><table className="w-full min-w-[1060px] border-collapse text-left text-[10px]"><thead className="text-[9px] uppercase tracking-wide text-white"><tr>{[language === 'vi' ? 'Ngày giờ' : 'Date & time', 'SOP', t('operator'), language === 'vi' ? 'Ca' : 'Shift', ...[1, 2, 3, 4, 5].map((point) => `${language === 'vi' ? 'Điểm' : 'Check'} ${point}`), language === 'vi' ? 'Ảnh' : 'Images', language === 'vi' ? 'Tiến độ đơn' : 'Order progress'].map((heading, index) => <th key={index} scope="col" className={`sticky top-0 z-30 border-r border-white/20 bg-industrial px-2 py-2 ${index >= 4 ? 'text-center' : 'text-left'} last:border-r-0`}>{heading}</th>)}</tr></thead><tbody>{filteredRecords.map((record) => (
-                <tr key={record.id} className="border-b border-line hover:bg-hmiHover"><td className="whitespace-nowrap px-2 py-2 font-mono font-bold">{new Intl.DateTimeFormat(language === 'vi' ? 'vi-VN' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(record.checkedAt))}</td><td className="px-2 py-2 font-mono font-semibold">{record.orderNumber || '—'}</td><td className="px-2 py-2">{record.operatorName || record.operatorIdentifier || '—'}</td><td className="px-2 py-2">{record.shift || '—'}</td>{record.checks.map((passed, index) => <td key={index} className={`px-2 py-2 text-center text-base font-bold ${passed ? 'text-success' : 'text-alarm'}`} aria-label={`${language === 'vi' ? 'Điểm' : 'Check'} ${index + 1}: ${passed ? (language === 'vi' ? 'Đạt' : 'Pass') : (language === 'vi' ? 'Cảnh báo' : 'Alert')}`}>{passed ? '✓' : '×'}</td>)}<td className="relative z-0 px-2 py-2 text-center">{record.images.length ? (() => { const image = record.images.find((item) => item.isPrimary) ?? record.images[0]; return unavailableImages.has(image.id) ? <span className="inline-flex h-12 w-16 items-center justify-center border border-warning bg-hmiWarning px-1 text-[8px] font-bold text-warning" title={image.originalName}>{language === 'vi' ? 'LỖI ẢNH' : 'IMAGE ERROR'}</span> : <button type="button" draggable={false} className="relative z-0 inline-flex select-none border border-line bg-hmiSection" onClick={() => setImagePreview({ url: image.url, name: image.originalName })} onDragStart={(event) => event.preventDefault()} aria-label={language === 'vi' ? `Xem ảnh ${image.originalName}` : `View image ${image.originalName}`}><img src={image.url} alt={image.originalName} className="pointer-events-none h-12 w-16 select-none object-cover" loading="lazy" decoding="async" draggable={false} onError={() => setUnavailableImages((current) => new Set(current).add(image.id))} />{record.images.length > 1 && <span className="pointer-events-none absolute bottom-0 right-0 bg-industrial px-1 text-[8px] font-bold text-white">+{record.images.length - 1}</span>}</button>; })() : '—'}</td><td className="px-2 py-2"><OrderProgressBadge progress={record.orderProgress} language={language} /></td></tr>
-              ))}</tbody></table></div>}
+              {loading ? <div className="p-8 text-center text-xs font-bold uppercase text-slate-500">{t('loadingHistory')}</div> : error ? <div className="p-8 text-center text-xs font-semibold text-alarm">{error}<div><button type="button" className="buffing-mes__secondary-button mt-3" onClick={() => window.location.reload()}>{t('retry')}</button></div></div> : filteredRecords.length === 0 ? <div className="p-8 text-center text-xs font-semibold uppercase text-slate-500">{records.length === 0 ? (language === 'vi' ? 'Chưa có bản ghi Buffing.' : 'No Buffing records yet.') : (language === 'vi' ? 'Không có bản ghi khớp bộ lọc.' : 'No records match these filters.')}</div> : <div className="min-h-0 flex-1 overflow-auto"><MesResizableTable initialWidths={[155, 150, 140, 85, 60, 60, 60, 60, 60, 110, 120]} storageKey="buffing-history" className="mes-data-table w-full min-w-[1060px] border-collapse text-left text-[10px]"><thead className="text-[9px] uppercase tracking-wide text-white"><tr>{[language === 'vi' ? 'Ngày giờ' : 'Date & time', 'SOP', t('operator'), language === 'vi' ? 'Ca' : 'Shift', ...[1, 2, 3, 4, 5].map((point) => `${language === 'vi' ? 'Điểm' : 'Check'} ${point}`), language === 'vi' ? 'Ảnh' : 'Images', language === 'vi' ? 'Tiến độ đơn' : 'Order progress'].map((heading, index) => <MesResizableHeaderCell key={index} index={index} scope="col" className={`sticky top-0 z-30 border-r border-white/20 bg-industrial px-2 py-2 ${index >= 4 ? 'text-center' : 'text-left'} last:border-r-0`}>{heading}</MesResizableHeaderCell>)}</tr></thead><tbody>{filteredRecords.map((record) => (
+                <tr key={record.id} className="border-b border-line hover:bg-hmiHover"><MesDataCell tooltip={new Intl.DateTimeFormat(language === 'vi' ? 'vi-VN' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(record.checkedAt))} className="whitespace-nowrap px-2 py-2 font-mono font-bold">{new Intl.DateTimeFormat(language === 'vi' ? 'vi-VN' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(record.checkedAt))}</MesDataCell><MesDataCell tooltip={record.orderNumber || '—'} className="px-2 py-2 font-mono font-semibold">{record.orderNumber || '—'}</MesDataCell><MesDataCell tooltip={record.operatorName || record.operatorIdentifier || '—'} className="px-2 py-2">{record.operatorName || record.operatorIdentifier || '—'}</MesDataCell><MesDataCell tooltip={formatShiftLabel(record.shift, language)} className="px-2 py-2">{formatShiftLabel(record.shift, language) || '—'}</MesDataCell>{record.checks.map((passed, index) => <td key={index} className={`px-2 py-2 text-center text-base font-bold ${passed ? 'text-success' : 'text-alarm'}`} aria-label={`${language === 'vi' ? 'Điểm' : 'Check'} ${index + 1}: ${passed ? (language === 'vi' ? 'Đạt' : 'Pass') : (language === 'vi' ? 'Cảnh báo' : 'Alert')}`}>{passed ? '✓' : '×'}</td>)}<td className="relative z-0 px-2 py-2 text-center">{record.images.length ? (() => { const image = record.images.find((item) => item.isPrimary) ?? record.images[0]; return unavailableImages.has(image.id) ? <span className="inline-flex h-12 w-16 items-center justify-center border border-warning bg-hmiWarning px-1 text-[8px] font-bold text-warning">{language === 'vi' ? 'LỖI ẢNH' : 'IMAGE ERROR'}</span> : <button type="button" draggable={false} className="relative z-0 inline-flex select-none border border-line bg-hmiSection" onClick={() => setImagePreview({ url: image.url, name: image.originalName })} onDragStart={(event) => event.preventDefault()} aria-label={language === 'vi' ? `Xem ảnh ${image.originalName}` : `View image ${image.originalName}`}><img src={image.url} alt={image.originalName} className="pointer-events-none h-12 w-16 select-none object-cover" loading="lazy" decoding="async" draggable={false} onError={() => setUnavailableImages((current) => new Set(current).add(image.id))} />{record.images.length > 1 && <span className="pointer-events-none absolute bottom-0 right-0 bg-industrial px-1 text-[8px] font-bold text-white">+{record.images.length - 1}</span>}</button>; })() : '—'}</td><MesDataCell tooltip={record.orderProgress === 'COMPLETED' ? (language === 'vi' ? 'ĐÃ HOÀN THÀNH' : 'COMPLETED') : (language === 'vi' ? 'ĐANG XỬ LÝ' : 'IN PROGRESS')} className="px-2 py-2"><OrderProgressBadge progress={record.orderProgress} language={language} /></MesDataCell></tr>
+              ))}</tbody></MesResizableTable></div>}
             </section>
           </div>
           <footer className="shrink-0 border-t border-line bg-hmiSection px-3 py-1 text-right font-mono text-[10px] font-bold uppercase text-slate-500">{filteredRecords.length} / {records.length} {language === 'vi' ? 'bản ghi' : 'records'}</footer>
-        </div>
       </div>
     </div>
     {imagePreview && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label={t('buffingImages')} onClick={() => setImagePreview(null)}><button type="button" className="absolute right-4 top-3 text-3xl text-white" aria-label={t('closeGallery')} onClick={() => setImagePreview(null)}>×</button><img src={imagePreview.url} alt={imagePreview.name} className="max-h-[90vh] max-w-[92vw] object-contain" /></div>}
-  </WS3Shell>;
+  </WS3MesShell>;
 }

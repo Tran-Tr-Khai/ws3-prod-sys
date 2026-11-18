@@ -14,11 +14,13 @@ from app.services.snapshot_sources import read_excel, parse_source
 from app.services.snapshot_report import build_report
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_sop_code
 from app.security.auth import get_current_user, role_codes
+from app.security.authorization import MANAGER_ROLES
 
 
 router = APIRouter(prefix="/ws3", tags=["ws3-snapshot"])
 
 def _text(value: object) -> str:
+    """Convert a spreadsheet value to a stable display and comparison string."""
     if value is None:
         return ""
     if isinstance(value, datetime):
@@ -29,6 +31,7 @@ def _text(value: object) -> str:
 
 
 def _date(value: object) -> str:
+    """Normalize supported spreadsheet date formats to ISO `YYYY-MM-DD`."""
     text = _text(value)
     if not text:
         return ""
@@ -51,6 +54,7 @@ def _date(value: object) -> str:
 
 
 def _decimal(value: str) -> Decimal | None:
+    """Parse a human-readable numeric cell without raising on invalid input."""
     try:
         return Decimal(value.replace(",", "")) if value else None
     except InvalidOperation:
@@ -58,11 +62,32 @@ def _decimal(value: str) -> Decimal | None:
 
 
 def _require_supervisor(user: User) -> None:
-    if not role_codes(user).intersection({"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}):
+    """
+    Restrict snapshot replacement and reports to management roles.
+
+    Args:
+        user: Authenticated MES user.
+
+    Raises:
+        HTTPException: 403 when the user is not a manager.
+    """
+    if not role_codes(user).intersection(MANAGER_ROLES):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor access is required")
 
 
 async def _read_upload(file: UploadFile) -> tuple[str, list[list[object]]]:
+    """
+    Read an uploaded spreadsheet and expose its filename with raw rows.
+
+    Args:
+        file: Uploaded MES source spreadsheet.
+
+    Returns:
+        Original filename and parsed cell rows.
+
+    Raises:
+        HTTPException: 422 when the file cannot be read as a spreadsheet.
+    """
     filename = file.filename or "source"
     try:
         return filename, read_excel(await file.read(), filename)
@@ -75,6 +100,22 @@ async def replace_data_snapshot(
     order_file: UploadFile | None = File(default=None), machine_file: UploadFile | None = File(default=None), worker_file: UploadFile | None = File(default=None),
     db: Session = Depends(get_db), user: User = Depends(get_current_user),
 ) -> dict[str, object]:
+    """
+    Replace one or more MES snapshot sources in a single database transaction.
+
+    Args:
+        order_file: Optional production-order source spreadsheet.
+        machine_file: Optional machine/roll source spreadsheet.
+        worker_file: Optional worker source spreadsheet.
+        db: Database session used for the atomic replacement.
+        user: Management user authorizing the import.
+
+    Returns:
+        Imported file names, per-source update counts and current totals.
+
+    Raises:
+        HTTPException: 403 for insufficient role or 422 for invalid source data.
+    """
     _require_supervisor(user)
     uploads = {"order": order_file, "machine": machine_file, "worker": worker_file}
     selected = {key: file for key, file in uploads.items() if file is not None}
@@ -111,6 +152,17 @@ async def replace_data_snapshot(
 
 @router.get("/production-orders")
 def production_order_report(production_date: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, object]:
+    """
+    Build the joined production report for one production date.
+
+    Args:
+        production_date: ISO production date from the MES snapshot.
+        db: Database session containing all snapshot sources.
+        user: Management user requesting the report.
+
+    Returns:
+        Report grouped by production order and joined roll data.
+    """
     _require_supervisor(user)
     orders = db.scalars(select(WS3ProductionOrder).where(WS3ProductionOrder.production_date == production_date)).all()
     machines = db.scalars(select(WS3MachineWS2Record)).all()
@@ -125,7 +177,22 @@ def production_order_context(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict[str, object] | None:
-    """Resolve a production order against the uploaded MES snapshot for a machine record."""
+    """
+    Resolve one SOP/order against the snapshot for a machine operation record.
+
+    Args:
+        order_number: SOP or order code entered by the operator.
+        machine_id: Machine that will own the operation record.
+        db: Database session containing the MES snapshot.
+        user: Authenticated user requesting the context.
+
+    Returns:
+        First joined production order, or `None` when no source row matches.
+
+    Raises:
+        HTTPException: 400 for unsupported machines, 403 for unauthorized
+            users or 409 when the entered order code is ambiguous.
+    """
     if machine_id not in {"BU-01", "SC-01"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported machine")
     if not role_codes(user).intersection({"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}) and machine_id not in (user.machine_ids or []):
@@ -146,6 +213,16 @@ def production_order_context(
 
 @router.get("/data-snapshot/status")
 def data_snapshot_status(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, int]:
+    """
+    Return the number of rows in each active snapshot source.
+
+    Args:
+        db: Database session used to count source rows.
+        user: Management user requesting the status.
+
+    Returns:
+        Counts for production orders, machine rows and worker rows.
+    """
     _require_supervisor(user)
     return {"orders": db.query(WS3ProductionOrder).count(), "machines": db.query(WS3MachineWS2Record).count(), "workers": db.query(WS3WorkerRecord).count()}
 
@@ -158,12 +235,31 @@ _WAREHOUSE_SOURCES = {
 
 
 def _require_admin(user: User) -> None:
+    """
+    Restrict raw data warehouse access to administrators.
+
+    Args:
+        user: Authenticated MES user.
+
+    Raises:
+        HTTPException: 403 when the user is not an administrator.
+    """
     if "ADMIN" not in role_codes(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access is required")
 
 
 @router.get("/admin/data-warehouse/summary")
 def admin_data_warehouse_summary(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, object]:
+    """
+    Summarize the available data warehouse sources for administrators.
+
+    Args:
+        db: Database session used to aggregate the source tables.
+        user: Administrator requesting the summary.
+
+    Returns:
+        Row counts, date ranges and latest import time by source.
+    """
     _require_admin(user)
     summary: dict[str, object] = {}
     for key, (model, date_column, _) in _WAREHOUSE_SOURCES.items():
@@ -177,15 +273,35 @@ def admin_data_warehouse_summary(db: Session = Depends(get_db), user: User = Dep
 @router.get("/admin/data-warehouse/{source}")
 def admin_data_warehouse_records(
     source: str,
-    q: str = "",
-    date: str = "",
-    offset: int = 0,
-    limit: int = 50,
-    sort_by: int | None = None,
-    sort_dir: str = "asc",
+    q: str = Query(default="", max_length=200),
+    date: str = Query(default="", max_length=10),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    sort_by: int | None = Query(default=None, ge=0),
+    sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict[str, object]:
+    """
+    Return a paginated, searchable raw snapshot source for warehouse review.
+
+    Args:
+        source: One supported snapshot source: order, machine or worker.
+        q: Optional free-text search across canonical and raw source fields.
+        date: Optional ISO date filter for the selected source.
+        offset: Zero-based result offset.
+        limit: Maximum rows returned, capped at 200.
+        sort_by: Optional raw source column index to sort before pagination.
+        sort_dir: Ascending or descending custom-column sort direction.
+        db: Database session containing the selected source.
+        user: Administrator requesting raw warehouse data.
+
+    Returns:
+        Source metadata, pagination details and raw source records.
+
+    Raises:
+        HTTPException: 403 for non-admin users or 404 for unknown sources.
+    """
     _require_admin(user)
     if source not in _WAREHOUSE_SOURCES:
         raise HTTPException(status_code=404, detail="Unknown data source")
@@ -211,6 +327,7 @@ def admin_data_warehouse_records(
         sortable_rows = query.order_by(model.id).all()
 
         def sort_key(row: object) -> tuple[int, object]:
+            """Return a stable empty-last key for one raw warehouse row."""
             try:
                 raw = json.loads(row.raw_data_json or "{}")
                 values = raw.get("row", []) if isinstance(raw, dict) else []

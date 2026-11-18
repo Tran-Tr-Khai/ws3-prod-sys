@@ -39,7 +39,9 @@ class BuffingExcelExportTests(unittest.TestCase):
             with patch.object(buffing, "media_root", return_value=root):
                 response = buffing.export_buffing_checks(
                     check_date=date(2026, 10, 3), machine_id="BU-01",
-                    language="vi", db=db, _user=object(), order_number=None,
+                    language="vi", db=db,
+                    user=SimpleNamespace(machine_ids=["BU-01"], roles=[]),
+                    order_number=None,
                 )
                 content = asyncio.run(self._read_body(response))
 

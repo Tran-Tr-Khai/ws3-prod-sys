@@ -56,3 +56,7 @@ export async function captureHikrobotPhoto(cameraId: string): Promise<File> {
     { type: image.type || 'image/jpeg' },
   );
 }
+
+export function hikrobotStreamUrl(cameraId: string): string {
+  return `${cameraAgentUrl}/api/v1/cameras/${encodeURIComponent(cameraId)}/stream`;
+}

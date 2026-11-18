@@ -11,7 +11,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function login(username: string, password: string): Promise<SessionUser> {
-  await request<UserApi>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+    await request<UserApi>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
   try {
     return fromApi(await request<UserApi>('/api/auth/me'));
   } catch {

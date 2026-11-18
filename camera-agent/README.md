@@ -6,6 +6,10 @@ must run on the same workstation as the camera, not in the WS3 Docker server.
 It binds only to `127.0.0.1:8765`; the WS3 page asks it only for a list of MVS
 cameras and a JPEG when a Buffing check is saved.
 
+Its local endpoints are intentionally versioned under `/api/v1/cameras` because
+this is a separate workstation service, not the website backend. The WS3 web
+backend itself exposes one API prefix only: `/api`.
+
 ## Installation on the camera workstation
 
 1. Install Hikrobot **MVS** and verify the camera can be seen in MVS.

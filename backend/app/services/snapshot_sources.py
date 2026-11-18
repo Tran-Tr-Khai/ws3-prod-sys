@@ -7,6 +7,7 @@ from io import BytesIO
 
 
 def text(value: object) -> str:
+    """Convert a spreadsheet value into a stable text representation."""
     if value is None:
         return ""
     if isinstance(value, datetime):
@@ -17,6 +18,7 @@ def text(value: object) -> str:
 
 
 def key(value: object) -> str:
+    """Normalize text for case- and whitespace-insensitive snapshot joins."""
     return re.sub(r"\s+", "", text(value)).upper()
 
 
@@ -57,6 +59,19 @@ FIELDS = {
 
 
 def parse_source(rows: list[list[object]], source: str) -> list[dict[str, object]]:
+    """
+    Validate and normalize one MES spreadsheet source into database rows.
+
+    Args:
+        rows: Raw spreadsheet cells from the first worksheet.
+        source: Supported source type: order, machine or worker.
+
+    Returns:
+        Database-ready source records with original headers and row values kept.
+
+    Raises:
+        ValueError: When required headers, identities, dates or quantities are invalid.
+    """
     fields = FIELDS[source]
     required = {key(v) for v in fields.values() if '/' not in v}
     header_index = next((i for i, row in enumerate(rows[:30]) if required.issubset({key(v) for v in row})), None)

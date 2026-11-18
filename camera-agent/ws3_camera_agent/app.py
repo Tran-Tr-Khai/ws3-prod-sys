@@ -13,10 +13,13 @@ import io
 import json
 import os
 import base64
+import ipaddress
+import socket
 import subprocess
 import sys
 import threading
-from contextlib import asynccontextmanager, contextmanager
+import time
+from contextlib import ExitStack, asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
@@ -25,12 +28,11 @@ from ctypes import POINTER, byref, cast, create_string_buffer, c_ubyte, memset, 
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from PIL import Image
 
 
 DEFAULT_ORIGINS = (
-    "https://192.168.100.253,"
-    "http://192.168.100.253,"
     "https://localhost,"
     "https://127.0.0.1,"
     "http://localhost:5173,"
@@ -75,18 +77,17 @@ class CameraDescriptor:
 
 
 class MvsCameraService:
-    """Load MVS lazily and take a single JPEG snapshot per request.
-
-    The service deliberately opens, captures and closes for each request.  This
-    avoids holding an exclusive MVS device handle while the browser is idle and
-    lets the MVS client or maintenance tools use the camera between checks.
-    """
+    """Capture snapshots and keep one dedicated MVS session for live preview."""
 
     def __init__(self) -> None:
         self._sdk: Any | None = None
         self._load_error: str | None = None
         self._dll_directories: list[Any] = []
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        self._stream_camera_id: str | None = None
+        self._stream_sdk: Any | None = None
+        self._stream_camera: Any | None = None
+        self._stream_context: ExitStack | None = None
 
     @staticmethod
     def _decode(value: Any) -> str:
@@ -294,7 +295,7 @@ class MvsCameraService:
             camera.MV_CC_DestroyHandle()
 
     @staticmethod
-    def _jpeg_from_frame(sdk: Any, camera: Any, frame: Any) -> bytes:
+    def _jpeg_from_frame(sdk: Any, camera: Any, frame: Any, *, quality: int = 92, preview_width: int | None = None) -> bytes:
         info = frame.stFrameInfo
         width, height = int(info.nWidth), int(info.nHeight)
         if width <= 0 or height <= 0 or not frame.pBufAddr:
@@ -326,34 +327,86 @@ class MvsCameraService:
                 f"(0x{result & 0xFFFFFFFF:08X})."
             )
 
+        if preview_width is not None and image.width > preview_width:
+            ratio = preview_width / image.width
+            image = image.resize((preview_width, max(1, round(image.height * ratio))), Image.Resampling.BILINEAR)
+
         output = io.BytesIO()
         # ``optimize=True`` can take tens of seconds on the 5 MP BU-01 frame.
-        # A fast JPEG is more useful to the operator and stays comfortably
-        # within the existing 5 MiB image-upload limit.
-        image.save(output, format="JPEG", quality=92)
+        image.save(output, format="JPEG", quality=quality)
         return output.getvalue()
+
+    def _capture_from_open_camera(self, sdk: Any, camera: Any, *, quality: int = 92, preview_width: int | None = None) -> bytes:
+        for _ in range(3):
+            frame = sdk.MV_FRAME_OUT()
+            memset(byref(frame), 0, sizeof(frame))
+            result = camera.MV_CC_GetImageBuffer(frame, 1_500)
+            if result == 0:
+                try:
+                    return self._jpeg_from_frame(sdk, camera, frame, quality=quality, preview_width=preview_width)
+                finally:
+                    camera.MV_CC_FreeImageBuffer(frame)
+        raise CameraAgentError("Không nhận được ảnh từ camera trong 3 lần thử.")
+
+    def _close_stream_unlocked(self) -> None:
+        context, self._stream_context = self._stream_context, None
+        self._stream_camera_id = None
+        self._stream_camera = None
+        self._stream_sdk = None
+        if context is not None:
+            context.close()
+
+    def _open_stream_unlocked(self, camera_id: str) -> None:
+        if self._stream_camera_id == camera_id and self._stream_camera is not None and self._stream_sdk is not None:
+            return
+        self._close_stream_unlocked()
+        sdk = self._load_sdk()
+        device_list, cameras = self._enumerate(sdk)
+        selected = next((item for item in cameras if item[0].id == camera_id), None)
+        if selected is None:
+            raise CameraNotFoundError("Không tìm thấy camera MVS đã chọn. Hãy quét lại danh sách camera.")
+        _descriptor, device_info = selected
+        context = ExitStack()
+        try:
+            camera = context.enter_context(self._opened_camera(sdk, device_info))
+        except Exception:
+            context.close()
+            raise
+        self._stream_camera_id = camera_id
+        self._stream_sdk = sdk
+        self._stream_camera = camera
+        self._stream_context = context
+
+    def start_stream(self, camera_id: str) -> None:
+        with self._lock:
+            self._open_stream_unlocked(camera_id)
+
+    def stream_jpeg(self, camera_id: str) -> bytes:
+        with self._lock:
+            self._open_stream_unlocked(camera_id)
+            preview_width = max(320, int(os.getenv("WS3_MVS_PREVIEW_WIDTH", "1280")))
+            preview_quality = max(40, min(90, int(os.getenv("WS3_MVS_PREVIEW_QUALITY", "78"))))
+            return self._capture_from_open_camera(self._stream_sdk, self._stream_camera, quality=preview_quality, preview_width=preview_width)
+
+    def stop_stream(self) -> None:
+        with self._lock:
+            self._close_stream_unlocked()
 
     def capture_jpeg(self, camera_id: str) -> bytes:
         with self._lock:
+            if self._stream_camera_id == camera_id and self._stream_camera is not None and self._stream_sdk is not None:
+                return self._capture_from_open_camera(self._stream_sdk, self._stream_camera)
             sdk = self._load_sdk()
             device_list, cameras = self._enumerate(sdk)
             selected = next((item for item in cameras if item[0].id == camera_id), None)
             if selected is None:
                 raise CameraNotFoundError("Không tìm thấy camera MVS đã chọn. Hãy quét lại danh sách camera.")
             _descriptor, device_info = selected
-            # Retain the SDK-owned enumeration list while its device-info
-            # pointer is used to create the MVS handle.
             with self._opened_camera(sdk, device_info) as camera:
-                for _ in range(3):
-                    frame = sdk.MV_FRAME_OUT()
-                    memset(byref(frame), 0, sizeof(frame))
-                    result = camera.MV_CC_GetImageBuffer(frame, 1_500)
-                    if result == 0:
-                        try:
-                            return self._jpeg_from_frame(sdk, camera, frame)
-                        finally:
-                            camera.MV_CC_FreeImageBuffer(frame)
-                raise CameraAgentError("Không nhận được ảnh từ camera trong 3 lần thử.")
+                return self._capture_from_open_camera(sdk, camera)
+
+    def close(self) -> None:
+        self.stop_stream()
 
 
 class MvsCameraWorkerProcess:
@@ -451,6 +504,29 @@ class MvsCameraWorkerProcess:
             raise CameraAgentError("MVS capture worker trả về ảnh trống.")
         return image
 
+    def start_stream(self, camera_id: str) -> None:
+        self._request({"action": "stream_start", "camera_id": camera_id})
+
+    def stream_jpeg(self, camera_id: str) -> bytes:
+        response = self._request({"action": "stream_frame", "camera_id": camera_id})
+        jpeg = response.get("jpeg")
+        if not isinstance(jpeg, str):
+            raise CameraAgentError("MVS stream worker trả về ảnh trống.")
+        try:
+            image = base64.b64decode(jpeg, validate=True)
+        except ValueError as error:
+            raise CameraAgentError("MVS stream worker trả về ảnh không hợp lệ.") from error
+        if not image:
+            raise CameraAgentError("MVS stream worker trả về ảnh trống.")
+        return image
+
+    def stop_stream(self) -> None:
+        try:
+            self._request({"action": "stream_stop"})
+        except CameraAgentError:
+            # Disconnect cleanup must not hide the original stream failure.
+            pass
+
     def close(self) -> None:
         with self._lock:
             process, self._process = self._process, None
@@ -463,12 +539,30 @@ class MvsCameraWorkerProcess:
             process.kill()
 
 
+def _local_ipv4_addresses() -> list[str]:
+    """Return private IPv4 addresses without hardcoding DHCP values."""
+    addresses: set[str] = set()
+    for target in ("192.0.2.1", "8.8.8.8"):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+                probe.connect((target, 9))
+                address = probe.getsockname()[0]
+            if ipaddress.ip_address(address).is_private:
+                addresses.add(address)
+        except OSError:
+            continue
+    return sorted(addresses)
+
+
 def _origins() -> list[str]:
-    return [
+    origins = [
         origin.strip()
         for origin in os.getenv("WS3_CAMERA_AGENT_ORIGINS", DEFAULT_ORIGINS).split(",")
         if origin.strip()
     ]
+    for address in _local_ipv4_addresses():
+        origins.extend((f"http://{address}", f"https://{address}"))
+    return list(dict.fromkeys(origins))
 
 
 camera_worker = MvsCameraWorkerProcess()
@@ -486,6 +580,9 @@ app = FastAPI(title="WS3 Camera Agent", version="0.1.0", docs_url=None, redoc_ur
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins(),
+    # The agent is a workstation-local service. Allow the current WS3 host
+    # even when DHCP changes its 192.168.x.x address between sessions.
+    allow_origin_regex=r"^https?://(?:localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3})(?::\d+)?$",
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
     max_age=600,
@@ -536,6 +633,35 @@ async def capture(camera_id: str) -> Response:
         content=jpeg,
         media_type="image/jpeg",
         headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/api/v1/cameras/{camera_id}/stream")
+def stream(camera_id: str) -> StreamingResponse:
+    """Serve a low-latency MJPEG preview from one persistent MVS session."""
+    try:
+        camera_worker.start_stream(camera_id)
+    except CameraAgentError as error:
+        raise _http_error(error) from error
+
+    frame_interval = 1 / max(1, min(30, int(os.getenv("WS3_MVS_PREVIEW_FPS", "10"))))
+
+    def frames() -> Iterator[bytes]:
+        try:
+            while True:
+                started_at = time.monotonic()
+                jpeg = camera_worker.stream_jpeg(camera_id)
+                yield b"--frame\r\nContent-Type: image/jpeg\r\nCache-Control: no-store\r\n\r\n" + jpeg + b"\r\n"
+                remaining = frame_interval - (time.monotonic() - started_at)
+                if remaining > 0:
+                    time.sleep(remaining)
+        finally:
+            camera_worker.stop_stream()
+
+    return StreamingResponse(
+        frames(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no"},
     )
 
 

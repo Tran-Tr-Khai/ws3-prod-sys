@@ -1,0 +1,5 @@
+.ws3-data-flow-nav { display: flex; min-width: 0; flex: 1; align-items: stretch; justify-content: flex-start; gap: 18px; }
+.ws3-data-flow-nav a { display: inline-flex; align-items: center; border-bottom: 2px solid transparent; color: #73868f; font-size: 10px; font-weight: 600; text-decoration: none; }
+.ws3-data-flow-nav a:hover { color: #4a6876; }
+.ws3-data-flow-nav a.active { border-bottom-color: #547587; color: #365766; }
+@media (max-width: 640px) { .ws3-data-flow-nav { justify-content: flex-start; gap: 13px; overflow-x: auto; } .ws3-data-flow-nav a { flex: none; } }

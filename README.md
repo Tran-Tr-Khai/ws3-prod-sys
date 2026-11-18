@@ -5,6 +5,7 @@
 ## Bắt đầu
 
 - Tài liệu dự án: [docs/README.md](docs/README.md)
+- Quy ước API: [docs/api-conventions.md](docs/api-conventions.md)
 - Chạy môi trường local: [docs/development.md](docs/development.md)
 - Kiến trúc và dữ liệu: [docs/architecture.md](docs/architecture.md)
 - Luồng MES và phân quyền: [docs/production-workflows.md](docs/production-workflows.md)

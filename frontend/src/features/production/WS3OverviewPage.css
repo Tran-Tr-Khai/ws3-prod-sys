@@ -1,0 +1,855 @@
+.mes-shell {
+  --mes-blue-900: #2c526d;
+  --mes-blue-800: #38657f;
+  --mes-blue-700: #4e7890;
+  --mes-ink: #2d4655;
+  --mes-muted: #71838b;
+  --mes-line: #c7d2d7;
+  --mes-soft-line: #dde5e8;
+  --mes-surface: #ffffff;
+  --mes-canvas: #f2f5f6;
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--mes-canvas);
+  color: var(--mes-ink);
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+.mes-shell__topbar {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid #193c53;
+  background: var(--mes-blue-900);
+  padding: 0 14px;
+  color: #f7fafb;
+}
+
+.mes-shell__brand { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.mes-shell__brand strong { font-size: 14px; font-weight: 750; letter-spacing: .08em; }
+.mes-shell__brand span { color: #c3d6df; font-size: 9px; font-weight: 700; letter-spacing: .12em; }
+.mes-shell__system-name { min-width: 0; overflow: hidden; color: #d4e1e6; font-size: 10px; font-weight: 650; letter-spacing: .06em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.mes-shell__account { display: flex; min-width: 0; align-items: center; gap: 8px; margin-left: auto; font-size: 10px; white-space: nowrap; }
+.mes-shell__clock { color: #eaf2f5; font-family: Consolas, "Courier New", monospace; font-variant-numeric: tabular-nums; }
+.mes-shell__user { max-width: 180px; overflow: hidden; color: #c5d8e1; font-weight: 650; text-overflow: ellipsis; }
+.mes-shell__account button { min-height: 22px; border: 1px solid rgb(255 255 255 / .3); background: transparent; padding: 0 6px; color: #fff; cursor: pointer; font-size: 9px; font-weight: 700; letter-spacing: .04em; }
+.mes-shell__account button:hover { background: rgb(255 255 255 / .12); }
+
+/* Shared WS3 shell: the overview is a data workspace, not a separate dashboard skin. */
+.ws3-dashboard {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f7f9fa;
+  padding: 0;
+}
+
+.ws3-dashboard__error {
+  flex: none;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid #efdddd;
+  border-left: 3px solid #bd6464;
+  background: #fff6f6;
+  padding: 8px 14px;
+  color: #9c4c4c;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.ws3-dashboard__controlbar {
+  display: flex;
+  min-height: 42px;
+  flex: none;
+  align-items: stretch;
+  gap: 12px;
+  border-bottom: 1px solid #dce5e8;
+  background: #f8fafb;
+  padding: 0 14px;
+}
+
+.ws3-dashboard__overview {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.ws3-dashboard__view-label,
+.ws3-dashboard__overview > span:not(.ws3-dashboard__view-label) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  color: #687d87;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.ws3-dashboard__view-label {
+  padding-left: 0;
+  color: #365766;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.ws3-dashboard__overview > span:not(.ws3-dashboard__view-label) {
+  border-left: 1px solid #e3eaec;
+}
+
+.ws3-dashboard__overview small {
+  color: inherit;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.ws3-dashboard__overview strong {
+  color: #3c5966;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ws3-dashboard__overview [data-tone="info"] strong {
+  color: #39748a;
+}
+
+.ws3-dashboard__overview [data-tone="warning"] strong {
+  color: #956b1c;
+}
+
+.ws3-dashboard__overview [data-tone="muted"] strong {
+  color: #7e9098;
+}
+
+.ws3-dashboard__command-actions {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.ws3-dashboard__filter summary {
+  min-height: 27px;
+  border-color: #d4dfe3;
+  background: #fff;
+  color: #4f6c79;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ws3-dashboard__workspace {
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  border: 0;
+  background: #fff;
+}
+
+.ws3-dashboard__workspace.has-detail {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  gap: 14px;
+  padding-right: 14px;
+}
+
+.ws3-dashboard__table-wrap {
+  min-height: 0;
+}
+
+.ws3-dashboard__table {
+  min-width: 980px;
+  table-layout: auto;
+  font-size: 12px;
+}
+
+.ws3-dashboard__table th {
+  height: 34px;
+  border-bottom-color: #d8e2e5;
+  background: #f2f6f7;
+  padding: 0 11px;
+  color: #56707c;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ws3-dashboard__table td {
+  height: 40px;
+  border-bottom-color: #edf1f2;
+  padding: 0 11px;
+}
+
+.ws3-dashboard__table tbody tr:nth-child(even) {
+  background: #fff;
+}
+
+.ws3-dashboard__table tbody tr:hover {
+  background: #f6fafb;
+}
+
+.ws3-dashboard__table tbody tr[data-selected] {
+  background: #e7f1f5;
+}
+
+.ws3-dashboard__table tbody tr[data-selected] td:first-child {
+  box-shadow: inset 3px 0 0 #547587;
+}
+
+.ws3-dashboard__detail {
+  border-left: 1px solid #e2e9eb;
+  background: #fff;
+}
+
+.ws3-dashboard__detail-header {
+  min-height: 61px;
+  border-bottom-color: #e2e9eb;
+  background: #fff;
+  color: #304d5b;
+  padding: 9px 13px;
+}
+
+.ws3-dashboard__detail footer {
+  border-top-color: #edf1f2;
+}
+
+@media (max-width: 980px) {
+  .ws3-dashboard {
+    overflow: auto;
+  }
+
+  .ws3-dashboard__controlbar {
+    min-height: 0;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 0 10px;
+  }
+
+  .ws3-dashboard__overview {
+    width: 100%;
+    min-height: 34px;
+  }
+
+  .ws3-dashboard__command-actions {
+    width: 100%;
+    min-height: 38px;
+    padding-bottom: 6px;
+  }
+
+  .ws3-dashboard__workspace.has-detail {
+    grid-template-columns: minmax(0, 1fr);
+    padding-right: 0;
+  }
+
+  .ws3-dashboard__detail {
+    min-height: 390px;
+    border-top: 1px solid #e2e9eb;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .ws3-dashboard__overview {
+    overflow-x: auto;
+  }
+
+  .ws3-dashboard__view-label,
+  .ws3-dashboard__overview > span:not(.ws3-dashboard__view-label) {
+    padding: 0 8px;
+  }
+
+  .ws3-dashboard__command-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* Compact navigation context: useful orientation without competing with the grid. */
+.mes-shell__topbar {
+  min-height: 36px;
+  padding: 0 14px;
+}
+.mes-shell__brand {
+  min-height: 20px;
+  gap: 5px;
+  padding-right: 12px;
+}
+.mes-shell__brand strong { font-size: 13px; }
+.mes-shell__brand span { font-size: 9px; }
+.mes-shell__clock,
+.mes-shell__user { padding: 0 9px; font-size: 10px; }
+.mes-shell__account button { padding: 1px 0 1px 9px; font-size: 9px; }
+
+.mes-shell__breadcrumb {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 1px solid #dce4e7;
+  background: #f8fafb;
+  padding: 0 14px;
+  color: #7a8c94;
+  font-size: 10px;
+}
+.mes-shell__breadcrumb > span[aria-hidden="true"] { color: #a4b1b6; }
+.mes-shell__breadcrumb strong { color: #4b6775; font-weight: 600; }
+
+@media (max-width: 640px) {
+  .mes-shell__breadcrumb { min-height: 22px; padding: 0 10px; }
+}
+
+/* Both Tenter machines are listed as rows; the single-machine selector is no longer needed. */
+.ws3-dashboard__select { display: none; }
+
+.ws3-dashboard__updated {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.ws3-dashboard__updated span {
+  display: inline;
+  color: #71838b;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ws3-dashboard__updated span::after { color: #a1afb4; content: "·"; margin-left: 6px; }
+.ws3-dashboard__updated strong { color: #536f7b; font-size: 11px; font-weight: 600; }
+
+.mes-overview__summary {
+  grid-column: 1 / -1;
+  min-height: 32px;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+.mes-overview__summary span,
+.mes-overview__summary span:first-child {
+  border-right: 0;
+  padding: 0 14px 0 0;
+}
+.mes-overview__summary span + span {
+  border-left: 1px solid #dce5e8;
+  padding-left: 14px;
+}
+.mes-overview__summary strong { font-size: 12px; }
+.ws3-dashboard__toolbar { margin-top: 10px; }
+
+/* Compact application bar: the data grid remains the primary surface. */
+.mes-shell__topbar {
+  min-height: 36px;
+  padding: 0 14px;
+}
+.mes-shell__brand {
+  min-height: 20px;
+  gap: 5px;
+  padding-right: 12px;
+}
+.mes-shell__brand strong { font-size: 13px; }
+.mes-shell__brand span { font-size: 9px; }
+.mes-shell__clock,
+.mes-shell__user { padding: 0 9px; font-size: 10px; }
+.mes-shell__account button { padding: 1px 0 1px 9px; font-size: 9px; }
+
+.mes-shell__contextbar {
+  display: flex;
+  min-height: 31px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--mes-line);
+  background: #f9fbfc;
+  padding: 0 15px;
+  color: #72848c;
+  font-size: 10px;
+}
+
+.mes-shell__breadcrumbs { display: flex; align-items: center; gap: 6px; color: #66808f; }
+.mes-shell__breadcrumbs b { color: #9baab0; font-weight: 400; }
+.mes-shell__breadcrumbs strong { color: #35596d; font-weight: 700; }
+
+.ws3-dashboard {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--mes-canvas);
+  padding: 15px clamp(12px, 1.8vw, 25px) 20px;
+}
+
+.ws3-dashboard__operator-notice { margin-bottom: 11px; }
+.ws3-dashboard__error { margin-bottom: 10px; border: 1px solid #cfaf63; background: #fff8e6; padding: 8px 10px; color: #70530d; font-size: 11px; font-weight: 600; }
+.ws3-dashboard__intro { display: flex; align-items: end; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--mes-line); padding: 0 1px 11px; }
+.ws3-dashboard__eyebrow { margin: 0 0 3px; color: #668190; font-size: 9px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.ws3-dashboard__intro h1 { margin: 0; color: #25495d; font-size: 18px; font-weight: 650; line-height: 1.2; letter-spacing: -.01em; }
+.ws3-dashboard__intro p:not(.ws3-dashboard__eyebrow) { margin: 3px 0 0; color: #71838b; font-size: 11px; line-height: 1.4; }
+.ws3-dashboard__updated { flex: 0 0 auto; min-width: 120px; border-left: 1px solid var(--mes-line); padding-left: 11px; text-align: right; }
+.ws3-dashboard__updated span { display: block; color: #7a8b92; font-size: 9px; font-weight: 700; letter-spacing: .065em; text-transform: uppercase; }
+.ws3-dashboard__updated strong { color: #456474; font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+.mes-overview__summary { display: flex; min-height: 35px; align-items: center; gap: 0; border-bottom: 1px solid var(--mes-line); color: #61777f; font-size: 10px; }
+.mes-overview__summary span { border-right: 1px solid var(--mes-line); padding: 0 13px; white-space: nowrap; }.mes-overview__summary span:first-child { padding-left: 1px; }.mes-overview__summary span:last-child { border-right: 0; }.mes-overview__summary strong { margin-right: 4px; color: #365a6d; font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }.mes-overview__summary [data-tone="info"] strong { color: #2c718a; }.mes-overview__summary [data-tone="warning"] strong { color: #9a6c19; }.mes-overview__summary [data-tone="muted"] strong { color: #87979d; }
+
+.ws3-dashboard__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; border: 1px solid var(--mes-line); border-bottom: 0; background: #f8fafb; padding: 7px 9px; }
+.ws3-dashboard__toolbar-label { display: block; color: #3d6072; font-size: 10px; font-weight: 750; letter-spacing: .075em; text-transform: uppercase; }
+.ws3-dashboard__toolbar-copy { display: block; margin-top: 1px; color: #788990; font-size: 10px; }
+.ws3-dashboard__toolbar-actions { display: flex; align-items: center; gap: 7px; }
+.ws3-dashboard__select { display: flex; min-height: 27px; align-items: center; gap: 6px; border: 1px solid #b8c7cd; background: #fff; padding: 0 7px; color: #617780; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.ws3-dashboard__select select { border: 0; background: transparent; color: #355667; font: inherit; outline: 0; text-transform: none; }
+.ws3-dashboard__filter { position: relative; }
+.ws3-dashboard__filter summary { display: flex; min-height: 27px; cursor: pointer; list-style: none; align-items: center; gap: 6px; border: 1px solid #a9bac1; background: #fff; padding: 0 8px; color: #456575; font-size: 9px; font-weight: 700; letter-spacing: .055em; text-transform: uppercase; }
+.ws3-dashboard__filter summary::-webkit-details-marker { display: none; }
+.ws3-dashboard__filter > div { position: absolute; right: 0; z-index: 20; display: grid; min-width: 250px; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; border: 1px solid #a9bac1; background: #fff; padding: 8px; box-shadow: 0 8px 18px rgb(35 62 75 / .14); }
+.ws3-dashboard__filter > div > header { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--mes-soft-line); padding-bottom: 6px; }
+.ws3-dashboard__filter button { border: 0; background: transparent; padding: 0; color: #416678; font-size: 10px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.ws3-dashboard__filter label { display: flex; min-height: 27px; align-items: center; gap: 6px; color: #3a5967; font-size: 10px; font-weight: 600; }
+
+.ws3-dashboard__workspace { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); border: 1px solid var(--mes-line); background: var(--mes-surface); }
+.ws3-dashboard__workspace.has-detail { grid-template-columns: minmax(0, 1fr) minmax(270px, 330px); }
+.ws3-dashboard__table-wrap { min-width: 0; overflow: auto; }
+.ws3-dashboard__table { width: 100%; min-width: 910px; border-collapse: collapse; color: #3e5967; font-size: 11px; }
+.ws3-dashboard__table th { position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #aebfc7; background: #e7eef1; padding: 8px 9px; color: #496b7a; font-size: 9px; font-weight: 750; letter-spacing: .055em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.ws3-dashboard__table td { max-width: 190px; border-bottom: 1px solid #e0e7e9; padding: 7px 9px; line-height: 1.35; vertical-align: middle; }
+.ws3-dashboard__table tbody tr { transition: background .12s ease; }.ws3-dashboard__table tbody tr:nth-child(even) { background: #fbfcfc; }.ws3-dashboard__table tbody tr:hover, .ws3-dashboard__table tbody tr[data-selected] { background: #f1f7f8; }
+.ws3-dashboard__machine { display: grid; min-width: 115px; cursor: pointer; border: 0; background: transparent; padding: 0; color: #31586c; text-align: left; }.ws3-dashboard__machine span { font-size: 11px; font-weight: 750; }.ws3-dashboard__machine small { margin-top: 1px; color: #7c9099; font-size: 9px; font-weight: 700; letter-spacing: .055em; }
+.ws3-dashboard__machine.is-disabled { cursor: not-allowed; opacity: .58; pointer-events: none; }
+.ws3-dashboard__machine.is-disabled span { color: #768990; }
+.ws3-dashboard__machine.is-disabled small { color: #a0adb1; }
+.ws3-dashboard button:focus-visible, .ws3-dashboard a:focus-visible, .ws3-dashboard select:focus-visible, .mes-shell button:focus-visible { outline: 2px solid #397c98; outline-offset: 2px; }
+.ws3-dashboard__status { display: inline-flex; align-items: center; gap: 6px; color: #506975; font-size: 10px; font-weight: 650; white-space: nowrap; }.ws3-dashboard__status i { width: 6px; height: 6px; border-radius: 50%; background: #80939a; }.ws3-dashboard__status[data-tone="success"] { color: #4d754d; }.ws3-dashboard__status[data-tone="success"] i { background: #628c62; }.ws3-dashboard__status[data-tone="info"] { color: #33718a; }.ws3-dashboard__status[data-tone="info"] i { background: #44839b; }.ws3-dashboard__status[data-tone="warning"] { color: #956c20; }.ws3-dashboard__status[data-tone="warning"] i { background: #b88934; }.ws3-dashboard__status[data-tone="alarm"] { color: #a14646; }.ws3-dashboard__status[data-tone="alarm"] i { background: #ba5656; }.ws3-dashboard__status[data-tone="muted"] { color: #87969c; }.ws3-dashboard__status[data-tone="muted"] i { background: #a3b0b4; }
+.ws3-dashboard__reference { color: #49616d; font-weight: 600; }.ws3-dashboard__numeric { color: #354f5d; font-family: Consolas, "Courier New", monospace; font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }.ws3-dashboard__alert { color: #8a999e; font-weight: 650; }.ws3-dashboard__alert[data-tone="warning"] { color: #966b1c; }.ws3-dashboard__alert[data-tone="alarm"] { color: #a33f3f; }
+.ws3-dashboard__actions { white-space: nowrap; }.ws3-dashboard__actions button, .ws3-dashboard__actions a { display: inline-flex; min-height: 25px; align-items: center; justify-content: center; border: 1px solid #b3c3c9; padding: 0 7px; color: #466978; font-size: 9px; font-weight: 700; letter-spacing: .025em; text-decoration: none; text-transform: uppercase; }.ws3-dashboard__actions button { margin-right: 4px; background: #fff; cursor: pointer; }.ws3-dashboard__actions a { border-color: #547687; background: #547687; color: #fff; }.ws3-dashboard__actions a:hover { background: #426575; }
+.ws3-dashboard__empty { padding: 24px; color: #6c7f87; font-size: 12px; text-align: center; }
+
+.ws3-dashboard__detail { display: flex; min-width: 0; flex-direction: column; border-left: 1px solid var(--mes-line); background: #f8fafb; }.ws3-dashboard__detail-header { display: flex; min-height: 61px; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid #aebfc7; background: #e6eef1; padding: 9px 11px; color: #34576a; }.ws3-dashboard__detail-header p { margin: 0 0 2px; color: #6d8794; font-size: 9px; font-weight: 750; letter-spacing: .08em; }.ws3-dashboard__detail-header h2 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }.ws3-dashboard__detail-header button { width: 25px; height: 25px; border: 1px solid #a8bbc3; background: #fff; color: #4d6d7b; cursor: pointer; font-size: 18px; line-height: 1; }
+.ws3-dashboard__detail-content { flex: 1; padding: 0 12px; }.ws3-dashboard__detail-section { padding: 12px 0; }.ws3-dashboard__detail-section + .ws3-dashboard__detail-section { border-top: 1px solid #d5e0e3; }.ws3-dashboard__detail-section h3 { margin: 0 0 8px; color: #5f7b89; font-size: 9px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }.ws3-dashboard__detail-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 8px; margin: 0; }.ws3-dashboard__detail-fields .is-wide { grid-column: 1 / -1; }.ws3-dashboard__detail-fields dt { color: #778991; font-size: 9px; font-weight: 700; letter-spacing: .025em; text-transform: uppercase; }.ws3-dashboard__detail-fields dd { margin: 2px 0 0; color: #3a5765; font-size: 11px; font-weight: 600; overflow-wrap: anywhere; }.ws3-dashboard__detail-fields dd[data-tone="success"] { color: #47774b; }.ws3-dashboard__detail-fields dd[data-tone="warning"] { color: #956b1c; }.ws3-dashboard__detail-fields dd[data-tone="alarm"] { color: #a34040; }.ws3-dashboard__detail-message { margin: 9px 0 0; color: #71838c; font-size: 11px; line-height: 1.4; }.ws3-dashboard__detail-message[data-tone="warning"] { color: #926719; }.ws3-dashboard__detail footer { border-top: 1px solid #d0dde1; padding: 10px 12px; }.ws3-dashboard__detail footer a { display: flex; min-height: 30px; align-items: center; justify-content: center; border: 1px solid #547587; background: #547587; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: .055em; text-decoration: none; text-transform: uppercase; }
+
+@media (max-width: 900px) { .ws3-dashboard__workspace.has-detail { grid-template-columns: minmax(0, 1fr); }.ws3-dashboard__detail { border-top: 1px solid var(--mes-line); border-left: 0; }.ws3-dashboard__detail-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }.ws3-dashboard__detail-section + .ws3-dashboard__detail-section { border-top: 0; }.ws3-dashboard__detail-section { min-width: 0; } }
+@media (max-width: 640px) { .mes-shell__topbar { padding: 0 9px; }.mes-shell__system-name, .mes-shell__user { display: none; }.mes-shell__account { gap: 5px; }.mes-shell__contextbar { padding: 0 9px; }.mes-shell__contextbar > :last-child { display: none; }.ws3-dashboard { padding: 11px 8px; }.ws3-dashboard__intro { align-items: start; flex-direction: column; gap: 7px; }.ws3-dashboard__updated { border-left: 0; border-top: 1px solid var(--mes-line); padding: 6px 0 0; text-align: left; }.mes-overview__summary { flex-wrap: wrap; align-content: center; min-height: 48px; gap: 4px 0; }.mes-overview__summary span { padding: 0 7px; }.mes-overview__summary span:first-child { padding-left: 1px; }.ws3-dashboard__toolbar { align-items: stretch; flex-direction: column; }.ws3-dashboard__toolbar-actions { justify-content: space-between; }.ws3-dashboard__filter > div { right: 0; left: auto; min-width: min(250px, calc(100vw - 34px)); }.ws3-dashboard__detail-content { display: block; }.ws3-dashboard__detail-section + .ws3-dashboard__detail-section { border-top: 1px solid #d2dcdf; } }
+
+/* Dense MES workspace: one visual hierarchy, table first. */
+.mes-shell {
+  --mes-blue-900: #294c61;
+  --mes-ink: #263b46;
+  --mes-muted: #6d7d85;
+  --mes-line: #cfd8dc;
+  --mes-soft-line: #e4e9eb;
+  --mes-canvas: #f5f7f8;
+  font-size: 12px;
+}
+
+.mes-shell__topbar {
+  min-height: 40px;
+  gap: 12px;
+  padding: 0 16px;
+}
+
+.mes-shell__brand strong { font-size: 14px; font-weight: 700; letter-spacing: .04em; }
+.mes-shell__brand span { font-size: 10px; font-weight: 600; letter-spacing: .05em; }
+.mes-shell__system-name { font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.mes-shell__account { gap: 10px; font-size: 11px; }
+.mes-shell__clock { font-family: inherit; }
+.mes-shell__user { font-weight: 500; }
+.mes-shell__account button {
+  min-height: auto;
+  border: 0;
+  border-left: 1px solid rgb(255 255 255 / .2);
+  padding: 2px 0 2px 10px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.mes-shell__contextbar { display: none; }
+
+.ws3-dashboard {
+  display: grid;
+  grid-template-columns: minmax(250px, auto) minmax(0, 1fr);
+  align-content: start;
+  padding: 14px 18px 20px;
+}
+
+.ws3-dashboard__error,
+.ws3-dashboard__operator-notice,
+.ws3-dashboard__toolbar,
+.ws3-dashboard__workspace { grid-column: 1 / -1; }
+
+.ws3-dashboard__intro {
+  min-height: 44px;
+  align-items: center;
+  border-bottom: 1px solid var(--mes-line);
+  padding: 0;
+}
+
+.ws3-dashboard__eyebrow,
+.ws3-dashboard__intro p:not(.ws3-dashboard__eyebrow),
+.ws3-dashboard__updated span,
+.ws3-dashboard__toolbar-copy { display: none; }
+
+.ws3-dashboard__intro h1 {
+  color: #2c4655;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.ws3-dashboard__updated {
+  min-width: auto;
+  border: 0;
+  padding: 0 0 0 12px;
+}
+
+.ws3-dashboard__updated strong {
+  color: var(--mes-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.mes-overview__summary {
+  min-height: 44px;
+  justify-content: flex-end;
+  border-bottom: 1px solid var(--mes-line);
+  font-size: 11px;
+}
+
+.mes-overview__summary span { padding: 0 12px; }
+.mes-overview__summary span:first-child { padding-left: 12px; }
+.mes-overview__summary strong { margin-right: 5px; font-size: 13px; font-weight: 600; }
+
+.ws3-dashboard__toolbar {
+  min-height: 39px;
+  margin-top: 10px;
+  border: 1px solid var(--mes-line);
+  border-bottom: 0;
+  background: #fff;
+  padding: 5px 9px;
+}
+
+.ws3-dashboard__toolbar-label {
+  color: #334f5e;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ws3-dashboard__select,
+.ws3-dashboard__filter summary {
+  min-height: 27px;
+  border-color: #c4ced2;
+  border-radius: 2px;
+  color: #435e6b;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ws3-dashboard__workspace { border-color: var(--mes-line); }
+.ws3-dashboard__table { font-size: 11.5px; }
+
+.ws3-dashboard__table th {
+  border-bottom-color: #c3cdd1;
+  background: #eef2f3;
+  padding: 7px 10px;
+  color: #536a75;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ws3-dashboard__table td {
+  border-bottom-color: #e4e9eb;
+  padding: 8px 10px;
+  line-height: 1.3;
+}
+
+.ws3-dashboard__table tbody tr { transition: none; }
+.ws3-dashboard__table tbody tr:nth-child(even) { background: #fafbfb; }
+.ws3-dashboard__table tbody tr:hover,
+.ws3-dashboard__table tbody tr[data-selected] { background: #edf4f6; }
+.ws3-dashboard__machine span { font-size: 11.5px; font-weight: 600; }
+.ws3-dashboard__machine small { color: #788991; font-size: 9.5px; font-weight: 500; letter-spacing: .03em; }
+.ws3-dashboard__reference { font-weight: 400; }
+.ws3-dashboard__numeric { overflow: hidden; font-family: "Segoe UI", Arial, sans-serif; font-size: 11px; font-variant-numeric: tabular-nums; }
+.ws3-dashboard__status { font-size: 11px; font-weight: 500; }
+.ws3-dashboard__status i { width: 5px; height: 5px; }
+.ws3-dashboard__alert { font-size: 10px; font-weight: 600; }
+
+.ws3-dashboard__actions button { display: none; }
+.ws3-dashboard__actions a {
+  min-height: auto;
+  border: 0;
+  background: transparent;
+  padding: 3px 0;
+  color: #35667c;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ws3-dashboard__actions a:hover { background: transparent; color: #1f4f66; text-decoration: underline; }
+.ws3-dashboard__actions .ws3-dashboard__action-disabled {
+  display: inline-flex;
+  min-height: auto;
+  align-items: center;
+  padding: 3px 0;
+  color: #a3b0b4;
+  cursor: not-allowed;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  opacity: .72;
+  pointer-events: none;
+  text-decoration: none;
+  text-transform: none;
+}
+
+.ws3-dashboard__detail {
+  position: relative;
+  z-index: 3;
+  border-left-color: #c4d3d8;
+  background: #fafbfb;
+  box-shadow: -6px 0 14px rgb(42 67 78 / .08);
+}
+.ws3-dashboard__detail-header {
+  min-height: 44px;
+  border-top: 2px solid #547587;
+  background: #eef2f3;
+  padding: 6px 11px;
+}
+.ws3-dashboard__detail-header p { font-size: 9.5px; font-weight: 500; letter-spacing: .04em; }
+.ws3-dashboard__detail-header h2 { font-size: 14px; font-weight: 600; }
+.ws3-dashboard__detail-header button { border: 0; background: transparent; font-size: 17px; }
+.ws3-dashboard__detail-section h3 { font-size: 10px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.ws3-dashboard__detail-fields dt { font-size: 9.5px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.ws3-dashboard__detail-fields dd { font-size: 11px; font-weight: 500; }
+.ws3-dashboard__detail footer a { border-radius: 2px; font-size: 10px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+
+@media (max-width: 760px) {
+  .ws3-dashboard { display: block; padding: 10px 8px 14px; }
+  .ws3-dashboard__intro { min-height: 42px; }
+  .mes-overview__summary { min-height: 43px; justify-content: flex-start; overflow-x: auto; }
+  .mes-overview__summary span:first-child { padding-left: 0; }
+  .ws3-dashboard__toolbar { margin-top: 8px; }
+}
+
+/* Final hierarchy pass for the application bar and data grid. */
+.mes-shell__topbar {
+  min-height: 44px;
+  gap: 0;
+  border-bottom: 1px solid #172c38;
+  background: #213b4a;
+  padding: 0 18px;
+}
+
+.mes-shell__brand {
+  min-height: 24px;
+  align-items: center;
+  gap: 7px;
+  border-right: 1px solid rgb(255 255 255 / .18);
+  padding-right: 16px;
+}
+
+.mes-shell__brand strong { color: #fff; font-size: 15px; letter-spacing: .03em; }
+.mes-shell__brand span { color: #b7cbd3; font-size: 10px; letter-spacing: .09em; }
+.mes-shell__system-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 16px;
+  color: #d9e5e9;
+  font-size: 12px;
+}
+.mes-shell__system-name::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #75a67e;
+  content: "";
+}
+.mes-shell__account { gap: 0; color: #d7e3e7; }
+.mes-shell__clock,
+.mes-shell__user { padding: 0 12px; }
+.mes-shell__clock { color: #e5eef0; font-variant-numeric: tabular-nums; }
+.mes-shell__user { border-left: 1px solid rgb(255 255 255 / .18); }
+.mes-shell__account button {
+  margin-left: 4px;
+  border-left: 1px solid rgb(255 255 255 / .18);
+  padding-left: 12px;
+}
+
+.ws3-dashboard__pagebar { min-height: 48px; }
+.ws3-dashboard__intro { min-height: 48px; }
+.ws3-dashboard__intro h1 { font-size: 17px; font-weight: 600; }
+
+.mes-overview__summary { min-height: 48px; }
+.mes-overview__summary span { color: #687b83; }
+.mes-overview__summary span + span { border-left: 1px solid #d6dfe2; border-right: 0; }
+.mes-overview__summary strong { color: #34576a; }
+
+.ws3-dashboard__toolbar { min-height: 42px; margin-top: 12px; padding: 6px 11px; }
+.ws3-dashboard__toolbar-label { font-size: 12px; }
+.ws3-dashboard__toolbar-count {
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  margin-left: 7px;
+  border-radius: 2px;
+  background: #e8eef0;
+  color: #526a75;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ws3-dashboard__table { table-layout: fixed; }
+.ws3-dashboard__col-machine { width: 13%; }
+.ws3-dashboard__col-status { width: 12%; }
+.ws3-dashboard__col-reference { width: 29%; }
+.ws3-dashboard__col-output { width: 12%; }
+.ws3-dashboard__col-operator { width: 13%; }
+.ws3-dashboard__col-updated { width: 11%; }
+.ws3-dashboard__col-alert { width: 6%; }
+.ws3-dashboard__col-actions { width: 7%; }
+.ws3-dashboard__table th:nth-child(4),
+.ws3-dashboard__table th:nth-child(6),
+.ws3-dashboard__table td:nth-child(4),
+.ws3-dashboard__table td:nth-child(6) { text-align: right; }
+.ws3-dashboard__table td:nth-child(3) { overflow-wrap: anywhere; }
+.ws3-dashboard__table td:nth-child(5),
+.ws3-dashboard__table td:nth-child(6) { white-space: nowrap; }
+.ws3-dashboard__table tbody tr[data-selected] td:first-child { box-shadow: inset 3px 0 0 #47768b; }
+.ws3-dashboard__table tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 #a5bdc6; }
+
+/* Keep overview headers aligned with their data cells, including when the
+   table is expanded beside the detail panel at wide desktop widths. */
+.ws3-dashboard__table .mes-resizable-header__label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 12px;
+  text-align: left !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .ws3-dashboard__table { min-width: 980px; }
+}
+
+@media (max-width: 640px) {
+  .mes-shell__topbar { padding: 0 10px; }
+  .mes-shell__brand { padding-right: 10px; }
+  .mes-shell__system-name { padding-left: 10px; }
+  .mes-shell__clock, .mes-shell__user { display: none; }
+  .mes-shell__account button { padding-left: 8px; }
+}
+
+/* Light application chrome: calm, neutral and readable on the factory floor. */
+.mes-shell__topbar {
+  min-height: 43px;
+  border-bottom: 1px solid #c4d1d5;
+  background: #e7eef0;
+  color: #294a5a;
+}
+
+.mes-shell__brand {
+  border-right-color: #c4d1d5;
+}
+
+.mes-shell__brand strong { color: #294e61; }
+.mes-shell__brand span { color: #68808b; }
+.mes-shell__system-name { color: #5b737d; }
+.mes-shell__system-name::before { background: #6c9b76; }
+.mes-shell__clock { color: #466572; }
+.mes-shell__user { border-left-color: #c4d1d5; color: #466572; }
+.mes-shell__account button {
+  border-left-color: #c4d1d5;
+  color: #3f6170;
+}
+.mes-shell__account button:hover { background: #d9e5e8; }
+
+/* Approved industrial slate blue for the application header. */
+.mes-shell__topbar {
+  border-bottom-color: rgb(65, 94, 109);
+  background: rgb(84, 117, 135);
+  color: #f6fafb;
+}
+.mes-shell__brand { border-right-color: rgb(255 255 255 / .24); }
+.mes-shell__brand strong { color: #fff; }
+.mes-shell__brand span { color: #d5e2e7; }
+.mes-shell__system-name { color: #e5eef1; }
+.mes-shell__system-name::before { background: #9bc59f; }
+.mes-shell__clock { color: #f4f8f9; }
+.mes-shell__user { border-left-color: rgb(255 255 255 / .24); color: #e8f0f2; }
+.mes-shell__account button {
+  border-left-color: rgb(255 255 255 / .24);
+  color: #f1f7f8;
+}
+.mes-shell__account button:hover { background: rgb(255 255 255 / .12); }
+
+/* Keep the machinery overview flush with the shared MES shell. Older
+   dashboard spacing rules are intentionally overridden here so the command
+   bar and table use the same full-width frame as the other MES pages. */
+.ws3-dashboard {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f7f9fa;
+  padding: 0;
+}
+
+.ws3-dashboard__controlbar {
+  min-height: 42px;
+  flex: none;
+  border-bottom: 1px solid #dce5e8;
+  padding: 0 14px;
+}
+
+.ws3-dashboard__workspace {
+  display: grid;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  border: 0;
+  background: #fff;
+}
+
+.ws3-dashboard__workspace.has-detail {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  gap: 0;
+  padding-right: 0;
+}
+
+.ws3-dashboard__table-wrap {
+  min-height: 0;
+  overflow: auto;
+}
+
+.ws3-dashboard__detail {
+  min-height: 0;
+  border-top: 0;
+  border-left: 1px solid #dce5e8;
+}
+
+@media (max-width: 980px) {
+  .ws3-dashboard__workspace.has-detail {
+    grid-template-columns: minmax(0, 1fr);
+    padding-right: 0;
+  }
+
+  .ws3-dashboard__detail {
+    border-top: 1px solid #dce5e8;
+    border-left: 0;
+  }
+}

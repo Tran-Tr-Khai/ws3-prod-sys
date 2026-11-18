@@ -10,13 +10,24 @@ from app.services.machine_order_progress import ORDER_RECORDS
 from app.services.ws3_order_codes import resolve_ws3_order_code
 
 
-def _source(machine_id):
+def _source(machine_id: str):
+    """Resolve the source model, SOP field and timestamp for one machine."""
     model, sop = ORDER_RECORDS[machine_id]
     timestamp = model.checked_at if model is BuffingCheck else model.updated_at if model is TenteringOrder else model.recorded_at
     return model, getattr(model, sop), timestamp
 
 
-def get_overview(db: Session, machine_id: str):
+def get_overview(db: Session, machine_id: str) -> dict[str, object] | None:
+    """
+    Read the latest active-first machine record without loading heavy relations.
+
+    Args:
+        db: Database session containing machine records and canonical progress.
+        machine_id: Canonical machine identifier from the API authorization layer.
+
+    Returns:
+        A compact operational summary, or `None` when the machine has no record.
+    """
     model, sop, timestamp = _source(machine_id)
     # Canonical state takes precedence over a legacy row's copied progress.
     state = select(MachineOrderState.order_progress).where(
@@ -52,7 +63,22 @@ def get_overview(db: Session, machine_id: str):
     return result
 
 
-def get_overview_details(db: Session, machine_id: str, record_id: int):
+def get_overview_details(db: Session, machine_id: str, record_id: int) -> dict[str, object] | None:
+    """
+    Aggregate details for one machine record without reading image payloads.
+
+    Args:
+        db: Database session containing the selected record and related entries.
+        machine_id: Canonical machine identifier.
+        record_id: Primary key of the record selected by the operator.
+
+    Returns:
+        Roll/output or inspection aggregates, or `None` when the record is absent.
+
+    Raises:
+        AmbiguousWS3OrderCode: Propagated when the record maps to multiple MES
+            order groups; the API route converts it into HTTP 409.
+    """
     model, sop, timestamp = _source(machine_id)
     record = db.scalar(select(model).where(model.machine_id == machine_id, model.id == record_id).options(raiseload('*')))
     if record is None:

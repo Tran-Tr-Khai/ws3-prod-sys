@@ -15,12 +15,35 @@ dependencies = [
     "openpyxl==3.1.5",
     "Pillow==11.3.0",
     "xlrd==2.0.1",
+    "websockets==14.2",
 ]
 
 [dependency-groups]
 dev = [
     "httpx==0.28.1",
+    "ruff==0.9.10",
 ]
 
 [tool.uv]
 package = false
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+# The existing backend predates project-wide linting. Keep this focused on the
+# FastAPI false-positive that prompted adoption, rather than surfacing unrelated
+# legacy formatting warnings across machines outside the current scope.
+select = ["B008"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI stores request metadata in these calls. They are framework markers,
+# not mutable runtime defaults, so B008 must not flag every route parameter.
+extend-immutable-calls = [
+    "fastapi.Body",
+    "fastapi.Depends",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Path",
+    "fastapi.Query",
+]

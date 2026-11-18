@@ -4,6 +4,7 @@ import re
 import unicodedata
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+from io import BytesIO
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import desc, select
@@ -15,20 +16,9 @@ from app.models.user import User
 from app.models.ws3_order import WS3ImportBatch, WS3ImportRow, WS3Order, WS3OrderRoll
 from app.schemas.ws3_order import WS3ImportBatchCreate, WS3ImportBatchDetailResponse, WS3ImportBatchResponse, WS3ImportRowResponse, WS3ImportWarehouseResponse, WS3OrderImport, WS3OrderResponse, WS3OrderRollResponse, WS3OrderStatusUpdate, WS3WarehouseRowUpdate
 from app.security.auth import get_current_user, role_codes
+from app.security.authorization import MANAGER_ROLES
 
 router = APIRouter(prefix="/ws3/orders", tags=["ws3-orders"])
-
-FIELD_ALIASES = {
-    "roll_id": ("roll id", "roll", "cuộn", "mã cuộn", "qr"),
-    "item_code": ("item code", "item", "mã hàng"),
-    "item_name": ("item name", "fabric", "fabric name", "tên vải"),
-    "lot_no": ("lot no", "lot", "số lot"),
-    "machine_no": ("m/c no", "machine", "loom", "loom no", "số máy"),
-    "length_meters": ("length", "meters", "met", "mét", "sản lượng"),
-    "shift": ("shift", "ca"),
-    "worker": ("worker", "operator", "người vận hành"),
-    "remarks": ("remarks", "remark", "note", "ghi chú", "sop"),
-}
 
 MES_HEADERS = {
     "DATE": ("date", "ngay", "ngày", "date production"),
@@ -62,12 +52,14 @@ SOURCE_KEY_ALIASES = {
 
 
 def _clean_header(value: object) -> str:
+    """Normalize a spreadsheet header for accent-insensitive matching."""
     text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode().strip().lower()
     text = re.sub(r"\s+", " ", text)
     return text
 
 
 def _canonical_header(value: object) -> str:
+    """Map a source header to its known MES canonical name when possible."""
     cleaned = _clean_header(value)
     for canonical, aliases in MES_HEADERS.items():
         if cleaned in {_clean_header(alias) for alias in aliases}:
@@ -76,11 +68,13 @@ def _canonical_header(value: object) -> str:
 
 
 def _date_like(value: object) -> bool:
+    """Return whether a source cell plausibly represents a date value."""
     text = str(value or "").strip()
     return isinstance(value, (datetime,)) or bool(re.search(r"\d{1,4}[-/]\d{1,2}[-/]\d{1,4}", text)) or (text.isdigit() and 20000 <= int(text) <= 60000)
 
 
 def _normalise_mts(value: object) -> str:
+    """Normalize meter values so equivalent numeric source keys compare equal."""
     text = str(value or "").strip().replace(",", "")
     try:
         number = Decimal(text)
@@ -90,6 +84,12 @@ def _normalise_mts(value: object) -> str:
 
 
 def _source_key(row: dict[str, str]) -> str | None:
+    """
+    Build the MES business key used to prevent importing the same roll twice.
+
+    Returns `None` when a required source field is absent so the row can remain
+    visible to the user as incomplete instead of being silently discarded.
+    """
     values: list[str] = []
     normalized = {_clean_header(column): value for column, value in row.items()}
     for field, aliases in SOURCE_KEY_ALIASES.items():
@@ -114,10 +114,12 @@ def _fallback_source_key(row: dict[str, str]) -> str:
 
 
 def _dedupe_key(row: dict[str, str]) -> str:
+    """Return a complete business key or a deterministic fallback fingerprint."""
     return _source_key(row) or _fallback_source_key(row)
 
 
 def _existing_source_keys(db: Session, model: type[WS3OrderRoll] | type[WS3ImportRow]) -> set[str]:
+    """Load persisted source keys, including fingerprints for legacy rows."""
     keys = set(db.scalars(select(model.source_key).where(model.source_key.is_not(None))).all())
     legacy_rows = db.scalars(select(model.raw_data_json).where(model.source_key.is_(None))).all()
     for raw_data in legacy_rows:
@@ -129,6 +131,7 @@ def _existing_source_keys(db: Session, model: type[WS3OrderRoll] | type[WS3Impor
 
 
 def _dedupe_rows(rows: list[dict[str, str]], existing_keys: set[str]) -> tuple[list[int], set[int], set[int]]:
+    """Classify uploaded rows as new, duplicate or incomplete before import."""
     seen = set(existing_keys)
     new_indexes: list[int] = []
     duplicate_indexes: set[int] = set()
@@ -168,7 +171,6 @@ def _normalise_mes_values(values: list[list[object]]) -> tuple[list[str], list[d
     used: set[str] = set()
     source_indexes: list[int] = []
     for index, value in enumerate(raw_headers):
-        parent = _clean_header(value)
         child_value = possible_subheaders[index] if has_subheaders and index < len(possible_subheaders) else ""
         child = _canonical_header(child_value)
         # MES exports merge "PRODUCTION QTY" over four child columns. The
@@ -191,7 +193,10 @@ def _normalise_mes_values(values: list[list[object]]) -> tuple[list[str], list[d
     rows: list[dict[str, str]] = []
     ignored = 0
     for raw_row in values[data_start:]:
-        row = {column: "" if raw_row[index] is None else str(raw_row[index]).strip() for column, index in zip(columns, source_indexes)}
+        row = {
+            column: "" if raw_row[index] is None else str(raw_row[index]).strip()
+            for column, index in zip(columns, source_indexes, strict=False)
+        }
         if not any(row.values()):
             continue
         if sum(1 for value in raw_row if _canonical_header(value) in MES_HEADERS) >= 3:
@@ -205,11 +210,21 @@ def _normalise_mes_values(values: list[list[object]]) -> tuple[list[str], list[d
 
 
 def _require_supervisor(user: User) -> None:
-    if not role_codes(user).intersection({"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"}):
+    """
+    Restrict MES import and order administration to management roles.
+
+    Args:
+        user: Authenticated MES user.
+
+    Raises:
+        HTTPException: 403 when the user is not a manager.
+    """
+    if not role_codes(user).intersection(MANAGER_ROLES):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor access is required")
 
 
 def _mapped(row: dict[str, str], mapping: dict[str, str], field: str) -> str | None:
+    """Read one optional canonical field from a user-selected source column."""
     source_column = mapping.get(field)
     if not source_column:
         return None
@@ -218,6 +233,7 @@ def _mapped(row: dict[str, str], mapping: dict[str, str], field: str) -> str | N
 
 
 def _decimal(value: str | None) -> Decimal | None:
+    """Parse an optional imported decimal without raising on invalid input."""
     if not value:
         return None
     normalized = value.replace(",", "").strip()
@@ -228,6 +244,7 @@ def _decimal(value: str | None) -> Decimal | None:
 
 
 def _response(order: WS3Order, *, duplicate_count: int = 0, new_count: int | None = None, incomplete_key_count: int = 0) -> WS3OrderResponse:
+    """Serialize an imported WS3 order with its normalized roll details."""
     return WS3OrderResponse(
         id=order.id,
         order_no=order.order_no,
@@ -261,6 +278,7 @@ def _response(order: WS3Order, *, duplicate_count: int = 0, new_count: int | Non
 
 
 def _import_response(batch: WS3ImportBatch, *, duplicate_count: int | None = None, incomplete_key_count: int | None = None) -> WS3ImportBatchResponse:
+    """Serialize import-batch counts without exposing raw source rows."""
     available_count = sum(1 for row in batch.rows if row.status == "AVAILABLE")
     duplicate_count = batch.duplicate_count if duplicate_count is None and batch.duplicate_count is not None else duplicate_count
     incomplete_key_count = batch.incomplete_key_count if incomplete_key_count is None and batch.incomplete_key_count is not None else incomplete_key_count
@@ -279,6 +297,7 @@ def _import_response(batch: WS3ImportBatch, *, duplicate_count: int | None = Non
 
 
 def _import_detail_response(batch: WS3ImportBatch) -> WS3ImportBatchDetailResponse:
+    """Serialize one import batch with source columns, mapping and raw rows."""
     summary = _import_response(batch)
     return WS3ImportBatchDetailResponse(
         **summary.model_dump(),
@@ -295,24 +314,27 @@ def _import_detail_response(batch: WS3ImportBatch) -> WS3ImportBatchDetailRespon
     )
 
 
-def _unique_columns(values: list[object]) -> list[str]:
-    columns: list[str] = []
-    used: set[str] = set()
-    for index, value in enumerate(values):
-        base = str(value).strip() if value is not None else ""
-        base = base or f"Column {index + 1}"
-        column = base
-        suffix = 2
-        while column in used:
-            column = f"{base} ({suffix})"
-            suffix += 1
-        columns.append(column)
-        used.add(column)
-    return columns
-
-
 @router.post("/parse-file")
-async def parse_source_file(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, object]:
+async def parse_source_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    """
+    Parse a candidate MES file and preview normalization/deduplication results.
+
+    Args:
+        file: XLS, XLSX, CSV or TSV source file selected by the user.
+        db: Database session used to identify existing source keys.
+        user: Management user previewing the import.
+
+    Returns:
+        Normalized columns/rows and indexes classified as new, duplicate or incomplete.
+
+    Raises:
+        HTTPException: 403 for insufficient role, 415 for unsupported file types,
+            or 422 for unreadable/invalid source content.
+    """
     _require_supervisor(user)
     filename = file.filename or "source"
     suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
@@ -335,7 +357,7 @@ async def parse_source_file(file: UploadFile = File(...), db: Session = Depends(
     elif suffix == "xlsx":
         from openpyxl import load_workbook
 
-        workbook = load_workbook(filename=__import__("io").BytesIO(content), read_only=True, data_only=True)
+        workbook = load_workbook(filename=BytesIO(content), read_only=True, data_only=True)
         sheet = workbook.active
         values = [list(row) for row in sheet.iter_rows(values_only=True)]
     else:
@@ -370,6 +392,17 @@ def create_import_batch(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> WS3ImportBatchResponse:
+    """
+    Persist a reviewed batch of selected MES rows in the import warehouse.
+
+    Args:
+        payload: Normalized preview rows, columns, mapping and selected indexes.
+        db: Database session used to create the batch and its warehouse rows.
+        user: Management user creating the batch.
+
+    Returns:
+        Batch metadata with available, duplicate and incomplete row counts.
+    """
     _require_supervisor(user)
     existing_keys = _existing_source_keys(db, WS3OrderRoll)
     existing_keys.update(_existing_source_keys(db, WS3ImportRow))
@@ -413,6 +446,16 @@ def create_import_batch(
 
 @router.get("/imports", response_model=list[WS3ImportBatchResponse])
 def list_import_batches(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[WS3ImportBatchResponse]:
+    """
+    List the newest 100 MES import batches for management review.
+
+    Args:
+        db: Database session used to load batches and row counts.
+        user: Management user requesting the list.
+
+    Returns:
+        Newest-first import batch summaries.
+    """
     _require_supervisor(user)
     statement = select(WS3ImportBatch).options(selectinload(WS3ImportBatch.rows)).order_by(desc(WS3ImportBatch.created_at)).limit(100)
     return [_import_response(batch) for batch in db.scalars(statement).unique().all()]
@@ -420,6 +463,16 @@ def list_import_batches(db: Session = Depends(get_db), user: User = Depends(get_
 
 @router.get("/imports/data", response_model=WS3ImportWarehouseResponse)
 def get_import_warehouse(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> WS3ImportWarehouseResponse:
+    """
+    Return usable imported MES rows across all batches for the data warehouse.
+
+    Args:
+        db: Database session used to load batches and their source rows.
+        user: Management user requesting the warehouse.
+
+    Returns:
+        Union of source columns and non-archived, non-duplicate warehouse rows.
+    """
     _require_supervisor(user)
     batches = db.scalars(select(WS3ImportBatch).options(selectinload(WS3ImportBatch.rows)).order_by(WS3ImportBatch.created_at)).unique().all()
     columns: list[str] = []
@@ -445,7 +498,27 @@ def get_import_warehouse(db: Session = Depends(get_db), user: User = Depends(get
 
 
 @router.patch("/imports/data/{row_id}", response_model=WS3ImportRowResponse)
-def update_warehouse_row(row_id: int, payload: WS3WarehouseRowUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> WS3ImportRowResponse:
+def update_warehouse_row(
+    row_id: int,
+    payload: WS3WarehouseRowUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WS3ImportRowResponse:
+    """
+    Correct one unassigned warehouse row while preserving deduplication safety.
+
+    Args:
+        row_id: Warehouse row being corrected.
+        payload: Replacement raw source fields.
+        db: Database session used to validate and save the correction.
+        user: Management user editing the warehouse row.
+
+    Returns:
+        Updated normalized warehouse row.
+
+    Raises:
+        HTTPException: 404 for missing rows or 409 for assigned/duplicate rows.
+    """
     _require_supervisor(user)
     row = db.scalar(select(WS3ImportRow).where(WS3ImportRow.id == row_id))
     if row is None or row.status == "ARCHIVED":
@@ -466,7 +539,22 @@ def update_warehouse_row(row_id: int, payload: WS3WarehouseRowUpdate, db: Sessio
 
 
 @router.delete("/imports/data/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
-def archive_warehouse_row(row_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> None:
+def archive_warehouse_row(
+    row_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    """
+    Archive an unassigned warehouse row without deleting its import history.
+
+    Args:
+        row_id: Warehouse row to archive.
+        db: Database session used to update its status.
+        user: Management user archiving the row.
+
+    Raises:
+        HTTPException: 404 for missing rows or 409 for assigned rows.
+    """
     _require_supervisor(user)
     row = db.scalar(select(WS3ImportRow).where(WS3ImportRow.id == row_id))
     if row is None or row.status == "ARCHIVED":
@@ -478,7 +566,25 @@ def archive_warehouse_row(row_id: int, db: Session = Depends(get_db), user: User
 
 
 @router.get("/imports/{batch_id}", response_model=WS3ImportBatchDetailResponse)
-def get_import_batch(batch_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> WS3ImportBatchDetailResponse:
+def get_import_batch(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WS3ImportBatchDetailResponse:
+    """
+    Return one import batch with its original mapping and source rows.
+
+    Args:
+        batch_id: Primary key of the import batch.
+        db: Database session used for the batch lookup.
+        user: Management user requesting the batch.
+
+    Returns:
+        Batch metadata, selected mapping and row-level statuses.
+
+    Raises:
+        HTTPException: 404 when the batch does not exist.
+    """
     _require_supervisor(user)
     batch = db.scalar(select(WS3ImportBatch).options(selectinload(WS3ImportBatch.rows)).where(WS3ImportBatch.id == batch_id))
     if batch is None:
@@ -492,6 +598,21 @@ def create_order(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> WS3OrderResponse:
+    """
+    Create a WS3 order from available warehouse rows or normalized preview rows.
+
+    Args:
+        payload: Source rows or warehouse selection with a field mapping.
+        db: Database session used to create the order and claim source rows.
+        user: Management user creating the order.
+
+    Returns:
+        New order with its unique imported roll rows and duplicate statistics.
+
+    Raises:
+        HTTPException: 409 when selected rows are unavailable/duplicated, or
+            422 when no valid source row remains.
+    """
     _require_supervisor(user)
     import_rows_for_order: list[WS3ImportRow] = []
     if payload.import_row_ids is not None:
@@ -580,12 +701,38 @@ def create_order(
 
 @router.get("", response_model=list[WS3OrderResponse])
 def list_orders(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[WS3OrderResponse]:
+    """
+    Return the newest 100 imported WS3 orders for management review.
+
+    Args:
+        db: Database session used to load orders and roll rows.
+        user: Management user requesting the list.
+
+    Returns:
+        Newest-first imported orders with normalized rolls.
+    """
+    _require_supervisor(user)
     statement = select(WS3Order).options(selectinload(WS3Order.rolls)).order_by(desc(WS3Order.created_at)).limit(100)
     return [_response(order) for order in db.scalars(statement).unique().all()]
 
 
 @router.get("/{order_id}", response_model=WS3OrderResponse)
 def get_order(order_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> WS3OrderResponse:
+    """
+    Return one imported WS3 order and its roll rows.
+
+    Args:
+        order_id: Primary key of the imported order.
+        db: Database session used for the order lookup.
+        user: Management user requesting the order.
+
+    Returns:
+        Imported order and its normalized rolls.
+
+    Raises:
+        HTTPException: 404 when the order does not exist.
+    """
+    _require_supervisor(user)
     order = db.scalar(select(WS3Order).options(selectinload(WS3Order.rolls)).where(WS3Order.id == order_id))
     if order is None:
         raise HTTPException(status_code=404, detail="WS3 order was not found")
@@ -593,7 +740,27 @@ def get_order(order_id: int, db: Session = Depends(get_db), user: User = Depends
 
 
 @router.patch("/{order_id}/status", response_model=WS3OrderResponse)
-def update_order_status(order_id: int, payload: WS3OrderStatusUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> WS3OrderResponse:
+def update_order_status(
+    order_id: int,
+    payload: WS3OrderStatusUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WS3OrderResponse:
+    """
+    Update the review status of one imported WS3 order.
+
+    Args:
+        order_id: Primary key of the imported order.
+        payload: Target review status.
+        db: Database session used to update the order.
+        user: Management user updating the status.
+
+    Returns:
+        Updated order and its roll details.
+
+    Raises:
+        HTTPException: 404 when the order does not exist.
+    """
     _require_supervisor(user)
     order = db.scalar(select(WS3Order).options(selectinload(WS3Order.rolls)).where(WS3Order.id == order_id))
     if order is None:
