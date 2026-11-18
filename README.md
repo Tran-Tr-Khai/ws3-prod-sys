@@ -125,9 +125,8 @@ docker compose -p ws3 --env-file .env.production `
 
 | File | Vai trò |
 | --- | --- |
-| `backend/pyproject.toml` | Dependency, phiên bản Python, cấu hình Ruff và nhóm dev của backend. |
-| `backend/uv.lock` | Khóa chính xác phiên bản dependency do `uv` resolve. Không sửa thủ công. |
-| `backend/requirements.production.txt` | Danh sách dependency production được `backend/Dockerfile` cài bằng pip. Phải đồng bộ với `pyproject.toml`. |
+| `backend/pyproject.toml` | Nguồn khai báo dependency, phiên bản Python, cấu hình Ruff và nhóm dev của backend. |
+| `backend/uv.lock` | Khóa chính xác phiên bản dependency; Docker dùng file này với `--frozen`. |
 | `backend/Dockerfile` | Đóng gói API backend thành image Docker. |
 | `backend/alembic.ini` | Cấu hình vị trí migration và logging của Alembic; database URL được lấy từ Settings. |
 | `docker-compose.yml` | PostgreSQL tối giản cho local development. |

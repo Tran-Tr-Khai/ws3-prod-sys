@@ -55,9 +55,8 @@ PostgreSQL disposable có quyền tạo/xóa database test.
 
 ## File cấu hình
 
-- `pyproject.toml`: dependency và cấu hình tooling.
-- `uv.lock`: phiên bản dependency đã khóa.
-- `requirements.production.txt`: manifest dependency production dùng bởi Docker.
+- `pyproject.toml`: nguồn khai báo dependency và cấu hình tooling.
+- `uv.lock`: phiên bản dependency đã khóa, Docker dùng với `--frozen`.
 - `Dockerfile`: image backend.
 - `alembic.ini`: vị trí migration và logging Alembic.
 - `.env.example`: mẫu cấu hình backend local.
