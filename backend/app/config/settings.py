@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +29,15 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://ws3:ws3_password@localhost:5432/ws3",
         validation_alias="DATABASE_URL",
     )
+
+    @field_validator("api_prefix", mode="before")
+    @classmethod
+    def normalize_api_prefix(cls, value: object) -> str:
+        """Keep an empty environment value from disabling the stable API prefix."""
+        if value is None or not str(value).strip():
+            return "/api"
+        prefix = str(value).strip()
+        return prefix if prefix.startswith("/") else f"/{prefix}"
     
     model_config = SettingsConfigDict(
         # Resolve the local file from the backend package, not the process cwd.
