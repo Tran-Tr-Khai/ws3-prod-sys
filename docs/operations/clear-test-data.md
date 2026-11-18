@@ -118,7 +118,7 @@ SELECT
 
 SELECT
   (SELECT count(*) FROM buffing_checks) AS buffing,
-  (SELECT count(*) FROM scouring_records) AS scouring,
+  (SELECT count(*) FROM tentering_orders) AS tentering,
   (SELECT count(*) FROM ws3_production_orders) AS mes_orders,
   (SELECT count(*) FROM ws3_worker_records) AS workers,
   (SELECT count(*) FROM ws3_unrolling_roll_events) AS unrolling_events;

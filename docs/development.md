@@ -50,7 +50,7 @@ Vite chạy tại `http://localhost:5173`. API URL mẫu có trong `.env.example
 `seed.py` chỉ tạo role. Tạo/cập nhật user bằng CLI trong thư mục `backend`:
 
 ```powershell
-uv run python -m app.db.create_user <username> <password> --name "Tên hiển thị" --role OPERATOR --machines TR-01
+uv run python -m app.db.create_user <username> <password> --name "Tên hiển thị" --role OPERATOR --machines BU-01
 ```
 
 Mật khẩu tối thiểu 10 ký tự. Role CLI hỗ trợ: `ADMIN`, `PRODUCTION_MANAGER`, `SUPERVISOR`, `OPERATOR`. `--machines` nhận danh sách ID phân tách bằng dấu phẩy. Tránh dùng password thật trong shell history dùng chung hoặc tài liệu.
