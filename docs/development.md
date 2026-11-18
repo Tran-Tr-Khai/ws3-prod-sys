@@ -45,12 +45,13 @@ uv run --directory backend python -m scripts.seed
 Trong terminal khác, tại thư mục gốc:
 
 ```powershell
+Set-Location frontend
 npm ci
 npm run dev
 ```
 
-Vite chạy tại `http://localhost:5173`. API URL mẫu có trong
-`frontend/.env.example`; backend cần cho phép origin này ở
+Vite chạy tại `http://localhost:5173`. Endpoint phát triển mặc định nằm trong
+`frontend/src/config/runtime.ts`; backend cần cho phép origin này ở
 `BACKEND_CORS_ORIGINS`.
 
 ## Tài khoản và vai trò
@@ -66,6 +67,7 @@ Mật khẩu tối thiểu 10 ký tự. Role CLI hỗ trợ: `ADMIN`, `PRODUCTIO
 ## Lệnh kiểm tra
 
 ```powershell
+Set-Location frontend
 npm run lint
 npm run build
 uv run --directory backend python -m unittest discover -s tests -v

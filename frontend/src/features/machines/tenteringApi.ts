@@ -1,4 +1,4 @@
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+import { apiUrl, ApiRequestError, requestJson } from '../../shared/api/http';
 
 export type TenteringRollEntry = {
   id: number;
@@ -37,63 +37,114 @@ export type TenteringOrder = {
   entries: TenteringRollEntry[];
 };
 
-export type TenteringOrderInput = Omit<TenteringOrder, 'id' | 'machine_id' | 'sop_no' | 'created_at' | 'updated_at' | 'entries'> & {
-  entries: Array<Pick<TenteringRollEntry, 'roll_number' | 'roll_id' | 'tenter_date' | 'weaving_date' | 'planned_quantity' | 'actual_quantity' | 'note'>>;
+export type TenteringOrderInput = Omit<
+  TenteringOrder,
+  'id' | 'machine_id' | 'sop_no' | 'created_at' | 'updated_at' | 'entries'
+> & {
+  entries: Array<
+    Pick<
+      TenteringRollEntry,
+      | 'roll_number'
+      | 'roll_id'
+      | 'tenter_date'
+      | 'weaving_date'
+      | 'planned_quantity'
+      | 'actual_quantity'
+      | 'note'
+    >
+  >;
 };
 
 export type TenteringOrderSource = {
   item_description: string | null;
   customer: string | null;
-  rolls: Array<{ roll_number: number; roll_id: string | null; weaving_date: string | null; length_meters: number | null }>;
+  rolls: Array<{
+    roll_number: number;
+    roll_id: string | null;
+    weaving_date: string | null;
+    length_meters: number | null;
+  }>;
   total_rolls: number;
 };
 
-async function readError(response: Response): Promise<string> {
-  const body = await response.json().catch(() => null) as { detail?: unknown } | null;
-  return typeof body?.detail === 'string' ? body.detail : `Tentering API returned HTTP ${response.status}`;
-}
-
-export async function getTenteringOrders(machineId: string, query = '', options: { signal?: AbortSignal } = {}): Promise<TenteringOrder[]> {
+/** List saved Tentering SOP records for one physical machine. */
+export async function getTenteringOrders(
+  machineId: string,
+  query = '',
+  options: { signal?: AbortSignal } = {},
+): Promise<TenteringOrder[]> {
   const params = new URLSearchParams({ limit: '100' });
   params.set('machine_id', machineId);
   if (query.trim()) params.set('q', query.trim());
-    const response = await fetch(`${apiBaseUrl}/api/tentering/orders?${params}`, { credentials: 'include', signal: options.signal });
-  if (!response.ok) throw new Error(await readError(response));
-  return await response.json() as TenteringOrder[];
+  return requestJson<TenteringOrder[]>(
+    `/api/tentering/orders?${params}`,
+    { signal: options.signal },
+    'Tentering API',
+  );
 }
 
-export async function downloadTenteringReport(filters: { machineId: string; savedDate?: string; query?: string; language: 'vi' | 'en' }): Promise<Blob> {
+/** Download the filtered Tentering order report as an Excel workbook. */
+export async function downloadTenteringReport(filters: {
+  machineId: string;
+  savedDate?: string;
+  query?: string;
+  language: 'vi' | 'en';
+}): Promise<Blob> {
   const params = new URLSearchParams({ machine_id: filters.machineId, language: filters.language });
   if (filters.savedDate) params.set('saved_date', filters.savedDate);
   if (filters.query?.trim()) params.set('q', filters.query.trim());
-    const response = await fetch(`${apiBaseUrl}/api/tentering/orders/export?${params.toString()}`, { credentials: 'include' });
-  if (!response.ok) throw new Error(await readError(response));
+  const response = await fetch(apiUrl(`/api/tentering/orders/export?${params.toString()}`), {
+    credentials: 'include',
+  });
+  if (!response.ok) throw new Error(`Tentering API returned HTTP ${response.status}`);
   return response.blob();
 }
 
-export async function getTenteringOrder(machineId: string, sopNo: string): Promise<TenteringOrder | null> {
+/** Find a saved SOP for one machine, returning null only when it does not exist. */
+export async function getTenteringOrder(
+  machineId: string,
+  sopNo: string,
+): Promise<TenteringOrder | null> {
   const params = new URLSearchParams({ machine_id: machineId });
-    const response = await fetch(`${apiBaseUrl}/api/tentering/orders/${encodeURIComponent(sopNo.trim())}?${params}`, { credentials: 'include' });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(await readError(response));
-  return await response.json() as TenteringOrder;
+  try {
+    return await requestJson<TenteringOrder>(
+      `/api/tentering/orders/${encodeURIComponent(sopNo.trim())}?${params}`,
+      {},
+      'Tentering API',
+    );
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 404) return null;
+    throw error;
+  }
 }
 
-export async function getTenteringOrderSource(machineId: string, sopNo: string): Promise<TenteringOrderSource | null> {
+/** Load MES source data that can prefill a Tentering SOP. */
+export async function getTenteringOrderSource(
+  machineId: string,
+  sopNo: string,
+): Promise<TenteringOrderSource | null> {
   const params = new URLSearchParams({ machine_id: machineId });
-    const response = await fetch(`${apiBaseUrl}/api/tentering/orders/${encodeURIComponent(sopNo.trim())}/source?${params}`, { credentials: 'include' });
-  if (!response.ok) throw new Error(await readError(response));
-  return await response.json() as TenteringOrderSource | null;
+  return requestJson<TenteringOrderSource | null>(
+    `/api/tentering/orders/${encodeURIComponent(sopNo.trim())}/source?${params}`,
+    {},
+    'Tentering API',
+  );
 }
 
-export async function saveTenteringOrder(machineId: string, sopNo: string, payload: TenteringOrderInput): Promise<TenteringOrder> {
+/** Create or replace the saved production record for one Tentering SOP. */
+export async function saveTenteringOrder(
+  machineId: string,
+  sopNo: string,
+  payload: TenteringOrderInput,
+): Promise<TenteringOrder> {
   const params = new URLSearchParams({ machine_id: machineId });
-    const response = await fetch(`${apiBaseUrl}/api/tentering/orders/${encodeURIComponent(sopNo.trim())}?${params}`, {
-    method: 'PUT',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) throw new Error(await readError(response));
-  return await response.json() as TenteringOrder;
+  return requestJson<TenteringOrder>(
+    `/api/tentering/orders/${encodeURIComponent(sopNo.trim())}?${params}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    'Tentering API',
+  );
 }

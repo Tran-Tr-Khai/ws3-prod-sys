@@ -1,4 +1,14 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type HTMLAttributes, type ReactNode, type ThHTMLAttributes } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type HTMLAttributes,
+  type ReactNode,
+  type ThHTMLAttributes,
+} from 'react';
 
 type ResizeState = { index: number; startX: number; startWidth: number };
 
@@ -18,7 +28,23 @@ type MesResizableTableProps = HTMLAttributes<HTMLTableElement> & {
 const MIN_COLUMN_WIDTH = 56;
 const MAX_COLUMN_WIDTH = 460;
 
-export function MesResizableTable({ initialWidths, storageKey, children, className, ...tableProps }: MesResizableTableProps) {
+/**
+ * Render a table whose column widths can be adjusted and retained per screen.
+ *
+ * Args:
+ *   initialWidths: Default column widths in pixels.
+ *   storageKey: Browser-storage key scoped to the table screen.
+ *
+ * Returns:
+ *   A table context used by `MesResizableHeaderCell` resize handles.
+ */
+export function MesResizableTable({
+  initialWidths,
+  storageKey,
+  children,
+  className,
+  ...tableProps
+}: MesResizableTableProps) {
   const defaultWidths = useRef(initialWidths).current;
   const [widths, setWidths] = useState(defaultWidths);
   const resizeRef = useRef<ResizeState | null>(null);
@@ -29,8 +55,14 @@ export function MesResizableTable({ initialWidths, storageKey, children, classNa
       const stored = window.localStorage.getItem(storageKey);
       if (!stored) return;
       const parsed: unknown = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length === defaultWidths.length && parsed.every((value) => typeof value === 'number' && Number.isFinite(value))) {
-        setWidths(parsed.map((value) => Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, value))));
+      if (
+        Array.isArray(parsed) &&
+        parsed.length === defaultWidths.length &&
+        parsed.every((value) => typeof value === 'number' && Number.isFinite(value))
+      ) {
+        setWidths(
+          parsed.map((value) => Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, value))),
+        );
       }
     } catch {
       // A bad saved preference should never prevent the table from rendering.
@@ -45,20 +77,28 @@ export function MesResizableTable({ initialWidths, storageKey, children, classNa
     }
   }, [storageKey, widths]);
 
-  const startResize = useCallback((index: number, event: React.PointerEvent<HTMLSpanElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    resizeRef.current = { index, startX: event.clientX, startWidth: widths[index] };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    document.body.classList.add('mes-is-resizing-column');
-  }, [widths]);
+  const startResize = useCallback(
+    (index: number, event: React.PointerEvent<HTMLSpanElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      resizeRef.current = { index, startX: event.clientX, startWidth: widths[index] };
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      document.body.classList.add('mes-is-resizing-column');
+    },
+    [widths],
+  );
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
       const active = resizeRef.current;
       if (!active) return;
-      const nextWidth = Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, active.startWidth + event.clientX - active.startX));
-      setWidths((current) => current.map((width, index) => index === active.index ? nextWidth : width));
+      const nextWidth = Math.min(
+        MAX_COLUMN_WIDTH,
+        Math.max(MIN_COLUMN_WIDTH, active.startWidth + event.clientX - active.startX),
+      );
+      setWidths((current) =>
+        current.map((width, index) => (index === active.index ? nextWidth : width)),
+      );
     };
     const stopResize = () => {
       if (!resizeRef.current) return;
@@ -76,12 +116,18 @@ export function MesResizableTable({ initialWidths, storageKey, children, classNa
     };
   }, []);
 
-  return <MesResizableTableContext.Provider value={{ widths, startResize }}>
-    <table {...tableProps} className={`mes-resizable-table${className ? ` ${className}` : ''}`}>
-      <colgroup>{widths.map((width, index) => <col key={index} style={{ width: `${width}px` }} />)}</colgroup>
-      {children}
-    </table>
-  </MesResizableTableContext.Provider>;
+  return (
+    <MesResizableTableContext.Provider value={{ widths, startResize }}>
+      <table {...tableProps} className={`mes-resizable-table${className ? ` ${className}` : ''}`}>
+        <colgroup>
+          {widths.map((width, index) => (
+            <col key={index} style={{ width: `${width}px` }} />
+          ))}
+        </colgroup>
+        {children}
+      </table>
+    </MesResizableTableContext.Provider>
+  );
 }
 
 type MesResizableHeaderCellProps = ThHTMLAttributes<HTMLTableCellElement> & {
@@ -89,12 +135,31 @@ type MesResizableHeaderCellProps = ThHTMLAttributes<HTMLTableCellElement> & {
   children: ReactNode;
 };
 
-export function MesResizableHeaderCell({ index, children, className, style, ...headerProps }: MesResizableHeaderCellProps) {
+/** Render one resizable table-header cell within `MesResizableTable`. */
+export function MesResizableHeaderCell({
+  index,
+  children,
+  className,
+  style,
+  ...headerProps
+}: MesResizableHeaderCellProps) {
   const context = useContext(MesResizableTableContext);
   if (!context) throw new Error('MesResizableHeaderCell must be used inside MesResizableTable');
   const width = context.widths[index];
-  return <th {...headerProps} className={`mes-resizable-header${className ? ` ${className}` : ''}`} style={{ ...style, width }}>
-    <span className="mes-resizable-header__label">{children}</span>
-    <span className="mes-resizable-header__handle" role="separator" aria-orientation="vertical" aria-label="Resize column" onPointerDown={(event) => context.startResize(index, event)} />
-  </th>;
+  return (
+    <th
+      {...headerProps}
+      className={`mes-resizable-header${className ? ` ${className}` : ''}`}
+      style={{ ...style, width }}
+    >
+      <span className="mes-resizable-header__label">{children}</span>
+      <span
+        className="mes-resizable-header__handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize column"
+        onPointerDown={(event) => context.startResize(index, event)}
+      />
+    </th>
+  );
 }

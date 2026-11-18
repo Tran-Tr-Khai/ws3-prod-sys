@@ -71,15 +71,13 @@ uv run --directory backend python -m app.db.create_user <username> <password> --
 Mở terminal thứ hai:
 
 ```powershell
-if (-not (Test-Path frontend\.env)) { Copy-Item frontend\.env.example frontend\.env }
+Set-Location frontend
 npm ci
 npm run dev
 ```
 
-Frontend chạy tại `http://localhost:5173`. Các biến Vite nằm trong
-`frontend/.env`; mẫu là `frontend/.env.example`.
-Nếu trước đây đã tạo `.env` ở root chỉ để chứa biến `VITE_*`, hãy chuyển các
-dòng đó sang `frontend/.env`; Vite không dùng root `.env` cho frontend này.
+Frontend chạy tại `http://localhost:5173`. Endpoint phát triển mặc định được
+quản lý trong `frontend/src/config/runtime.ts`, nên không cần tạo file `.env`.
 
 ### Camera Agent
 

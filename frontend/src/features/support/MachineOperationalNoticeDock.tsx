@@ -1,13 +1,8 @@
-import { useAuth } from '../../auth/AuthContext';
+import { useAuth } from '../../auth/useAuth';
 import { SupportChatWidget } from './SupportChatWidget';
+import { isOperatorAssignedToMachine } from './machineAssignment';
 
 type MachineOperationalNoticeDockProps = { machineId: string };
-
-export function isOperatorAssignedToMachine(user: { role?: string; machineIds?: string[] } | null | undefined, machineId: string): boolean {
-  if (user?.role !== 'OPERATOR') return false;
-  const prefix = machineId.trim().toUpperCase().split('-', 1)[0];
-  return (user.machineIds ?? []).some((assignedId) => assignedId.trim().toUpperCase().startsWith(`${prefix}-`));
-}
 
 export function MachineOperationalNoticeDock({ machineId }: MachineOperationalNoticeDockProps) {
   const { user } = useAuth();

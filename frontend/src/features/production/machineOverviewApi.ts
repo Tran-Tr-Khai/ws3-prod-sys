@@ -1,4 +1,4 @@
-const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+import { requestJson } from '../../shared/api/http';
 
 export type OverviewRecord = {
   id: number;
@@ -25,16 +25,34 @@ export type OverviewDetails = {
   failed_checks?: number;
   inspection?: 'PASS' | 'WARNING';
 };
-export type OverviewMes = { item: string | null; lot: string | null; rolls: number; input: number | null };
+export type OverviewMes = {
+  item: string | null;
+  lot: string | null;
+  rolls: number;
+  input: number | null;
+};
 
+/** Read one overview endpoint while allowing the caller to cancel stale loads. */
 async function request<T>(path: string, signal: AbortSignal): Promise<T> {
-  const response = await fetch(`${baseUrl}/api/machine-overview/${path}`, { credentials: 'include', signal });
-  if (!response.ok) throw new Error(`Machine overview returned HTTP ${response.status}`);
-  return response.json() as Promise<T>;
+  return requestJson<T>(`/api/machine-overview/${path}`, { signal }, 'Machine overview API');
 }
 
-export const getOverview = (machineId: string, signal: AbortSignal) => request<OverviewRecord | null>(encodeURIComponent(machineId), signal);
-export const getOverviewDetails = (record: OverviewRecord, signal: AbortSignal) => request<OverviewDetails>(`${encodeURIComponent(record.machine_id)}/details?record_id=${record.id}`, signal);
-export const getOverviewMes = (record: OverviewRecord, signal: AbortSignal) => record.sop
-  ? request<OverviewMes | null>(`${encodeURIComponent(record.machine_id)}/mes?${new URLSearchParams({ sop: record.sop })}`, signal)
-  : Promise.resolve(null);
+/** Load the current production overview for one machine. */
+export const getOverview = (machineId: string, signal: AbortSignal) =>
+  request<OverviewRecord | null>(encodeURIComponent(machineId), signal);
+
+/** Load supporting details for an overview record. */
+export const getOverviewDetails = (record: OverviewRecord, signal: AbortSignal) =>
+  request<OverviewDetails>(
+    `${encodeURIComponent(record.machine_id)}/details?record_id=${record.id}`,
+    signal,
+  );
+
+/** Load MES order details only when the machine record is linked to an SOP. */
+export const getOverviewMes = (record: OverviewRecord, signal: AbortSignal) =>
+  record.sop
+    ? request<OverviewMes | null>(
+        `${encodeURIComponent(record.machine_id)}/mes?${new URLSearchParams({ sop: record.sop })}`,
+        signal,
+      )
+    : Promise.resolve(null);

@@ -1,3 +1,5 @@
+import { cameraAgentUrl } from '../../config/runtime';
+
 export type HikrobotCamera = {
   id: string;
   label: string;
@@ -8,7 +10,6 @@ export type HikrobotCamera = {
 type CameraListResponse = { cameras?: HikrobotCamera[] };
 type AgentErrorResponse = { detail?: unknown; message?: unknown };
 
-const cameraAgentUrl = (import.meta.env.VITE_CAMERA_AGENT_URL || 'http://127.0.0.1:8765').replace(/\/+$/, '');
 const requestTimeoutMs = 12_000;
 
 function errorText(body: AgentErrorResponse, fallback: string) {
@@ -28,7 +29,11 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
     });
     if (response.ok) return response;
     let body: AgentErrorResponse = {};
-    try { body = await response.json() as AgentErrorResponse; } catch { /* A non-JSON error is still a usable failure. */ }
+    try {
+      body = (await response.json()) as AgentErrorResponse;
+    } catch {
+      /* A non-JSON error is still a usable failure. */
+    }
     throw new Error(errorText(body, `Camera agent returned HTTP ${response.status}.`));
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
@@ -40,14 +45,18 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
   }
 }
 
+/** Discover cameras exposed by the local Hikrobot/MVS Camera Agent. */
 export async function listHikrobotCameras(): Promise<HikrobotCamera[]> {
   const response = await request('/api/v1/cameras');
-  const body = await response.json() as CameraListResponse;
+  const body = (await response.json()) as CameraListResponse;
   return Array.isArray(body.cameras) ? body.cameras : [];
 }
 
+/** Capture one still image and convert it into a file ready for Buffing upload. */
 export async function captureHikrobotPhoto(cameraId: string): Promise<File> {
-  const response = await request(`/api/v1/cameras/${encodeURIComponent(cameraId)}/capture`, { method: 'POST' });
+  const response = await request(`/api/v1/cameras/${encodeURIComponent(cameraId)}/capture`, {
+    method: 'POST',
+  });
   const image = await response.blob();
   if (image.size === 0) throw new Error('Camera Agent trả về ảnh trống.');
   return new File(
@@ -57,6 +66,7 @@ export async function captureHikrobotPhoto(cameraId: string): Promise<File> {
   );
 }
 
+/** Return the direct MJPEG stream URL for a selected Camera Agent device. */
 export function hikrobotStreamUrl(cameraId: string): string {
   return `${cameraAgentUrl}/api/v1/cameras/${encodeURIComponent(cameraId)}/stream`;
 }

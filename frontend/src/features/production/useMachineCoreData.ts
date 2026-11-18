@@ -15,8 +15,16 @@ export function useMachineCoreData<T>(
   const loadRef = useRef(load);
   loadRef.current = load;
   const requestKey = `${enabled ? 'enabled' : 'disabled'}:${key}`;
-  const [state, setState] = useState<{ requestKey: string; data: T | null; loading: boolean; failed: boolean }>({
-    requestKey: '', data: null, loading: true, failed: false,
+  const [state, setState] = useState<{
+    requestKey: string;
+    data: T | null;
+    loading: boolean;
+    failed: boolean;
+  }>({
+    requestKey: '',
+    data: null,
+    loading: true,
+    failed: false,
   });
 
   useEffect(() => {
@@ -27,12 +35,15 @@ export function useMachineCoreData<T>(
 
     const controller = new AbortController();
     setState({ requestKey, data: null, loading: true, failed: false });
-    void loadRef.current(controller.signal)
+    void loadRef
+      .current(controller.signal)
       .then((data) => {
-        if (!controller.signal.aborted) setState({ requestKey, data, loading: false, failed: false });
+        if (!controller.signal.aborted)
+          setState({ requestKey, data, loading: false, failed: false });
       })
       .catch(() => {
-        if (!controller.signal.aborted) setState({ requestKey, data: null, loading: false, failed: true });
+        if (!controller.signal.aborted)
+          setState({ requestKey, data: null, loading: false, failed: true });
       });
     return () => controller.abort();
   }, [enabled, requestKey]);

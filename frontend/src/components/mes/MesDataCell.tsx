@@ -5,6 +5,10 @@ type MesDataCellProps = TdHTMLAttributes<HTMLTableCellElement> & {
   tooltip?: string | null;
 };
 
+/**
+ * Render a data-table cell that reveals its full value only when the visible
+ * value has been truncated by the current column width.
+ */
 export function MesDataCell({ children, className, tooltip, ...cellProps }: MesDataCellProps) {
   const contentRef = useRef<HTMLSpanElement>(null);
   const [truncated, setTruncated] = useState(false);
@@ -24,8 +28,19 @@ export function MesDataCell({ children, className, tooltip, ...cellProps }: MesD
     return () => observer.disconnect();
   }, [children, tooltipText]);
 
-  return <td {...cellProps} className={`mes-data-cell${truncated ? ' is-truncated' : ''}${className ? ` ${className}` : ''}`}>
-    <span ref={contentRef} className="mes-data-cell__content">{children}</span>
-    {truncated && <span className="mes-data-cell__tooltip" role="tooltip">{tooltipText}</span>}
-  </td>;
+  return (
+    <td
+      {...cellProps}
+      className={`mes-data-cell${truncated ? ' is-truncated' : ''}${className ? ` ${className}` : ''}`}
+    >
+      <span ref={contentRef} className="mes-data-cell__content">
+        {children}
+      </span>
+      {truncated && (
+        <span className="mes-data-cell__tooltip" role="tooltip">
+          {tooltipText}
+        </span>
+      )}
+    </td>
+  );
 }

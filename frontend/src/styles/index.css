@@ -19,7 +19,7 @@
   gap: 0.5rem;
 }
 
-/* Reserve enough actual content width for both panels, including HMI scaling. */
+/* Reserve enough actual content width for both panels after display scaling. */
 @container overview (min-width: 900px) {
   .operator-overview-layout {
     grid-template-columns: minmax(0, 1fr) 320px;
@@ -48,8 +48,8 @@
   }
 }
 
-.hmi-condensed {
-  font-family: "Roboto Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+.mes-condensed {
+  font-family: 'Roboto Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
 }
 
 /* Buffing checklist interval belongs to the lower-left status area. */
@@ -58,14 +58,11 @@ section.border-t-2.border-industrialDark > div.text-right {
 }
 
 :root {
-  --hmi-scale: 1.25;
-  font-family: "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif;
+  --display-scale: 1.25;
+  font-family: 'Segoe UI', Inter, ui-sans-serif, system-ui, sans-serif;
   color: #1f2937;
   background: #c4cdd1;
   font-variant-numeric: tabular-nums;
-  --hmi-border-strong: #6f828d;
-  --hmi-border-subtle: #9aa8af;
-  --hmi-surface-gap: #d9e2e6;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -81,13 +78,21 @@ body {
   background: #c4cdd1;
 }
 
-/* Engineering-grade HMI type calibration */
+/* Keep controls and numerical data consistent across MES workspaces. */
 @layer base {
-  h1, h2, h3, label, button, input, select {
+  h1,
+  h2,
+  h3,
+  label,
+  button,
+  input,
+  select {
     line-height: 1.15;
   }
 
-  button, input, select {
+  button,
+  input,
+  select {
     font-family: inherit;
   }
 
@@ -96,111 +101,20 @@ body {
     letter-spacing: 0.015em;
   }
 }
-/* The HMI is designed for an operator display density of 125%.  Keep this
+/* The MES is calibrated for an operator display density of 125%. Keep this
    inside the application instead of relying on a browser's per-site zoom
    preference: localhost and the LAN address are different browser origins. */
 #root {
-  width: calc(100vw / var(--hmi-scale));
-  height: calc(100vh / var(--hmi-scale));
-  min-height: calc(600px / var(--hmi-scale));
+  width: calc(100vw / var(--display-scale));
+  height: calc(100vh / var(--display-scale));
+  min-height: calc(600px / var(--display-scale));
   overflow: hidden;
-  transform: scale(var(--hmi-scale));
+  transform: scale(var(--display-scale));
   transform-origin: top left;
 }
 
 body {
   overflow: hidden;
-}
-
-/* Keep Scouring entry grids explicit so the HMI remains stable even when the
-   utility CSS is cached. */
-.scouring-record-grid {
-  column-gap: 0.5rem;
-  row-gap: 0.25rem;
-  width: 100%;
-}
-
-.scouring-record-grid-2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.scouring-record-grid-3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.scouring-record-grid-5 {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  min-width: 900px;
-}
-
-.scouring-record-grid-5 .scouring-record-field {
-  width: 100%;
-}
-
-.scouring-record-field {
-  min-height: 0;
-}
-
-/* Vietnamese diacritics extend above the cap height. Give the compact form
-   labels a taller line box without changing the HMI font or control sizing. */
-.scouring-record-field > span:first-child,
-.scouring-record-group h3 {
-  line-height: 1.35;
-  overflow: visible;
-}
-
-.scouring-record-input-shell {
-  height: 46px;
-  background: #fff;
-  border-color: #8296a1;
-}
-
-.scouring-record-input {
-  background: #fff !important;
-  color: #243b4a;
-}
-
-.scouring-record-unit {
-  background: #f1f6f9 !important;
-  color: #334d5c;
-}
-
-.scouring-record-group {
-  background: #fff;
-}
-
-/* Keep the two-level Scouring history header's vertical dividers aligned. */
-.scouring-history-table thead th {
-  border-right: 1px solid #9aa8af;
-  border-bottom: 1px solid #9aa8af;
-}
-
-.scouring-history-table thead tr:first-child th[colspan] {
-  border-bottom-color: transparent;
-}
-
-.scouring-history-table thead tr:first-child th[rowspan] {
-  border-bottom: 1px solid #9aa8af;
-}
-
-.scouring-history-table tbody td {
-  border-bottom: 1px solid #d5e0e5;
-}
-
-.scouring-history-table thead th:last-child,
-.scouring-history-table tbody td:last-child {
-  border-right: 0;
-}
-
-.scouring-record-field .text-slate-500 {
-  color: #607783;
-}
-
-.scouring-record-workspace {
-  width: 100%;
-  max-width: none;
-  margin-left: 0;
-  margin-right: 0;
 }
 
 .machine-operational-notices {
@@ -221,76 +135,15 @@ body {
   max-height: none;
 }
 
-@media (min-width: 1200px) {
-  .scouring-record-workspace.scouring-record-workspace-with-notices {
-    grid-template-columns: minmax(220px, 0.85fr) minmax(620px, 2.8fr) minmax(260px, 1fr);
-    width: 100%;
-    min-height: 0;
-    align-items: stretch;
-  }
-
-  .scouring-record-workspace.scouring-record-workspace-with-notices > aside,
-  .scouring-record-workspace.scouring-record-workspace-with-notices > section,
-  .scouring-record-workspace.scouring-record-workspace-with-notices > .scouring-record-notices {
-    height: auto;
-    min-height: 0;
-    align-self: stretch;
-  }
-
-  .scouring-record-notices .operational-notice-dock {
-    height: 100%;
-    max-height: none;
-  }
-
-}
-
-.scouring-screen-frame {
-  width: calc(100% - 1rem);
-  max-width: 1440px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.scouring-full-width-frame {
-  max-width: none;
-  margin-left: 0.5rem;
-  margin-right: 0.5rem;
-}
-
-.scouring-inspection-frame {
-  width: calc(100% - 1rem);
-  max-width: 1280px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-@media (max-width: 1100px) {
-  .scouring-screen-frame {
-    width: calc(100% - 0.5rem);
-  }
-}
-
-.scouring-record-context {
-  background: #fff;
-}
-
-.scouring-record-context-content {
-  background: #fff;
-}
-
-.scouring-record-reference {
-  background: #f8fafb;
-  border-color: #c4d0d6;
-}
 #root main.min-h-screen {
   min-height: 100% !important;
 }
 
-/* Mobile uses the device width directly. The desktop HMI intentionally scales
+/* Mobile uses the device width directly. The desktop MES intentionally scales
    to 125%, but retaining that scale on a phone squeezes fixed-width panels. */
 @media (max-width: 640px) {
   :root {
-    --hmi-scale: 1;
+    --display-scale: 1;
   }
 
   body {
@@ -317,142 +170,6 @@ body {
     height: auto !important;
     min-height: 0;
     overflow: visible !important;
-  }
-
-  .scouring-screen-frame,
-  .scouring-full-width-frame {
-    width: calc(100% - 0.75rem);
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  .scouring-record-workspace {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.5rem;
-  }
-
-  .scouring-record-workspace.scouring-record-workspace-with-notices {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .scouring-record-context,
-  .scouring-record-workspace > section {
-    height: auto !important;
-  }
-
-  .scouring-record-context-content {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.65rem;
-    min-width: 0;
-  }
-
-  .scouring-record-context-content > * {
-    min-width: 0;
-  }
-
-  .scouring-record-context-content input {
-    box-sizing: border-box;
-    width: 100%;
-    min-width: 0;
-  }
-
-  .scouring-record-context-content > div {
-    grid-column: span 2;
-  }
-
-  .scouring-history-layout {
-    display: flex;
-    flex-direction: column;
-    overflow: auto;
-  }
-
-  .scouring-history-layout > section {
-    flex: none;
-    min-height: auto;
-  }
-
-  .scouring-history-layout > section:first-child {
-    min-height: 15rem;
-  }
-
-  .scouring-history-detail-scroll {
-    overflow: visible;
-  }
-
-  .scouring-history-layout > .scouring-history-detail {
-    display: none;
-  }
-
-  .scouring-history-layout > .scouring-history-detail.mobile-detail-open {
-    display: flex;
-    position: fixed;
-    inset: 0.5rem;
-    z-index: 60;
-    min-height: 0;
-    border: 2px solid #364d5d;
-    box-shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
-  }
-
-  .scouring-history-detail.mobile-detail-open .scouring-history-detail-scroll {
-    overflow: auto;
-  }
-
-  .scouring-history-detail.mobile-detail-open .mobile-detail-close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
-  }
-
-  .scouring-record-grid-5 {
-    min-width: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 0.5rem;
-    padding-left: 0.4rem;
-    padding-right: 0.4rem;
-  }
-
-  .scouring-record-grid-3 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 0.5rem;
-    padding-left: 0.4rem;
-    padding-right: 0.4rem;
-  }
-
-  .scouring-record-group .overflow-x-auto {
-    overflow-x: visible;
-  }
-
-  .scouring-record-input-shell {
-    height: 48px;
-  }
-
-  .scouring-record-input {
-    font-size: 15px;
-  }
-
-  .scouring-record-unit {
-    min-width: 2.5rem;
-    padding-left: 0.25rem;
-    padding-right: 0.25rem;
-    font-size: 10px;
-  }
-
-  .scouring-record-actions {
-    grid-template-columns: minmax(0, 1fr);
-    position: sticky;
-    bottom: 0;
-    z-index: 20;
-  }
-
-  .scouring-record-action-buttons {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .scouring-record-action-buttons > button {
-    width: 100%;
   }
 
   .buffing-page-shell {

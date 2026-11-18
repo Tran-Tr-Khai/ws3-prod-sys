@@ -1,3 +1,5 @@
+import { apiUrl, requestJson } from '../../shared/api/http';
+
 export type BuffingImage = {
   id: number;
   originalName: string;
@@ -69,12 +71,10 @@ type BuffingImageResponse = {
 
 type RequestOptions = { signal?: AbortSignal };
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
-const checksPath = `${apiBaseUrl}/api/buffing/checks`;
+const checksPath = '/api/buffing/checks';
 
 function toApiUrl(path: string): string {
-  if (path.startsWith('http') || apiBaseUrl === '/') return path;
-  return `${apiBaseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+  return apiUrl(path);
 }
 
 function toImage(image: BuffingImageResponse): BuffingImage {
@@ -100,7 +100,13 @@ function toCheck(response: BuffingCheckResponse): BuffingCheck {
     shift: response.shift,
     orderNumber: response.order_number,
     orderProgress: response.order_progress,
-    checks: [response.check_1, response.check_2, response.check_3, response.check_4, response.check_5],
+    checks: [
+      response.check_1,
+      response.check_2,
+      response.check_3,
+      response.check_4,
+      response.check_5,
+    ],
     remark: response.remark,
     createdAt: response.created_at,
     images: (response.images ?? []).map(toImage),
@@ -127,17 +133,13 @@ function toCreatePayload(payload: BuffingCheckCreatePayload) {
 }
 
 async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
-  let response: Response;
   try {
-    response = await fetch(url, { credentials: 'include', ...init });
+    return await requestJson<T>(url, init, 'Buffing API');
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    throw new Error('Unable to reach the Buffing backend.');
+    if (error instanceof TypeError) throw new Error('Unable to reach the Buffing backend.');
+    throw error;
   }
-  if (response.ok) return response.status === 204 ? undefined as T : response.json() as Promise<T>;
-
-  const body = await response.json().catch(() => ({})) as { detail?: string; message?: string };
-  throw new Error(body.message || body.detail || `Buffing API returned HTTP ${response.status}`);
 }
 
 /** List checklist records, optionally narrowed to one production date. */
@@ -150,37 +152,60 @@ export async function getBuffingChecks(
   if (checkDate) params.set('check_date', checkDate);
   if (limit !== undefined) params.set('limit', String(limit));
   const query = params.size ? `?${params}` : '';
-  return (await request<BuffingCheckResponse[]>(`${checksPath}${query}`, { signal: options.signal })).map(toCheck);
+  return (
+    await request<BuffingCheckResponse[]>(`${checksPath}${query}`, { signal: options.signal })
+  ).map(toCheck);
 }
 
 /** List checklist records linked to an entered SOP/order code. */
-export async function getBuffingChecksForOrder(orderNumber: string, options: RequestOptions = {}): Promise<BuffingCheck[]> {
+export async function getBuffingChecksForOrder(
+  orderNumber: string,
+  options: RequestOptions = {},
+): Promise<BuffingCheck[]> {
   const query = new URLSearchParams({ order_number: orderNumber.trim() });
-  return (await request<BuffingCheckResponse[]>(`${checksPath}?${query}`, { signal: options.signal })).map(toCheck);
+  return (
+    await request<BuffingCheckResponse[]>(`${checksPath}?${query}`, { signal: options.signal })
+  ).map(toCheck);
 }
 
 /** Create one Buffing checklist record. */
-export async function createBuffingCheck(payload: BuffingCheckCreatePayload, options: RequestOptions = {}): Promise<BuffingCheck> {
-  return toCheck(await request<BuffingCheckResponse>(checksPath, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(toCreatePayload(payload)),
-    signal: options.signal,
-  }));
+export async function createBuffingCheck(
+  payload: BuffingCheckCreatePayload,
+  options: RequestOptions = {},
+): Promise<BuffingCheck> {
+  return toCheck(
+    await request<BuffingCheckResponse>(checksPath, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(toCreatePayload(payload)),
+      signal: options.signal,
+    }),
+  );
 }
 
 /** Delete a checklist record and its associated images. */
-export async function deleteBuffingCheck(checkId: number, options: RequestOptions = {}): Promise<void> {
+export async function deleteBuffingCheck(
+  checkId: number,
+  options: RequestOptions = {},
+): Promise<void> {
   await request<void>(`${checksPath}/${checkId}`, { method: 'DELETE', signal: options.signal });
 }
 
 /** Upload checklist images after the parent check has been saved. */
-export async function uploadBuffingImages(checkId: number, files: File[], options: RequestOptions = {}): Promise<BuffingImage[]> {
+export async function uploadBuffingImages(
+  checkId: number,
+  files: File[],
+  options: RequestOptions = {},
+): Promise<BuffingImage[]> {
   const body = new FormData();
   files.forEach((file) => body.append('files', file));
-  return (await request<BuffingImageResponse[]>(`${checksPath}/${checkId}/images`, {
-    method: 'POST', body, signal: options.signal,
-  })).map(toImage);
+  return (
+    await request<BuffingImageResponse[]>(`${checksPath}/${checkId}/images`, {
+      method: 'POST',
+      body,
+      signal: options.signal,
+    })
+  ).map(toImage);
 }
 
 /** Download the filtered checklist report as an Excel file. */
@@ -193,7 +218,10 @@ export async function downloadBuffingReport(
   const params = new URLSearchParams({ language });
   if (checkDate) params.set('check_date', checkDate);
   if (orderNumber) params.set('order_number', orderNumber);
-  const response = await fetch(`${checksPath}/export?${params}`, { credentials: 'include', signal: options.signal });
+  const response = await fetch(apiUrl(`${checksPath}/export?${params}`), {
+    credentials: 'include',
+    signal: options.signal,
+  });
   if (!response.ok) throw new Error(`Buffing API returned HTTP ${response.status}`);
   return response.blob();
 }

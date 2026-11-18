@@ -137,7 +137,7 @@ body.mes-is-resizing-column * {
   border-radius: 3px;
   background: #f7fbfc;
   padding: 6px 8px;
-  box-shadow: 0 8px 20px rgb(42 64 72 / .14);
+  box-shadow: 0 8px 20px rgb(42 64 72 / 0.14);
   color: #344f5d;
   font-size: 10px;
   font-weight: 500;
@@ -147,7 +147,9 @@ body.mes-is-resizing-column * {
   overflow-wrap: anywhere;
   opacity: 0;
   transform: translateY(-2px);
-  transition: opacity .12s ease, transform .12s ease;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
 }
 
 .mes-data-cell.is-truncated:hover .mes-data-cell__tooltip,

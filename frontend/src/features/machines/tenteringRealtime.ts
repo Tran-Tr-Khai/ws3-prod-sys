@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { tenterRealtimeUrl } from '../../config/runtime';
 
 export type TenterReadingValues = Record<string, Record<string, number>>;
 
@@ -93,13 +94,7 @@ function mockSnapshot(machineId: string, tick: number): TenterRealtimeSnapshot {
 }
 
 function websocketUrl(machineId: string) {
-  const configured = import.meta.env.VITE_WS_BASE_URL?.trim();
-  if (configured) {
-    const base = configured.replace(/\/$/, '').replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
-    return `${base}/ws/tenter-data?machine_id=${encodeURIComponent(machineId)}`;
-  }
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/ws/tenter-data?machine_id=${encodeURIComponent(machineId)}`;
+  return tenterRealtimeUrl(machineId);
 }
 
 function machineAliases(machineId: string) {
@@ -108,16 +103,20 @@ function machineAliases(machineId: string) {
   return new Set([normalized, number ? `TENTER ${Number(number)}` : '']);
 }
 
-function pickMachine(states: Record<string, unknown>, machineId: string): TenterMachineState | null {
+function pickMachine(
+  states: Record<string, unknown>,
+  machineId: string,
+): TenterMachineState | null {
   const aliases = machineAliases(machineId);
   const entry = Object.entries(states).find(([key]) => aliases.has(key.trim().toUpperCase()));
   if (!entry) return null;
   const [id, raw] = entry;
   if (!raw || typeof raw !== 'object') return null;
   const value = raw as { timestamp?: unknown; reading_values?: unknown; status?: unknown };
-  const readings = value.reading_values && typeof value.reading_values === 'object'
-    ? value.reading_values as TenterReadingValues
-    : {};
+  const readings =
+    value.reading_values && typeof value.reading_values === 'object'
+      ? (value.reading_values as TenterReadingValues)
+      : {};
   return {
     machineId: id,
     timestamp: typeof value.timestamp === 'string' ? value.timestamp : null,
@@ -142,11 +141,17 @@ function toSample(machine: TenterMachineState): TenterRealtimeSample | null {
   return {
     time,
     values: {
-      speed: nestedNumber(readings, [['speed_and_width', 'speed'], ['speed_and_width', 'Tốc độ']]),
+      speed: nestedNumber(readings, [
+        ['speed_and_width', 'speed'],
+        ['speed_and_width', 'Tốc độ'],
+      ]),
       counterA: nestedNumber(readings, [['speed_and_width', 'Counter A']]),
       counterB: nestedNumber(readings, [['speed_and_width', 'Counter B']]),
       counterTotal: nestedNumber(readings, [['speed_and_width', 'Counter Total']]),
-      width: nestedNumber(readings, [['speed_and_width', 'width'], ['speed_and_width', 'Width']]),
+      width: nestedNumber(readings, [
+        ['speed_and_width', 'width'],
+        ['speed_and_width', 'Width'],
+      ]),
     },
   };
 }
@@ -161,6 +166,12 @@ function payloadMachine(payload: unknown, machineId: string) {
   return pickMachine(states as Record<string, unknown>, machineId);
 }
 
+/**
+ * Subscribe to one Tenter machine relay and retain a bounded 30-minute signal history.
+ *
+ * The `?mock=tenter` fixture is deliberately opt-in for dashboard review; it never
+ * replaces live data during normal machine operation.
+ */
 export function useTenterRealtime(machineId: string, enabled: boolean): TenterRealtimeSnapshot {
   const [snapshot, setSnapshot] = useState<TenterRealtimeSnapshot>(emptySnapshot);
 
@@ -191,7 +202,11 @@ export function useTenterRealtime(machineId: string, enabled: boolean): TenterRe
       try {
         socket = new WebSocket(websocketUrl(machineId));
       } catch (reason) {
-        setSnapshot((current) => ({ ...current, connected: false, error: reason instanceof Error ? reason.message : 'Unable to connect to Tenter data.' }));
+        setSnapshot((current) => ({
+          ...current,
+          connected: false,
+          error: reason instanceof Error ? reason.message : 'Unable to connect to Tenter data.',
+        }));
         reconnectTimer = window.setTimeout(connect, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, 10000);
         return;
@@ -208,14 +223,21 @@ export function useTenterRealtime(machineId: string, enabled: boolean): TenterRe
           const sample = toSample(machine);
           setSnapshot((current) => {
             const history = sample
-              ? [...current.history, sample].reduce<TenterRealtimeSample[]>((items, item) => {
-                const withoutDuplicate = items.filter((existing) => existing.time !== item.time);
-                withoutDuplicate.push(item);
-                return withoutDuplicate;
-              }, [])
-                .filter((item) => item.time >= Date.now() - 30 * 60 * 1000 && item.time <= Date.now() + 60 * 1000)
-                .sort((left, right) => left.time - right.time)
-                .slice(-120)
+              ? [...current.history, sample]
+                  .reduce<TenterRealtimeSample[]>((items, item) => {
+                    const withoutDuplicate = items.filter(
+                      (existing) => existing.time !== item.time,
+                    );
+                    withoutDuplicate.push(item);
+                    return withoutDuplicate;
+                  }, [])
+                  .filter(
+                    (item) =>
+                      item.time >= Date.now() - 30 * 60 * 1000 &&
+                      item.time <= Date.now() + 60 * 1000,
+                  )
+                  .sort((left, right) => left.time - right.time)
+                  .slice(-120)
               : current.history;
             return { connected: true, machine, history, error: '' };
           });
@@ -224,7 +246,11 @@ export function useTenterRealtime(machineId: string, enabled: boolean): TenterRe
         }
       });
       socket.addEventListener('error', () => {
-        setSnapshot((current) => ({ ...current, connected: false, error: 'Không kết nối được dữ liệu máy.' }));
+        setSnapshot((current) => ({
+          ...current,
+          connected: false,
+          error: 'Không kết nối được dữ liệu máy.',
+        }));
       });
       socket.addEventListener('close', () => {
         if (disposed) return;
@@ -245,10 +271,12 @@ export function useTenterRealtime(machineId: string, enabled: boolean): TenterRe
   return snapshot;
 }
 
+/** Return the first finite realtime value found in a list of group/key aliases. */
 export function readTenterValue(readings: TenterReadingValues, paths: string[][]) {
   return nestedNumber(readings, paths);
 }
 
+/** Return the first available realtime signal group from compatible relay aliases. */
 export function readTenterGroup(readings: TenterReadingValues, keys: string[]) {
   for (const key of keys) {
     const group = readings[key];

@@ -15,7 +15,8 @@ async function toBase64(url: string): Promise<string> {
 }
 
 export function ensureVietnamesePdfFonts(document: jsPDF): Promise<void> {
-  if (!fontDataPromise) fontDataPromise = Promise.all([toBase64(regularFontUrl), toBase64(boldFontUrl)]);
+  if (!fontDataPromise)
+    fontDataPromise = Promise.all([toBase64(regularFontUrl), toBase64(boldFontUrl)]);
   return fontDataPromise.then(([regular, bold]) => {
     document.addFileToVFS('Arial.ttf', regular);
     document.addFont('Arial.ttf', 'Arial', 'normal');

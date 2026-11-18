@@ -1,4 +1,4 @@
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+import { requestJson } from '../../shared/api/http';
 
 export type UnrollingRollStatus = 'WAITING' | 'COLLECTED' | 'TRANSFERRED';
 export type UnrollingRoll = {
@@ -37,35 +37,41 @@ export type UnrollingOrder = {
   rolls: UnrollingRoll[];
 };
 
-async function readError(response: Response, fallback: string): Promise<string> {
-  const body = await response.json().catch(() => null) as { detail?: unknown } | null;
-  return typeof body?.detail === 'string' ? body.detail : fallback;
-}
-
-export async function getUnrollingOrders(q = '', signal?: AbortSignal, orderDate = ''): Promise<UnrollingOrder[]> {
+/** Load production orders and roll state for the Unrolling workspace. */
+export async function getUnrollingOrders(
+  q = '',
+  signal?: AbortSignal,
+  orderDate = '',
+): Promise<UnrollingOrder[]> {
   const params = new URLSearchParams({ limit: '500' });
   if (q.trim()) params.set('q', q.trim());
   if (orderDate) params.set('order_date', orderDate);
-  const response = await fetch(`${apiBaseUrl}/api/ws3/unrolling/orders?${params}`, {
-    credentials: 'include',
-    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000),
-  });
-  if (!response.ok) throw new Error(await readError(response, `Order API returned HTTP ${response.status}`));
-  const result = await response.json() as { orders: UnrollingOrder[] };
+  const result = await requestJson<{ orders: UnrollingOrder[] }>(
+    `/api/ws3/unrolling/orders?${params}`,
+    {
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(20000)])
+        : AbortSignal.timeout(20000),
+    },
+    'Unrolling order API',
+  );
   return result.orders;
 }
 
+/** Record one collect, undo, or production-transfer action for a roll. */
 export async function recordUnrollingRollAction(
   pkNo: string,
   rollId: string,
   action: 'COLLECT' | 'UNDO_COLLECTION' | 'TRANSFER_TO_PRODUCTION',
   worker: UnrollingWorkerProfile,
 ): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/api/ws3/unrolling/roll-actions`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pk_no: pkNo, roll_id: rollId, action, ...worker }),
-  });
-  if (!response.ok) throw new Error(await readError(response, `Roll action failed with HTTP ${response.status}`));
+  await requestJson<void>(
+    '/api/ws3/unrolling/roll-actions',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pk_no: pkNo, roll_id: rollId, action, ...worker }),
+    },
+    'Unrolling roll action',
+  );
 }

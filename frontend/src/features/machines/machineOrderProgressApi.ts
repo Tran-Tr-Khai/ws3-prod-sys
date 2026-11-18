@@ -1,3 +1,5 @@
+import { requestJson } from '../../shared/api/http';
+
 export type OrderProgress = 'IN_PROGRESS' | 'COMPLETED';
 export type OrderProgressMachineId = 'BU-01' | 'TE-01' | 'TE-02';
 
@@ -19,8 +21,7 @@ type MachineOrderProgressResponse = {
 
 type RequestOptions = { signal?: AbortSignal };
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
-const progressPath = `${apiBaseUrl}/api/machine-orders/progress`;
+const progressPath = '/api/machine-orders/progress';
 
 function toProgress(response: MachineOrderProgressResponse): MachineOrderProgress {
   return {
@@ -32,14 +33,6 @@ function toProgress(response: MachineOrderProgressResponse): MachineOrderProgres
   };
 }
 
-async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, { credentials: 'include', ...init });
-  if (response.ok) return response.status === 204 ? undefined as T : response.json() as Promise<T>;
-
-  const body = await response.json().catch(() => ({})) as { detail?: string; message?: string };
-  throw new Error(body.message || body.detail || `Machine order API returned HTTP ${response.status}`);
-}
-
 /** Read the persisted SOP progress for a supported production machine. */
 export async function getMachineOrderProgress(
   machineId: OrderProgressMachineId,
@@ -47,7 +40,11 @@ export async function getMachineOrderProgress(
   options: RequestOptions = {},
 ): Promise<MachineOrderProgress | null> {
   const query = new URLSearchParams({ machine_id: machineId, order_number: orderNumber.trim() });
-  const response = await request<MachineOrderProgressResponse | null>(`${progressPath}?${query}`, { signal: options.signal });
+  const response = await requestJson<MachineOrderProgressResponse | null>(
+    `${progressPath}?${query}`,
+    { signal: options.signal },
+    'Machine order API',
+  );
   return response ? toProgress(response) : null;
 }
 
@@ -58,11 +55,19 @@ export async function saveMachineOrderProgress(
   orderProgress: OrderProgress,
   options: RequestOptions = {},
 ): Promise<MachineOrderProgress> {
-  const response = await request<MachineOrderProgressResponse>(progressPath, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ machine_id: machineId, order_number: orderNumber.trim(), order_progress: orderProgress }),
-    signal: options.signal,
-  });
+  const response = await requestJson<MachineOrderProgressResponse>(
+    progressPath,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        machine_id: machineId,
+        order_number: orderNumber.trim(),
+        order_progress: orderProgress,
+      }),
+      signal: options.signal,
+    },
+    'Machine order API',
+  );
   return toProgress(response);
 }
