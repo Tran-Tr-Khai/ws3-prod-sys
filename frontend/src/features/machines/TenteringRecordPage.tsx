@@ -4,7 +4,7 @@ import { MachineOperationSidebar } from '../../components/hmi/MachineOperationSi
 import { useAuth } from '../../auth/AuthContext';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { isOperatorAssignedToMachine, MachineOperationalNoticeDock } from '../support/MachineOperationalNoticeDock';
-import { getMachineOrderProgress, saveMachineOrderProgress } from './scouringApi';
+import { getMachineOrderProgress, saveMachineOrderProgress } from './machineOrderProgressApi';
 import { MACHINE_NOTICE_DURATION_MS } from './noticeTiming';
 import { getTenteringOrder, getTenteringOrders, getTenteringOrderSource, saveTenteringOrder, type TenteringOrder, type TenteringOrderInput } from './tenteringApi';
 import { TENTERING_MACHINES, TenteringMachineSelect, TenteringNavigation } from './TenteringNavigation';

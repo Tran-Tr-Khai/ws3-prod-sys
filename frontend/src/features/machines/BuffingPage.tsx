@@ -5,7 +5,8 @@ import { MachineOperationSidebar } from '../../components/hmi/MachineOperationSi
 import { MachineOrderProgressField } from '../../components/hmi/MachineOrderProgressField';
 import { WS3MesShell } from '../../components/mes/WS3MesShell';
 import { useAuth } from '../../auth/AuthContext';
-import { createBuffingCheck, deleteBuffingCheck, getBuffingChecks, getBuffingChecksForOrder, getMachineOrderProgress, saveMachineOrderProgress, uploadBuffingImages, type BuffingCheck, type BuffingImage } from './scouringApi';
+import { createBuffingCheck, deleteBuffingCheck, getBuffingChecks, getBuffingChecksForOrder, uploadBuffingImages, type BuffingCheck, type BuffingImage } from './buffingApi';
+import { getMachineOrderProgress, saveMachineOrderProgress } from './machineOrderProgressApi';
 import { getWS3ProductionOrderContext, type WS3ProductionOrderReport } from '../orders/ws3OrderApi';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { isOperatorAssignedToMachine, MachineOperationalNoticeDock } from '../support/MachineOperationalNoticeDock';

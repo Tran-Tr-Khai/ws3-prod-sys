@@ -1,1 +1,0 @@
-"""Machine data source adapters."""

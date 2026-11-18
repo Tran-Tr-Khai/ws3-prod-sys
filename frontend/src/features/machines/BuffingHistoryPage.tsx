@@ -5,7 +5,7 @@ import { MesDataCell } from '../../components/mes/MesDataCell';
 import { MesResizableHeaderCell, MesResizableTable } from '../../components/mes/MesResizableTable';
 import { formatShiftLabel } from '../../components/hmi/ShiftSelect';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { downloadBuffingReport, getBuffingChecks, type BuffingCheck } from './scouringApi';
+import { downloadBuffingReport, getBuffingChecks, type BuffingCheck } from './buffingApi';
 import './BuffingPage.css';
 import '../../components/mes/MesDataTable.css';
 

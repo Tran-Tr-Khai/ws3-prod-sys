@@ -8,19 +8,16 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.buffing import BuffingCheck
 from app.models.machine_order_state import MachineOrderState
-from app.models.scouring import ScouringRecord
 from app.models.tentering import TenteringOrder
-from app.models.transfer import TransferRecord
-from app.models.print import PrintRecord
 from app.models.user import User
 from app.security.auth import get_current_user
-from app.security.authorization import MACHINE_IDS, require_machine_access
+from app.security.authorization import require_machine_access
 from app.services.machine_order_progress import set_order_progress
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, is_pkp_order_code, resolve_ws3_order_code, resolve_ws3_sop_code
 
 
 router = APIRouter(prefix="/machine-orders", tags=["machine-orders"])
-MACHINES = MACHINE_IDS
+MACHINES = frozenset({"BU-01", "TE-01", "TE-02"})
 
 
 class OrderProgressUpdate(BaseModel):
@@ -28,7 +25,7 @@ class OrderProgressUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    machine_id: Literal["BU-01", "SC-01", "TE-01", "TE-02", "TR-01", "PR-01"]
+    machine_id: Literal["BU-01", "TE-01", "TE-02"]
     order_number: str = Field(min_length=1, max_length=160)
     order_progress: Literal["IN_PROGRESS", "COMPLETED"]
 
@@ -165,12 +162,6 @@ def update_order_progress(
                 .where(BuffingCheck.machine_id == machine_id, func.upper(func.trim(BuffingCheck.order_number)).in_(aliases or {normalized}))
                 .values(order_progress=payload.order_progress)
             )
-        elif machine_id == "SC-01":
-            db.execute(
-                update(ScouringRecord)
-                .where(ScouringRecord.machine_id == machine_id, func.upper(func.trim(ScouringRecord.order_number)).in_(aliases or {normalized}))
-                .values(order_progress=payload.order_progress)
-            )
         elif machine_id in {"TE-01", "TE-02"}:
             db.execute(
                 update(TenteringOrder)
@@ -178,18 +169,6 @@ def update_order_progress(
                     TenteringOrder.machine_id == machine_id,
                     func.upper(func.trim(TenteringOrder.sop_no)).in_(aliases or {normalized}),
                 )
-                .values(order_progress=payload.order_progress)
-            )
-        elif machine_id == "TR-01":
-            db.execute(
-                update(TransferRecord)
-                .where(TransferRecord.machine_id == machine_id, TransferRecord.order_number.in_(aliases or {normalized}))
-                .values(order_progress=payload.order_progress)
-            )
-        else:
-            db.execute(
-                update(PrintRecord)
-                .where(PrintRecord.machine_id == payload.machine_id, PrintRecord.order_number.in_(aliases or {normalized}))
                 .values(order_progress=payload.order_progress)
             )
         db.commit()

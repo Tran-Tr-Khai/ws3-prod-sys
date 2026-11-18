@@ -33,14 +33,3 @@ Health check:
 ```text
 GET http://localhost:8000/health
 ```
-
-Mock machine simulator:
-
-```text
-GET http://localhost:8000/simulator/machines
-GET http://localhost:8000/simulator/machines/SC-01
-```
-
-The simulator is exposed through the `MachineDataSource` interface, so a PLC,
-Modbus TCP, OPC-UA, or MQTT adapter can replace it without changing the API
-contract.
