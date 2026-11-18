@@ -24,6 +24,7 @@ services:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
+      API_PREFIX: ${API_PREFIX:-/api}
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS}
       AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY is required}
       AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-8}
