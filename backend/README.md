@@ -59,7 +59,7 @@ PostgreSQL disposable có quyền tạo/xóa database test.
 - `uv.lock`: phiên bản dependency đã khóa, Docker dùng với `--frozen`.
 - `Dockerfile`: image backend được cài dependency bằng `uv`.
 - `alembic.ini`: vị trí migration và logging Alembic.
-- `.env.example`: mẫu cấu hình backend local.
+- `.env.example`: mẫu cấu hình backend local (`backend/.env.example` khi nhìn từ root).
 - `alembic/README`: quy tắc migration và baseline hiện tại.
 
 Đọc tài liệu repository tại [../docs/README.md](../docs/README.md) trước khi

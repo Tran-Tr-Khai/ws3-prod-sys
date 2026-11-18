@@ -71,13 +71,15 @@ uv run --directory backend python -m app.db.create_user <username> <password> --
 Mở terminal thứ hai:
 
 ```powershell
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+if (-not (Test-Path frontend\.env)) { Copy-Item frontend\.env.example frontend\.env }
 npm ci
 npm run dev
 ```
 
-Frontend chạy tại `http://localhost:5173`. Các biến Vite nằm trong file `.env`
-ở thư mục gốc; mẫu là `.env.example`.
+Frontend chạy tại `http://localhost:5173`. Các biến Vite nằm trong
+`frontend/.env`; mẫu là `frontend/.env.example`.
+Nếu trước đây đã tạo `.env` ở root chỉ để chứa biến `VITE_*`, hãy chuyển các
+dòng đó sang `frontend/.env`; Vite không dùng root `.env` cho frontend này.
 
 ### Camera Agent
 
@@ -179,7 +181,7 @@ docker compose -p ws3 ps
 | `docker-compose.production.yml` | PostgreSQL, backend và web cho stack production-like. |
 | `docker-compose.https.yml` | Overlay bật HTTPS và mount certificate cho Nginx. |
 | `backend/.env.example` | Mẫu biến môi trường local của backend. |
-| `.env.example` | Mẫu biến Vite của frontend local. |
+| `frontend/.env.example` | Mẫu biến Vite của frontend local. |
 | `.env.production.example` | Mẫu biến Compose production; không chứa secret thật. |
 
 ## 6. Kiểm tra trước khi gửi code

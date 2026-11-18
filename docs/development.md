@@ -19,10 +19,11 @@ uv run --project backend alembic -c backend\alembic.ini upgrade head
 
 `backend/app/config/settings.py` resolves the local backend environment file
 from the repository, so the API can be started from the repository root or
-from inside `backend`. The root `.env` is reserved for frontend Vite
-variables; production Docker settings use `.env.production`.
+from inside `backend`. Frontend Vite variables belong in `frontend/.env`;
+production Docker settings use the root `.env.production`.
 
-Kiểm tra `backend/.env` trỏ đúng database local trước migration. `.env.example` dành cho development, không dùng làm cấu hình production.
+Kiểm tra `backend/.env` trỏ đúng database local trước migration.
+`backend/.env.example` dành cho development, không dùng làm cấu hình production.
 
 Khởi động API:
 
@@ -48,7 +49,9 @@ npm ci
 npm run dev
 ```
 
-Vite chạy tại `http://localhost:5173`. API URL mẫu có trong `.env.example`; backend cần cho phép origin này ở `BACKEND_CORS_ORIGINS`.
+Vite chạy tại `http://localhost:5173`. API URL mẫu có trong
+`frontend/.env.example`; backend cần cho phép origin này ở
+`BACKEND_CORS_ORIGINS`.
 
 ## Tài khoản và vai trò
 
