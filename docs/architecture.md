@@ -18,10 +18,10 @@ Compose production có ba service: `web`, `backend`, `postgres`. Backend chờ P
 - `backend/app/api/routes/`: API theo miền nghiệp vụ.
 - `backend/app/models/`, `backend/app/schemas/`: mô hình database và hợp đồng request/response.
 - `backend/app/services/`: xử lý nghiệp vụ, đọc snapshot MES và lập báo cáo.
-- `backend/alembic/versions/`: lịch sử schema; thay đổi mới cần migration tiến về phía trước.
+- `backend/alembic/versions/`: baseline schema active và các migration tiến về phía trước.
 - `backend/tests/`: kiểm thử API, báo cáo, Unrolling và nâng cấp database.
 - `frontend/src/features/`: màn hình nghiệp vụ; `frontend/src/auth/`: đăng nhập.
-- `frontend/src/components/`: component dùng chung, bao gồm HMI.
+- `frontend/src/components/mes/`: component MES dùng chung (table, control, operation form).
 - `frontend/nginx.conf`, `frontend/nginx.https.conf`: cấu hình proxy HTTP/HTTPS.
 
 ## Dữ liệu và độ bền

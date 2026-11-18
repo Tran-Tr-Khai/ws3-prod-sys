@@ -19,8 +19,9 @@ uv run --project backend alembic -c backend\alembic.ini upgrade head
 
 `backend/app/config/settings.py` resolves the local backend environment file
 from the repository, so the API can be started from the repository root or
-from inside `backend`. Frontend Vite variables belong in `frontend/.env`;
-production Docker settings use the root `.env.production`.
+from inside `backend`. Frontend endpoints use the defaults in
+`frontend/src/config/runtime.ts`; production Docker settings use the root
+`.env.production`.
 
 Kiểm tra `backend/.env` trỏ đúng database local trước migration.
 `backend/.env.example` dành cho development, không dùng làm cấu hình production.

@@ -1,16 +1,25 @@
-# Tài liệu WS3
+# Tài liệu WS3 MES
 
-Tài liệu mô tả mã nguồn hiện có và cách vận hành đã đối chiếu với repository. Nếu tài liệu khác hành vi thực tế, xác minh lại phiên bản/commit trước khi thao tác trên server.
+Tài liệu này chỉ mô tả phần WS3 MES đã hoàn thiện. Khi tài liệu và mã nguồn
+khác nhau, commit đang triển khai là nguồn tham chiếu trước khi thao tác trên
+server hoặc database.
+
+## Dành cho phát triển
 
 | Tài liệu | Nội dung |
 |---|---|
-| [API contract](api-conventions.md) | API `/api`, quy ước đặt tên và thay đổi tương thích |
-| [Kiến trúc](architecture.md) | Thành phần hệ thống, nơi lưu dữ liệu, request và quy tắc thiết kế |
-| [Phát triển local](development.md) | Cài dependencies, cấu hình môi trường, chạy frontend/backend, kiểm tra |
-| [Luồng sản xuất và MES](production-workflows.md) | Snapshot Excel, Unrolling, Buffing và phạm vi máy đang hỗ trợ |
-| [Deploy production](deployment/production.md) | Compose project chính `ws3`, backup, cập nhật website và kiểm tra |
-| [An toàn Alembic](deployment/alembic-safety.md) | Migration, phục hồi lỗi và rollout schema |
-| [Dọn dữ liệu ứng dụng](operations/clear-test-data.md) | Xóa dữ liệu test nhưng giữ tài khoản và bảng xác thực |
+| [Phát triển local](development.md) | Cài dependency, chạy backend/frontend và kiểm tra thay đổi. |
+| [Kiến trúc](architecture.md) | Thành phần hệ thống, dữ liệu, ranh giới tin cậy và các module nguồn. |
+| [HTTP API](api-conventions.md) | API `/api`, naming contract và quy tắc thay đổi tương thích. |
+
+## Dành cho vận hành
+
+| Tài liệu | Nội dung |
+|---|---|
+| [Luồng sản xuất MES](operations/production-workflows.md) | Snapshot Excel, Unrolling, Buffing, Tentering và phạm vi máy hỗ trợ. |
+| [Deploy production](deployment/production.md) | Compose project `ws3`, backup, cập nhật website và kiểm tra. |
+| [An toàn Alembic](deployment/alembic-safety.md) | Baseline schema, migration tiến và xử lý database hiện hữu. |
+| [Dọn dữ liệu ứng dụng](operations/clear-test-data.md) | Xóa dữ liệu test nhưng giữ tài khoản và bảng xác thực. |
 
 ## Quy tắc an toàn dữ liệu
 

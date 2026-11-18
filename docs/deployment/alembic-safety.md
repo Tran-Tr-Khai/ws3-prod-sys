@@ -19,21 +19,25 @@ API. Seed roles and create users only after the baseline has completed.
 
 ## Existing pre-baseline databases
 
-Do not run this branch directly against a database stamped with the old
-`2026...` revision history. This repository reset is intended for a new local
-or new deployment database.
+Do not run `alembic upgrade head` directly against a database stamped with the
+retired `2026...` revision history: those revision files are intentionally no
+longer in this repository, so Alembic cannot construct its revision graph.
 
-If an old database contains information worth preserving:
+For a database with information worth preserving, choose exactly one path:
 
-1. Back it up with `pg_dump`.
-2. Restore it into an isolated environment if data needs review.
-3. Export only business data that belongs to the active features.
-4. Create a new database and apply this baseline.
-5. Import reviewed data using a separately tested script.
+1. **Adopt the baseline once** only after a verified backup and a schema
+   comparison prove that every active baseline table already exists. Record the
+   old revision and update the single `alembic_version` row to
+   `20261118_0001` in a reviewed maintenance procedure. This metadata change
+   does not create, alter, or delete application tables.
+2. **Migrate into a fresh database** when the old schema does not match the
+   active baseline. Export only business data belonging to active features,
+   apply the baseline to the new database, then import through a separately
+   tested script.
 
-The old migration history and retired schemas are preserved on the Git branch
-`archive/pre-baseline-alembic` for reference. Do not use `alembic stamp head`
-to make an old database appear compatible with this baseline.
+Never use `alembic stamp head` as a shortcut. It still needs the old revision
+graph and can make an incompatible database appear healthy. Keep the backup,
+the previous revision, schema comparison, and approval with the release record.
 
 ## Development contract
 

@@ -179,14 +179,16 @@ docker compose -p ws3 ps
 | `docker-compose.production.yml` | PostgreSQL, backend và web cho stack production-like. |
 | `docker-compose.https.yml` | Overlay bật HTTPS và mount certificate cho Nginx. |
 | `backend/.env.example` | Mẫu biến môi trường local của backend. |
-| `frontend/.env.example` | Mẫu biến Vite của frontend local. |
+| `frontend/src/config/runtime.ts` | Endpoint mặc định của frontend local và logic chọn URL runtime. |
 | `.env.production.example` | Mẫu biến Compose production; không chứa secret thật. |
 
 ## 6. Kiểm tra trước khi gửi code
 
 ```powershell
+Set-Location frontend
 npm run lint
 npm run build
+Set-Location ..
 uv run --directory backend ruff check app scripts tests
 uv run --directory backend python -m unittest discover -s tests -v
 ```
@@ -200,7 +202,7 @@ thay đổi schema hoặc deploy.
 - [Tài liệu phát triển](docs/development.md)
 - [Quy ước API](docs/api-conventions.md)
 - [Kiến trúc và dữ liệu](docs/architecture.md)
-- [Luồng MES và phân quyền](docs/production-workflows.md)
+- [Luồng MES và phân quyền](docs/operations/production-workflows.md)
 - [Triển khai production](docs/deployment/production.md)
 - [An toàn Alembic](docs/deployment/alembic-safety.md)
 - [Xóa dữ liệu test](docs/operations/clear-test-data.md)

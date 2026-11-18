@@ -7,17 +7,16 @@ React, TypeScript and Vite application for the WS3 MES interface.
 From this directory:
 
 ```powershell
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 npm ci
 npm run dev
 ```
 
 The development server listens on `http://localhost:5173`.
 
-## Environment variables
+## Runtime endpoints
 
-`frontend/.env` is optional. When it is absent, the application uses safe local
-defaults so a new developer can start immediately.
+The application runs without a frontend `.env` file. Defaults are centralized
+in `src/config/runtime.ts`:
 
 | Variable                | Default                 | Purpose                          |
 | ----------------------- | ----------------------- | -------------------------------- |
@@ -25,8 +24,9 @@ defaults so a new developer can start immediately.
 | `VITE_WS_BASE_URL`      | Browser origin          | Tenter realtime relay base URL.  |
 | `VITE_CAMERA_AGENT_URL` | `http://127.0.0.1:8765` | Local Hikrobot/MVS Camera Agent. |
 
-Do not commit `.env`. Use `.env.example` as the shareable template. Docker uses
-the same-origin API path (`/`) and configures Nginx as the public reverse proxy.
+Docker uses the same-origin API path (`/`) and configures Nginx as the public
+reverse proxy. Add a Vite environment override only when an isolated local
+integration needs a different endpoint; do not commit it.
 
 ## Verification
 
@@ -40,8 +40,6 @@ npm run build
 - `src/app`: application routes and top-level composition.
 - `src/auth`: session API and authentication context.
 - `src/components/mes`: shared MES UI primitives.
-- `src/components/hmi`: shared legacy-compatible machine UI primitives still
-  used by active Buffing, Tentering and Unrolling screens.
 - `src/config`: browser runtime configuration and endpoint resolution.
 - `src/features`: business features grouped by operational area.
 - `src/styles`: global design tokens and minimal layout rules.
