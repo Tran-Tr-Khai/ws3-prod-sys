@@ -37,7 +37,7 @@ def media_root() -> Path:
     Returns:
         Existing absolute media root path.
     """
-    root = Path(get_settings().media_root).resolve()
+    root = get_settings().media_path
     root.mkdir(parents=True, exist_ok=True)
     return root
 

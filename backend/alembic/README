@@ -1,1 +1,16 @@
-Alembic migration scripts for the WS3 database.
+# WS3 database migrations
+
+This directory contains the single active baseline migration for the supported
+MES scope. New schema changes must be added as immutable Alembic revisions;
+never edit a revision that has already been applied to a shared database.
+
+For a fresh database:
+
+```powershell
+uv run --project backend alembic -c backend\alembic.ini upgrade head
+```
+
+The migration history before `20261118_0001` is preserved on the
+`archive/pre-baseline-alembic` branch and is not part of the active `main`
+installation path. Existing databases should follow the backup/export/import
+procedure documented in `docs/deployment/alembic-safety.md`.

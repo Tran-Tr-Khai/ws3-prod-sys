@@ -17,6 +17,11 @@ docker compose up -d postgres
 uv run --project backend alembic -c backend\alembic.ini upgrade head
 ```
 
+`backend/app/config/settings.py` resolves the local backend environment file
+from the repository, so the API can be started from the repository root or
+from inside `backend`. The root `.env` is reserved for frontend Vite
+variables; production Docker settings use `.env.production`.
+
 Kiểm tra `backend/.env` trỏ đúng database local trước migration. `.env.example` dành cho development, không dùng làm cấu hình production.
 
 Khởi động API:

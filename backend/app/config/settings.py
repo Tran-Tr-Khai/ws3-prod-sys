@@ -1,7 +1,12 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+
 
 class Settings(BaseSettings):
     app_name: str = Field(default="WS3 Backend API", validation_alias="APP_NAME")
@@ -17,7 +22,7 @@ class Settings(BaseSettings):
     auth_secret_key: str = Field(default="change-me-before-production", validation_alias="AUTH_SECRET_KEY")
     auth_session_ttl_hours: int = Field(default=8, validation_alias="AUTH_SESSION_TTL_HOURS")
     auth_cookie_secure: bool = Field(default=False, validation_alias="AUTH_COOKIE_SECURE")
-    media_root: str = Field(default="backend/media", validation_alias="MEDIA_ROOT")
+    media_root: str = Field(default="media", validation_alias="MEDIA_ROOT")
     tenter_realtime_ws_url: str = Field(default="", validation_alias="TENTER_REALTIME_WS_URL")
 
     database_url: str = Field(
@@ -26,7 +31,9 @@ class Settings(BaseSettings):
     )
     
     model_config = SettingsConfigDict(
-        env_file="backend/.env",
+        # Resolve the local file from the backend package, not the process cwd.
+        # Container environment variables still take precedence over this file.
+        env_file=BACKEND_DIR / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -39,6 +46,12 @@ class Settings(BaseSettings):
             for origin in self.backend_cors_origins.split(",")
             if origin.strip()
         ]
+
+    @property
+    def media_path(self) -> Path:
+        """Return the absolute directory used for uploaded media files."""
+        path = Path(self.media_root)
+        return path if path.is_absolute() else BACKEND_DIR / path
 
 
 @lru_cache
