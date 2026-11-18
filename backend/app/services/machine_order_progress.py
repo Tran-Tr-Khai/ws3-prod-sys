@@ -3,20 +3,14 @@ from sqlalchemy.orm import Session
 
 from app.models.buffing import BuffingCheck
 from app.models.machine_order_state import MachineOrderState
-from app.models.scouring import ScouringRecord
 from app.models.tentering import TenteringOrder
-from app.models.transfer import TransferRecord
-from app.models.print import PrintRecord
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code
 
 
 ORDER_RECORDS = {
     "BU-01": (BuffingCheck, "order_number"),
-    "SC-01": (ScouringRecord, "order_number"),
     "TE-01": (TenteringOrder, "sop_no"),
     "TE-02": (TenteringOrder, "sop_no"),
-    "TR-01": (TransferRecord, "order_number"),
-    "PR-01": (PrintRecord, "order_number"),
 }
 
 

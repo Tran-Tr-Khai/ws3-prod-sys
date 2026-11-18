@@ -13,7 +13,7 @@ from app.security.auth import role_codes
 
 
 MANAGER_ROLES = frozenset({"ADMIN", "SUPERVISOR", "PRODUCTION_MANAGER"})
-MACHINE_IDS = frozenset({"BU-01", "SC-01", "TE-01", "TE-02", "TR-01", "PR-01"})
+ACTIVE_MACHINE_IDS = frozenset({"BU-01", "TE-01", "TE-02"})
 
 
 def normalize_machine_id(machine_id: str) -> str:
@@ -33,7 +33,7 @@ def require_machine_access(
     user: User,
     machine_id: str,
     *,
-    supported_machines: Collection[str] = MACHINE_IDS,
+    supported_machines: Collection[str] = ACTIVE_MACHINE_IDS,
     not_found_detail: str = "Machine was not found",
     not_found_status: int = status.HTTP_404_NOT_FOUND,
 ) -> str:

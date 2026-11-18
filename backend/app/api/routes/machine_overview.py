@@ -5,9 +5,9 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.ws3_production import WS3MachineWS2Record
 from app.models.user import User
-from app.security.authorization import MACHINE_IDS, require_machine_access
+from app.security.authorization import require_machine_access
 from app.security.auth import get_current_user
-from app.services.machine_overview import get_overview, get_overview_details
+from app.services.machine_overview import OVERVIEW_MACHINE_IDS, get_overview, get_overview_details
 from app.services.snapshot_report import build_report
 from app.services.snapshot_sources import key
 from app.services.ws3_order_codes import AmbiguousWS3OrderCode, resolve_ws3_order_code
@@ -31,7 +31,7 @@ def overview(machine_id: str, db: Session = Depends(get_db), user: User = Depend
     machine_id = require_machine_access(
         user,
         machine_id,
-        supported_machines=MACHINE_IDS,
+        supported_machines=OVERVIEW_MACHINE_IDS,
         not_found_detail="Unsupported machine",
         not_found_status=status.HTTP_404_NOT_FOUND,
     )
@@ -59,7 +59,7 @@ def details(machine_id: str, record_id: int = Query(gt=0), db: Session = Depends
     machine_id = require_machine_access(
         user,
         machine_id,
-        supported_machines=MACHINE_IDS,
+        supported_machines=OVERVIEW_MACHINE_IDS,
         not_found_detail="Unsupported machine",
         not_found_status=status.HTTP_404_NOT_FOUND,
     )
@@ -94,7 +94,7 @@ def mes(machine_id: str, sop: str = Query(min_length=1, max_length=160), db: Ses
     machine_id = require_machine_access(
         user,
         machine_id,
-        supported_machines=MACHINE_IDS,
+        supported_machines=OVERVIEW_MACHINE_IDS,
         not_found_detail="Unsupported machine",
         not_found_status=status.HTTP_404_NOT_FOUND,
     )

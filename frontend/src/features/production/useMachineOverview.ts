@@ -19,22 +19,16 @@ function outputTone(output: number | null, input: number | null, progress: strin
 // Descriptors define only which fields a machine presents, never how it loads.
 const productionFields: Record<string, string[]> = {
   'BU-01': ['sop', 'item', 'lot', 'rolls', 'checks'],
-  'SC-01': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
   'TE-01': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
   'TE-02': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
-  'TR-01': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
-  'PR-01': ['sop', 'item', 'lot', 'rolls', 'input', 'output'],
 };
 
 export function useMachineOverview() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const buffing = useProgressiveMachineOverview('BU-01');
-  const scouring = useProgressiveMachineOverview('SC-01');
   const tentering01 = useProgressiveMachineOverview('TE-01');
   const tentering02 = useProgressiveMachineOverview('TE-02');
-  const transfer = useProgressiveMachineOverview('TR-01');
-  const print = useProgressiveMachineOverview('PR-01');
   const canViewMesOrders = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
   const today = factoryToday();
   const unrolling = useMachineCoreData(`${user?.username}:UN-01:${today}`, canViewMesOrders,
@@ -88,7 +82,7 @@ export function useMachineOverview() {
     };
     const inspection = details.data?.inspection ?? record.inspection;
     const statuses: OverviewField[] = [];
-    if (machineId === 'BU-01' || machineId === 'SC-01') {
+    if (machineId === 'BU-01') {
       statuses.push(field('inspection', tx('Kết quả kiểm tra', 'Inspection result'),
         inspection === 'PASS' ? tx('ĐẠT', 'PASS') : inspection === 'WARNING' ? tx('CẢNH BÁO', 'WARNING') : null,
         inspection === 'PASS' ? 'success' : inspection === 'WARNING' ? 'warning' : 'muted'));
@@ -107,11 +101,8 @@ export function useMachineOverview() {
 
   const summaries: Record<string, MachineOverviewSummary> = {
     'BU-01': summarize('BU-01', buffing),
-    'SC-01': summarize('SC-01', scouring),
     'TE-01': summarize('TE-01', tentering01),
     'TE-02': summarize('TE-02', tentering02),
-    'TR-01': summarize('TR-01', transfer),
-    'PR-01': summarize('PR-01', print),
     'UN-01': {
       operation: [field('machine', t('machine'), 'UN-01')],
       operationMessage: message(tx('Đơn và danh sách cuộn lấy trực tiếp từ MES.', 'Orders and rolls are supplied directly from MES.')),

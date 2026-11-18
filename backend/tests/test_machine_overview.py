@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, date
+from datetime import datetime
 from unittest.mock import patch
 
 from fastapi import HTTPException
@@ -38,12 +38,6 @@ class MachineOverviewTests(unittest.TestCase):
             values.update(created_at=when, updated_at=when, item_description='Fabric')
         elif model is BuffingCheck:
             values.update(checked_at=when, check_date=when.date(), **{f'check_{i}': True for i in range(1, 6)})
-        elif machine == 'SC-01':
-            values.update(recorded_at=when, item='Fabric', naoh=1, soap=1, desizer=1, h2o2=1, chelate=1, speed=45, temperature=95, cylinder_temperature=95, production_quantity_meters=0)
-        else:
-            values.update(recorded_at=when, production_date=date(2026, 10, day), item='Fabric', buyer='', design='', speed=40, quantity_meters=0)
-            if machine == 'TR-01':
-                values['temperature'] = 90
         row = model(**values)
         self.db.add(row)
         self.db.commit()
@@ -65,27 +59,27 @@ class MachineOverviewTests(unittest.TestCase):
                 self.assertEqual(get_overview(self.db, machine)['id'], latest.id)
 
     def test_canonical_state_overrides_copied_status(self):
-        old = self.record('TR-01', 'SOP-A', 1, 'COMPLETED')
-        self.record('TR-01', 'SOP-B', 2)
+        old = self.record('TE-01', 'SOP-A', 1, 'COMPLETED')
+        self.record('TE-01', 'SOP-B', 2)
         self.db.add_all([
-            MachineOrderState(machine_id='TR-01', order_number='SOP-A', order_progress='IN_PROGRESS'),
-            MachineOrderState(machine_id='TR-01', order_number='SOP-B', order_progress='COMPLETED'),
+            MachineOrderState(machine_id='TE-01', order_number='SOP-A', order_progress='IN_PROGRESS'),
+            MachineOrderState(machine_id='TE-01', order_number='SOP-B', order_progress='COMPLETED'),
         ])
         self.db.commit()
-        result = get_overview(self.db, 'TR-01')
+        result = get_overview(self.db, 'TE-01')
         self.assertEqual(result['id'], old.id)
         self.assertEqual(result['progress'], 'IN_PROGRESS')
-        self.assertEqual(result['output'], 0)
+        self.assertIsNone(result['output'])
 
     def test_core_does_not_read_mes_images_or_roll_entries(self):
-        for machine in ('BU-01', 'TE-01', 'SC-01'):
+        for machine in ('BU-01', 'TE-01', 'TE-02'):
             self.record(machine, 'SOP-A', 1)
         statements = []
         def capture(conn, cursor, statement, parameters, context, executemany):
             statements.append(statement.lower())
         event.listen(self.engine, 'before_cursor_execute', capture)
         with patch('app.services.machine_overview.resolve_ws3_order_code', side_effect=AssertionError('MES called')):
-            for machine in ('BU-01', 'TE-01', 'SC-01'):
+            for machine in ('BU-01', 'TE-01', 'TE-02'):
                 get_overview(self.db, machine)
         event.remove(self.engine, 'before_cursor_execute', capture)
         self.assertEqual(len(statements), 3)
@@ -121,7 +115,7 @@ class MachineOverviewTests(unittest.TestCase):
         self.assertIsNone(get_overview_details(self.db, 'TE-02', order.id))
 
     def test_endpoints_authorize_all_stages(self):
-        worker = User(username='worker', roles=[], machine_ids=['SC-01'])
+        worker = User(username='worker', roles=[], machine_ids=['TE-01'])
         calls = [lambda: overview('BU-01', self.db, worker), lambda: details('BU-01', 1, self.db, worker), lambda: mes('BU-01', 'SOP-A', self.db, worker)]
         for call in calls:
             with self.assertRaises(HTTPException) as error:
@@ -135,9 +129,9 @@ class MachineOverviewTests(unittest.TestCase):
             WS3MachineWS2Record(out_dyeing_sop='OTHER', roll_id='ROLL-2', length_meters=999),
         ])
         self.db.commit()
-        result = mes('SC-01', 'SOP-A', self.db, self.manager)
+        result = mes('TE-01', 'SOP-A', self.db, self.manager)
         self.assertEqual(result, {'item': 'Fabric', 'lot': None, 'rolls': 1, 'input': 0})
-        self.assertIsNone(mes('SC-01', 'MISSING', self.db, self.manager))
+        self.assertIsNone(mes('TE-01', 'MISSING', self.db, self.manager))
 
     def test_mes_does_not_mix_sops_with_same_pkp(self):
         self.db.add_all([

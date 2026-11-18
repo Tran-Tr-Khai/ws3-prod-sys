@@ -4,10 +4,12 @@ from sqlalchemy.orm import Session, raiseload
 
 from app.models.buffing import BuffingCheck
 from app.models.machine_order_state import MachineOrderState
-from app.models.scouring import ScouringRecord
 from app.models.tentering import TenteringOrder, TenteringRollEntry
 from app.services.machine_order_progress import ORDER_RECORDS
 from app.services.ws3_order_codes import resolve_ws3_order_code
+
+
+OVERVIEW_MACHINE_IDS = frozenset(ORDER_RECORDS)
 
 
 def _source(machine_id: str):
@@ -54,12 +56,6 @@ def get_overview(db: Session, machine_id: str) -> dict[str, object] | None:
         'speed': getattr(record, 'speed', None), 'temperature': getattr(record, 'temperature', None),
         'inspection': None,
     }
-    if model is ScouringRecord:
-        result['output'] = record.production_quantity_meters if record.production_quantity_meters is not None else record.output_fabric_meters
-        complete = all(getattr(record, name) is not None for name in ('naoh', 'soap', 'desizer', 'h2o2', 'chelate', 'speed', 'temperature', 'cylinder_temperature'))
-        result['inspection'] = 'PASS' if complete and 40 <= record.speed <= 50 and 90 <= record.temperature <= 98 else 'WARNING'
-    elif model is not BuffingCheck and model is not TenteringOrder:
-        result['output'] = record.quantity_meters
     return result
 
 
