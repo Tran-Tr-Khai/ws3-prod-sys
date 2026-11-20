@@ -1,4 +1,4 @@
-import { apiUrl, requestJson } from '../../shared/api/http';
+import { apiUrl, requestBlob, requestJson } from '../../shared/api/http';
 
 export type BuffingImage = {
   id: number;
@@ -218,10 +218,5 @@ export async function downloadBuffingReport(
   const params = new URLSearchParams({ language });
   if (checkDate) params.set('check_date', checkDate);
   if (orderNumber) params.set('order_number', orderNumber);
-  const response = await fetch(apiUrl(`${checksPath}/export?${params}`), {
-    credentials: 'include',
-    signal: options.signal,
-  });
-  if (!response.ok) throw new Error(`Buffing API returned HTTP ${response.status}`);
-  return response.blob();
+  return requestBlob(`${checksPath}/export?${params}`, { signal: options.signal }, 'Buffing API');
 }

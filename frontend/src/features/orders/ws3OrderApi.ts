@@ -1,4 +1,4 @@
-import { apiBaseUrl } from '../../config/runtime';
+import { requestJson } from '../../shared/api/http';
 
 export type ImportedRow = Record<string, string>;
 export type WS3OrderRoll = {
@@ -88,15 +88,11 @@ export type WS3WarehousePage = {
 
 /** Load record counts and date ranges for each data-warehouse source. */
 export async function getWS3WarehouseSummary(): Promise<WS3WarehouseSummary> {
-  const response = await fetch(`${apiBaseUrl}/api/ws3/admin/data-warehouse/summary`, {
-    credentials: 'include',
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Warehouse API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as WS3WarehouseSummary;
+  return requestJson<WS3WarehouseSummary>(
+    '/api/ws3/admin/data-warehouse/summary',
+    {},
+    'Warehouse API',
+  );
 }
 
 /** Load one sortable, pageable data-warehouse result page. */
@@ -118,16 +114,11 @@ export async function getWS3WarehouseRecords(params: {
   if (params.sortBy !== undefined && params.sortBy !== null)
     query.set('sort_by', String(params.sortBy));
   if (params.sortDirection) query.set('sort_dir', params.sortDirection);
-  const response = await fetch(
-    `${apiBaseUrl}/api/ws3/admin/data-warehouse/${params.source}?${query}`,
-    { credentials: 'include' },
+  return requestJson<WS3WarehousePage>(
+    `/api/ws3/admin/data-warehouse/${params.source}?${query}`,
+    {},
+    'Warehouse API',
   );
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Warehouse API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as WS3WarehousePage;
 }
 
 export type WS3ProductionRollReport = {
@@ -171,15 +162,11 @@ export async function getWS3ProductionOrderContext(
   machineId: 'BU-01' | 'SC-01' = 'BU-01',
 ): Promise<WS3ProductionOrderReport | null> {
   const query = new URLSearchParams({ order_number: orderNumber, machine_id: machineId });
-  const response = await fetch(`${apiBaseUrl}/api/ws3/production-order-context?${query}`, {
-    credentials: 'include',
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Production order API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as WS3ProductionOrderReport | null;
+  return requestJson<WS3ProductionOrderReport | null>(
+    `/api/ws3/production-order-context?${query}`,
+    {},
+    'Production order API',
+  );
 }
 
 /** Replace the MES snapshot files used to derive WS3 production data. */
@@ -190,17 +177,11 @@ export async function replaceWS3Snapshot(
   if (files.order) formData.append('order_file', files.order);
   if (files.machine) formData.append('machine_file', files.machine);
   if (files.worker) formData.append('worker_file', files.worker);
-  const response = await fetch(`${apiBaseUrl}/api/ws3/data-snapshot`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Snapshot API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as WS3SnapshotResult;
+  return requestJson<WS3SnapshotResult>(
+    '/api/ws3/data-snapshot',
+    { method: 'POST', body: formData },
+    'Snapshot API',
+  );
 }
 
 /** Load all production orders and rolls for one production date. */
@@ -208,16 +189,11 @@ export async function getWS3ProductionReport(
   productionDate: string,
   options: { signal?: AbortSignal } = {},
 ): Promise<WS3ProductionReport> {
-  const response = await fetch(
-    `${apiBaseUrl}/api/ws3/production-orders?production_date=${encodeURIComponent(productionDate)}`,
-    { credentials: 'include', signal: options.signal },
+  return requestJson<WS3ProductionReport>(
+    `/api/ws3/production-orders?production_date=${encodeURIComponent(productionDate)}`,
+    { signal: options.signal },
+    'Production report API',
   );
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Production report API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as WS3ProductionReport;
 }
 
 /** Create a WS3 production order from normalized imported source rows. */
@@ -231,18 +207,15 @@ export async function createWS3Order(payload: {
   import_batch_id?: number | null;
   import_row_ids?: number[];
 }): Promise<WS3Order> {
-  const response = await fetch(`${apiBaseUrl}/api/ws3/orders`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Order API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as WS3Order;
+  return requestJson<WS3Order>(
+    '/api/ws3/orders',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    'Order API',
+  );
 }
 
 /** Persist a staged import batch before operators select final production rows. */
@@ -254,42 +227,25 @@ export async function createWS3ImportBatch(payload: {
   mapping: Record<string, string>;
   selected_row_indexes?: number[];
 }): Promise<WS3ImportBatch> {
-  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/imports`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Import API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as WS3ImportBatch;
+  return requestJson<WS3ImportBatch>(
+    '/api/ws3/orders/imports',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    'Import API',
+  );
 }
 
 /** List previously staged source-file imports. */
 export async function listWS3ImportBatches(): Promise<WS3ImportBatch[]> {
-  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/imports`, { credentials: 'include' });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Import API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as WS3ImportBatch[];
+  return requestJson<WS3ImportBatch[]>('/api/ws3/orders/imports', {}, 'Import API');
 }
 
 /** Load one staged import with its column mapping and source rows. */
 export async function getWS3ImportBatch(id: number): Promise<WS3ImportBatchDetail> {
-  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/imports/${id}`, {
-    credentials: 'include',
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Import API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as WS3ImportBatchDetail;
+  return requestJson<WS3ImportBatchDetail>(`/api/ws3/orders/imports/${id}`, {}, 'Import API');
 }
 
 /** Load rows stored in the WS3 staging warehouse. */
@@ -297,15 +253,11 @@ export async function getWS3ImportWarehouse(): Promise<{
   columns: string[];
   rows: WS3ImportRow[];
 }> {
-  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/imports/data`, {
-    credentials: 'include',
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Warehouse API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as { columns: string[]; rows: WS3ImportRow[] };
+  return requestJson<{ columns: string[]; rows: WS3ImportRow[] }>(
+    '/api/ws3/orders/imports/data',
+    {},
+    'Warehouse API',
+  );
 }
 
 /** Update the raw source values for one staging-warehouse row. */
@@ -313,31 +265,24 @@ export async function updateWS3WarehouseRow(
   id: number,
   raw_data: ImportedRow,
 ): Promise<WS3ImportRow> {
-  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/imports/data/${id}`, {
-    method: 'PATCH',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ raw_data }),
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Warehouse API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as WS3ImportRow;
+  return requestJson<WS3ImportRow>(
+    `/api/ws3/orders/imports/data/${id}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_data }),
+    },
+    'Warehouse API',
+  );
 }
 
 /** Archive one staging row that should not be used for order creation. */
 export async function archiveWS3WarehouseRow(id: number): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/imports/data/${id}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Warehouse API returned HTTP ${response.status}`,
-    );
+  await requestJson<void>(
+    `/api/ws3/orders/imports/data/${id}`,
+    { method: 'DELETE' },
+    'Warehouse API',
+  );
 }
 
 /** Upload and normalize a source file without committing an import batch yet. */
@@ -358,17 +303,7 @@ export async function parseWS3SourceFile(file: File): Promise<{
 }> {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/parse-file`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `File API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as {
+  return requestJson<{
     filename: string;
     format: string;
     text?: string;
@@ -382,21 +317,18 @@ export async function parseWS3SourceFile(file: File): Promise<{
     duplicate_count?: number;
     new_count?: number;
     incomplete_key_count?: number;
-  };
+  }>('/api/ws3/orders/parse-file', { method: 'POST', body: formData }, 'File API');
 }
 
 /** Mark a drafted WS3 production order as confirmed for downstream use. */
 export async function confirmWS3Order(id: number): Promise<WS3Order> {
-  const response = await fetch(`${apiBaseUrl}/api/ws3/orders/${id}/status`, {
-    method: 'PATCH',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: 'CONFIRMED' }),
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json().catch(() => null))?.detail ||
-        `Order API returned HTTP ${response.status}`,
-    );
-  return (await response.json()) as WS3Order;
+  return requestJson<WS3Order>(
+    `/api/ws3/orders/${id}/status`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'CONFIRMED' }),
+    },
+    'Order API',
+  );
 }

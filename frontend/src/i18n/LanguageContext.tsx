@@ -531,6 +531,7 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
   },
 };
 
+/** Provide the selected UI language and translation lookup to the application. */
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>(() =>
     window.localStorage.getItem('ws3-language') === 'en' ? 'en' : 'vi',

@@ -1,236 +1,21 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
-} from 'react';
+import { useCallback } from 'react';
 import { WS3MesShell } from '../../components/mes/WS3MesShell';
 import { MachineOperationSidebar } from '../../components/mes/operations/MachineOperationSidebar';
 import { useAuth } from '../../auth/useAuth';
 import { useLanguage } from '../../i18n/useLanguage';
 import { MachineOperationalNoticeDock } from '../support/MachineOperationalNoticeDock';
 import { isOperatorAssignedToMachine } from '../support/machineAssignment';
-import { getMachineOrderProgress, saveMachineOrderProgress } from './machineOrderProgressApi';
-import { MACHINE_NOTICE_DURATION_MS } from './noticeTiming';
-import {
-  getTenteringOrder,
-  getTenteringOrders,
-  getTenteringOrderSource,
-  saveTenteringOrder,
-  type TenteringOrder,
-  type TenteringOrderInput,
-} from './tenteringApi';
 import {
   TENTERING_MACHINES,
   TenteringMachineSelect,
   TenteringNavigation,
 } from './TenteringNavigation';
-import { TenteringLiveDashboard, type TenteringDashboardOrder } from './TenteringLiveDashboard';
-import { readTenterValue, useTenterRealtime } from './tenteringRealtime';
-import { useExistingMachineRecord } from './useExistingMachineRecord';
+import { TenteringLiveDashboard } from './TenteringLiveDashboard';
+import type { HeaderDraft } from './tenteringRecordTypes';
+import { displayDate, toCentimeters } from './tenteringRecordUtils';
+import { useOperationPanelResize } from './useOperationPanelResize';
+import { useTenteringRecord } from './useTenteringRecord';
 import './TenteringPage.css';
-
-type RollDraft = {
-  rollNumber: number;
-  savedEntryId?: number;
-  rollId: string;
-  tenterDate: string;
-  weavingDate: string;
-  plannedQuantity: string;
-  actualQuantity: string;
-  note: string;
-};
-
-type HeaderDraft = {
-  operatorName: string;
-  operatorIdentifier: string;
-  shift: string;
-  customer: string;
-  itemDescription: string;
-  warpYarn: string;
-  weftYarn: string;
-  greigeDensityPick: string;
-  finishDensityPick: string;
-  shrinkPercent: string;
-  greigeWidthInch: string;
-  finishWidthInch: string;
-};
-
-const emptyHeader: HeaderDraft = {
-  operatorName: '',
-  operatorIdentifier: '',
-  shift: '',
-  customer: '',
-  itemDescription: '',
-  warpYarn: '',
-  weftYarn: '',
-  greigeDensityPick: '',
-  finishDensityPick: '',
-  shrinkPercent: '',
-  greigeWidthInch: '',
-  finishWidthInch: '',
-};
-
-const emptyRolls = (count = 0): RollDraft[] =>
-  Array.from({ length: count }, (_, index) => ({
-    rollNumber: index + 1,
-    savedEntryId: undefined,
-    rollId: '',
-    tenterDate: '',
-    weavingDate: '',
-    plannedQuantity: '',
-    actualQuantity: '',
-    note: '',
-  }));
-
-const numeric = (value: string) => (value.trim() ? Number(value) : null);
-
-function displayDate(value: string, language: string) {
-  if (!value) return '—';
-  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
-  return Number.isNaN(date.valueOf())
-    ? value
-    : date.toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-GB');
-}
-
-function toCentimeters(value: string) {
-  const inches = numeric(value);
-  return inches === null || !Number.isFinite(inches)
-    ? '—'
-    : `${(inches * 2.54).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} cm`;
-}
-
-function headerFromOrder(order: TenteringOrder): HeaderDraft {
-  return {
-    operatorName: order.operator_name ?? '',
-    operatorIdentifier: order.operator_identifier ?? '',
-    shift: order.shift ?? '',
-    customer: order.customer ?? '',
-    itemDescription: order.item_description ?? '',
-    warpYarn: order.warp_yarn ?? '',
-    weftYarn: order.weft_yarn ?? '',
-    greigeDensityPick: order.greige_density_pick?.toString() ?? '',
-    finishDensityPick: order.finish_density_pick?.toString() ?? '',
-    shrinkPercent: order.shrink_percent?.toString() ?? '',
-    greigeWidthInch: order.greige_width_inch?.toString() ?? '',
-    finishWidthInch: order.finish_width_inch?.toString() ?? '',
-  };
-}
-
-function rollsFromOrder(order: TenteringOrder): RollDraft[] {
-  const lastSavedRoll = Math.max(0, ...order.entries.map((entry) => entry.roll_number));
-  const result = emptyRolls(lastSavedRoll);
-  for (const entry of order.entries) {
-    result[entry.roll_number - 1] = {
-      rollNumber: entry.roll_number,
-      savedEntryId: entry.id,
-      rollId: entry.roll_id ?? '',
-      tenterDate: entry.tenter_date ?? '',
-      weavingDate: entry.weaving_date ?? '',
-      plannedQuantity: entry.planned_quantity?.toString() ?? '',
-      actualQuantity: entry.actual_quantity?.toString() ?? '',
-      note: entry.note ?? '',
-    };
-  }
-  return result;
-}
-
-function applySourceRolls(
-  rolls: RollDraft[],
-  source: Awaited<ReturnType<typeof getTenteringOrderSource>>,
-) {
-  if (!source) return rolls;
-  const rollCount = Math.max(
-    rolls.length,
-    source.total_rolls,
-    ...source.rolls.map((roll) => roll.roll_number),
-  );
-  const expanded =
-    rollCount > rolls.length ? [...rolls, ...emptyRolls(rollCount).slice(rolls.length)] : rolls;
-  return source.rolls.reduce(
-    (current, sourceRoll) =>
-      current.map((row) =>
-        row.rollNumber === sourceRoll.roll_number
-          ? {
-              ...row,
-              rollId: sourceRoll.roll_id ?? row.rollId,
-              weavingDate: sourceRoll.weaving_date ?? row.weavingDate,
-              plannedQuantity: sourceRoll.length_meters?.toString() ?? row.plannedQuantity,
-            }
-          : row,
-      ),
-    expanded,
-  );
-}
-
-function inputFromDraft(
-  header: HeaderDraft,
-  rolls: RollDraft[],
-  orderProgress: 'IN_PROGRESS' | 'COMPLETED',
-): TenteringOrderInput {
-  return {
-    operator_name: header.operatorName.trim() || null,
-    operator_identifier: header.operatorIdentifier.trim() || null,
-    shift: header.shift || null,
-    order_progress: orderProgress,
-    customer: header.customer.trim() || null,
-    item_description: header.itemDescription.trim() || null,
-    warp_yarn: header.warpYarn.trim() || null,
-    weft_yarn: header.weftYarn.trim() || null,
-    greige_density_pick: numeric(header.greigeDensityPick),
-    finish_density_pick: numeric(header.finishDensityPick),
-    shrink_percent: numeric(header.shrinkPercent),
-    greige_width_inch: numeric(header.greigeWidthInch),
-    finish_width_inch: numeric(header.finishWidthInch),
-    fabric_received_date: null,
-    entries: rolls
-      .filter(
-        (row) =>
-          row.rollId ||
-          row.tenterDate ||
-          row.weavingDate ||
-          row.plannedQuantity ||
-          row.actualQuantity ||
-          row.note.trim(),
-      )
-      .map((row) => ({
-        roll_number: row.rollNumber,
-        roll_id: row.rollId || null,
-        tenter_date: row.tenterDate || null,
-        weaving_date: row.weavingDate || null,
-        planned_quantity: numeric(row.plannedQuantity),
-        actual_quantity: numeric(row.actualQuantity),
-        note: row.note.trim() || null,
-      })),
-  };
-}
-
-function dashboardOrderFromOrder(order: TenteringOrder): TenteringDashboardOrder {
-  const plannedValues = order.entries
-    .map((entry) => entry.planned_quantity)
-    .filter((value): value is number => value !== null);
-  const actualValues = order.entries
-    .map((entry) => entry.actual_quantity)
-    .filter((value): value is number => value !== null);
-  return {
-    sopNo: order.sop_no,
-    customer: order.customer ?? '',
-    itemDescription: order.item_description ?? '',
-    operatorName: order.operator_name ?? '',
-    shift: order.shift ?? '',
-    plannedQuantity: plannedValues.length
-      ? plannedValues.reduce((sum, value) => sum + value, 0)
-      : null,
-    actualQuantity: actualValues.length
-      ? actualValues.reduce((sum, value) => sum + value, 0)
-      : null,
-    rollCount: order.entries.length,
-    progress: order.order_progress,
-  };
-}
 
 export function TenteringRecordPage({
   machineId: routeMachineId = 'TE-01',
@@ -250,358 +35,50 @@ export function TenteringRecordPage({
     ? routeMachineId.toUpperCase()
     : 'TE-01';
   const machine = TENTERING_MACHINES.find((item) => item.id === machineId) ?? TENTERING_MACHINES[0];
-  const [sopInput, setSopInput] = useState('');
-  const [activeSop, setActiveSop] = useState('');
-  const [header, setHeader] = useState<HeaderDraft>({ ...emptyHeader });
-  const [rolls, setRolls] = useState<RollDraft[]>(emptyRolls());
-  const [shiftOrders, setShiftOrders] = useState<TenteringOrder[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [saved, setSaved] = useState(false);
-  const [newOrder, setNewOrder] = useState(false);
-  const [showNewOrderNotice, setShowNewOrderNotice] = useState(false);
-  const [knownOrder, setKnownOrder] = useState(false);
-  const [orderProgress, setOrderProgress] = useState<'IN_PROGRESS' | 'COMPLETED'>('IN_PROGRESS');
-  const [progressSaving, setProgressSaving] = useState(false);
-  const [progressError, setProgressError] = useState('');
-  const [operationCollapsed, setOperationCollapsed] = useState(false);
-  const [operationWidth, setOperationWidth] = useState(272);
-  const [recordMode, setRecordMode] = useState<'AUTO' | 'MANUAL'>('AUTO');
-  const [showMachineSignals, setShowMachineSignals] = useState(false);
-  const [autoCounterBaseline, setAutoCounterBaseline] = useState<number | null>(null);
-  const operationLayoutRef = useRef<HTMLDivElement>(null);
-  const operationDragRef = useRef<{
-    startX: number;
-    startWidth: number;
-    moved: boolean;
-    width: number;
-    collapsed: boolean;
-    frame: number | null;
-  } | null>(null);
+  const {
+    sopInput,
+    activeSop,
+    header,
+    setHeader,
+    rolls,
+    loading,
+    saving,
+    error,
+    saved,
+    newOrder,
+    showNewOrderNotice,
+    knownOrder,
+    orderProgress,
+    progressSaving,
+    progressError,
+    recordMode,
+    setRecordMode,
+    showMachineSignals,
+    setShowMachineSignals,
+    realtime,
+    plannedQuantity,
+    actualQuantity,
+    completedRolls,
+    dashboardOrders,
+    stateText,
+    resetForSop,
+    changeOrderProgress,
+    save,
+    updateRoll,
+  } = useTenteringRecord({ machineId, tx });
+  const {
+    operationCollapsed,
+    operationWidth,
+    operationLayoutRef,
+    workspaceStyle,
+    handleDividerPointerDown,
+    handleDividerPointerMove,
+    handleDividerPointerUp,
+    handleDividerPointerCancel,
+    handleDividerKeyDown,
+  } = useOperationPanelResize();
   const isOperator = user?.role === 'OPERATOR';
   const isTenteringOperator = isOperatorAssignedToMachine(user, machineId);
-  const realtime = useTenterRealtime(machineId, recordMode === 'AUTO');
-  const liveCounterTotal = readTenterValue(realtime.machine?.readingValues ?? {}, [
-    ['speed_and_width', 'Counter Total'],
-  ]);
-  const autoActualQuantity =
-    liveCounterTotal !== null && autoCounterBaseline !== null
-      ? Math.max(0, liveCounterTotal - autoCounterBaseline)
-      : null;
-
-  useEffect(() => {
-    if (recordMode !== 'AUTO' || !activeSop) {
-      setAutoCounterBaseline(null);
-      return;
-    }
-    if (liveCounterTotal !== null) setAutoCounterBaseline((current) => current ?? liveCounterTotal);
-  }, [activeSop, liveCounterTotal, recordMode]);
-  const findExistingOrder = useCallback(
-    (normalizedSop: string) => getTenteringOrder(machineId, normalizedSop),
-    [machineId],
-  );
-  // The optional realtime fixture must never disable MES production data.
-  // ?mock=tenter only changes the machine signal source, while SOP lookup stays real.
-  const existingLookup = useExistingMachineRecord(sopInput, findExistingOrder, 300);
-  const workspaceStyle = {
-    '--tentering-operation-width': `${operationCollapsed ? 10 : operationWidth}px`,
-  } as CSSProperties;
-
-  useEffect(() => {
-    if (!header.shift) {
-      setShiftOrders([]);
-      return undefined;
-    }
-    const controller = new AbortController();
-    void getTenteringOrders(machineId, '', { signal: controller.signal })
-      .then((orders) => setShiftOrders(orders.filter((order) => order.shift === header.shift)))
-      .catch(() => {
-        if (!controller.signal.aborted) setShiftOrders([]);
-      });
-    return () => controller.abort();
-  }, [header.shift, machineId]);
-
-  const handleOperationDividerPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType === 'mouse' && event.button !== 0) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    operationDragRef.current = {
-      startX: event.clientX,
-      startWidth: operationCollapsed ? 40 : operationWidth,
-      moved: false,
-      width: operationCollapsed ? 10 : operationWidth,
-      collapsed: operationCollapsed,
-      frame: null,
-    };
-  };
-  const handleOperationDividerPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const drag = operationDragRef.current;
-    if (!drag) return;
-    const delta = event.clientX - drag.startX;
-    if (Math.abs(delta) > 4) drag.moved = true;
-    if (!drag.moved) return;
-    const nextWidth = drag.startWidth + delta;
-    const nextCollapsed = nextWidth <= 10;
-    // Keep the drag continuous all the way to the collapsed width. The old 220px
-    // floor made the sidebar stick, then jump when it crossed the collapse point.
-    const width = nextCollapsed ? 10 : Math.min(420, Math.max(10, nextWidth));
-    drag.width = width;
-    if (drag.collapsed !== nextCollapsed) {
-      drag.collapsed = nextCollapsed;
-      setOperationCollapsed(nextCollapsed);
-      setOperationWidth(nextCollapsed ? 10 : width);
-    }
-    if (drag.frame === null) {
-      drag.frame = window.requestAnimationFrame(() => {
-        drag.frame = null;
-        operationLayoutRef.current?.style.setProperty(
-          '--tentering-operation-width',
-          `${drag.width}px`,
-        );
-      });
-    }
-  };
-  const handleOperationDividerPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const drag = operationDragRef.current;
-    operationDragRef.current = null;
-    if (drag?.frame !== null && drag?.frame !== undefined) window.cancelAnimationFrame(drag.frame);
-    if (drag && !drag.moved) {
-      const collapsed = !operationCollapsed;
-      setOperationCollapsed(collapsed);
-      setOperationWidth(collapsed ? 10 : operationWidth);
-      operationLayoutRef.current?.style.setProperty(
-        '--tentering-operation-width',
-        `${collapsed ? 10 : operationWidth}px`,
-      );
-    } else if (drag) {
-      setOperationCollapsed(drag.collapsed);
-      setOperationWidth(drag.collapsed ? 10 : drag.width);
-      operationLayoutRef.current?.style.setProperty(
-        '--tentering-operation-width',
-        `${drag.collapsed ? 10 : drag.width}px`,
-      );
-    }
-    if (event.currentTarget.hasPointerCapture(event.pointerId))
-      event.currentTarget.releasePointerCapture(event.pointerId);
-  };
-  const handleOperationDividerPointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const drag = operationDragRef.current;
-    operationDragRef.current = null;
-    if (drag?.frame !== null && drag?.frame !== undefined) window.cancelAnimationFrame(drag.frame);
-    if (drag?.moved) {
-      setOperationCollapsed(drag.collapsed);
-      setOperationWidth(drag.collapsed ? 10 : drag.width);
-      operationLayoutRef.current?.style.setProperty(
-        '--tentering-operation-width',
-        `${drag.collapsed ? 10 : drag.width}px`,
-      );
-    }
-    if (event.currentTarget.hasPointerCapture(event.pointerId))
-      event.currentTarget.releasePointerCapture(event.pointerId);
-  };
-  const handleOperationDividerKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      setOperationCollapsed((current) => !current);
-      return;
-    }
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-    event.preventDefault();
-    const delta = event.key === 'ArrowRight' ? 16 : -16;
-    setOperationCollapsed(false);
-    setOperationWidth((current) => Math.min(420, Math.max(220, current + delta)));
-  };
-
-  useEffect(() => {
-    if (!saved) return undefined;
-    const timer = window.setTimeout(() => setSaved(false), MACHINE_NOTICE_DURATION_MS);
-    return () => window.clearTimeout(timer);
-  }, [saved]);
-
-  useEffect(() => {
-    if (!newOrder) {
-      setShowNewOrderNotice(false);
-      return undefined;
-    }
-    setShowNewOrderNotice(true);
-    const timer = window.setTimeout(() => setShowNewOrderNotice(false), MACHINE_NOTICE_DURATION_MS);
-    return () => window.clearTimeout(timer);
-  }, [newOrder]);
-
-  useEffect(() => {
-    const normalized = sopInput.trim().toUpperCase();
-    if (!normalized || normalized === activeSop) {
-      setLoading(false);
-      return;
-    }
-    if (existingLookup.loading) {
-      setLoading(true);
-      return;
-    }
-    let active = true;
-    setLoading(true);
-    setError('');
-    void (async () => {
-      try {
-        if (existingLookup.error) throw new Error(existingLookup.error);
-        const result = existingLookup.record;
-        const [sourceResult, progressResult] = await Promise.allSettled([
-          getTenteringOrderSource(machineId, normalized),
-          getMachineOrderProgress(machineId as 'TE-01' | 'TE-02', normalized),
-        ]);
-        if (!result && sourceResult.status === 'rejected') throw sourceResult.reason;
-        if (!active) return;
-        const source = sourceResult.status === 'fulfilled' ? sourceResult.value : null;
-        setActiveSop(normalized);
-        setNewOrder(!result);
-        setKnownOrder(Boolean(result || source));
-        setHeader(
-          result
-            ? headerFromOrder(result)
-            : {
-                ...emptyHeader,
-                customer: source?.customer ?? '',
-                itemDescription: source?.item_description ?? '',
-              },
-        );
-        setRolls(applySourceRolls(result ? rollsFromOrder(result) : emptyRolls(), source));
-        setOrderProgress(
-          progressResult.status === 'fulfilled'
-            ? (progressResult.value?.orderProgress ?? result?.order_progress ?? 'IN_PROGRESS')
-            : (result?.order_progress ?? 'IN_PROGRESS'),
-        );
-        setProgressError('');
-      } catch (reason) {
-        if (active)
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : tx('Không tải được dữ liệu Tentering.', 'Unable to load Tentering data.'),
-          );
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [
-    activeSop,
-    existingLookup.error,
-    existingLookup.loading,
-    existingLookup.record,
-    machineId,
-    sopInput,
-    tx,
-  ]);
-
-  const resetForSop = (value: string) => {
-    setSopInput(value.toUpperCase());
-    setActiveSop('');
-    setKnownOrder(false);
-    setHeader({ ...emptyHeader });
-    setRolls(emptyRolls());
-    setNewOrder(false);
-    setSaved(false);
-    setLoading(false);
-    setOrderProgress('IN_PROGRESS');
-    setProgressError('');
-    setError('');
-  };
-
-  const changeOrderProgress = async (nextProgress: 'IN_PROGRESS' | 'COMPLETED') => {
-    if (!activeSop || !knownOrder || progressSaving || loading) return;
-    const previousProgress = orderProgress;
-    setOrderProgress(nextProgress);
-    setProgressSaving(true);
-    setProgressError('');
-    try {
-      await saveMachineOrderProgress(machineId as 'TE-01' | 'TE-02', activeSop, nextProgress);
-    } catch (reason) {
-      setOrderProgress(previousProgress);
-      setProgressError(
-        reason instanceof Error
-          ? reason.message
-          : tx('Không lưu được tiến độ đơn.', 'Unable to save order progress.'),
-      );
-    } finally {
-      setProgressSaving(false);
-    }
-  };
-
-  const save = async () => {
-    if (!activeSop || saving) return;
-    if (!header.operatorName.trim() || !header.operatorIdentifier.trim() || !header.shift) {
-      setError(
-        tx(
-          'Nhập người vận hành, ID nhân viên và ca làm trước khi lưu.',
-          'Enter the operator, employee ID, and shift before saving.',
-        ),
-      );
-      return;
-    }
-    const invalidHeader = [
-      header.greigeDensityPick,
-      header.finishDensityPick,
-      header.shrinkPercent,
-      header.greigeWidthInch,
-      header.finishWidthInch,
-    ].find((value) => value.trim() && (!Number.isFinite(Number(value)) || Number(value) < 0));
-    if (invalidHeader !== undefined) {
-      setError(
-        tx(
-          'Thông tin mật độ, co rút hoặc khổ vải phải là số không âm.',
-          'Density, shrinkage, and width must be non-negative numbers.',
-        ),
-      );
-      return;
-    }
-    const invalidRow = rolls.find((row) =>
-      [row.plannedQuantity, row.actualQuantity].some(
-        (value) => value.trim() && (!Number.isFinite(Number(value)) || Number(value) < 0),
-      ),
-    );
-    if (invalidRow) {
-      setError(
-        tx(
-          `Số mét ở cuộn ${invalidRow.rollNumber} không hợp lệ.`,
-          `Invalid meter value on roll ${invalidRow.rollNumber}.`,
-        ),
-      );
-      return;
-    }
-    setSaving(true);
-    setError('');
-    setSaved(false);
-    try {
-      const result = await saveTenteringOrder(
-        machineId,
-        activeSop,
-        inputFromDraft(header, rolls, orderProgress),
-      );
-      setOrderProgress(result.order_progress);
-      setHeader(headerFromOrder(result));
-      setRolls(rollsFromOrder(result));
-      setSopInput(result.sop_no);
-      setActiveSop(result.sop_no);
-      setNewOrder(false);
-      setSaved(true);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : tx('Không lưu được dữ liệu Tentering.', 'Unable to save Tentering data.'),
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const updateRoll = (index: number, key: keyof RollDraft, value: string) =>
-    setRolls((current) =>
-      current.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row)),
-    );
   const field = (
     key: keyof HeaderDraft,
     label: string,
@@ -634,32 +111,6 @@ export function TenteringRecordPage({
     </label>
   );
 
-  const stateText = loading ? tx('Đang tra cứu SOP…', 'Looking up SOP…') : '';
-  const plannedQuantity = rolls.some((row) => row.plannedQuantity.trim())
-    ? rolls.reduce((sum, row) => sum + (numeric(row.plannedQuantity) ?? 0), 0)
-    : null;
-  const actualQuantity = rolls.some((row) => row.actualQuantity.trim())
-    ? rolls.reduce((sum, row) => sum + (numeric(row.actualQuantity) ?? 0), 0)
-    : null;
-  const completedRolls = rolls.filter((row) => row.actualQuantity.trim()).length;
-  const currentDashboardOrder: TenteringDashboardOrder | null = activeSop
-    ? {
-        sopNo: activeSop,
-        customer: header.customer,
-        itemDescription: header.itemDescription,
-        operatorName: header.operatorName,
-        shift: header.shift,
-        plannedQuantity,
-        actualQuantity: recordMode === 'AUTO' ? autoActualQuantity : actualQuantity,
-        rollCount: rolls.length,
-        progress: orderProgress,
-      }
-    : null;
-  const dashboardOrders = [
-    ...shiftOrders.filter((order) => order.sop_no !== activeSop).map(dashboardOrderFromOrder),
-    ...(currentDashboardOrder ? [currentDashboardOrder] : []),
-  ];
-
   return (
     <WS3MesShell
       module={tx('Định hình', 'Tentering')}
@@ -679,7 +130,9 @@ export function TenteringRecordPage({
           <span className="tentering-page__status">{stateText}</span>
         </header>
         <div
-          ref={operationLayoutRef}
+          ref={(element) => {
+            operationLayoutRef.current = element;
+          }}
           className={`tentering-record__layout${isTenteringOperator ? ' has-notices' : ''}${operationCollapsed ? ' tentering-record__layout--operation-collapsed' : ''}`}
           style={workspaceStyle}
         >
@@ -745,11 +198,11 @@ export function TenteringRecordPage({
                   ? 'Thu gọn hoặc thay đổi độ rộng thông tin vận hành'
                   : 'Collapse or resize operation details'
               }
-              onPointerDown={handleOperationDividerPointerDown}
-              onPointerMove={handleOperationDividerPointerMove}
-              onPointerUp={handleOperationDividerPointerUp}
-              onPointerCancel={handleOperationDividerPointerCancel}
-              onKeyDown={handleOperationDividerKeyDown}
+              onPointerDown={handleDividerPointerDown}
+              onPointerMove={handleDividerPointerMove}
+              onPointerUp={handleDividerPointerUp}
+              onPointerCancel={handleDividerPointerCancel}
+              onKeyDown={handleDividerKeyDown}
             />
           </MachineOperationSidebar>
 
@@ -796,7 +249,7 @@ export function TenteringRecordPage({
                   activeSop={activeSop}
                   orderProgress={orderProgress}
                   plannedQuantity={plannedQuantity}
-                  actualQuantity={recordMode === 'AUTO' ? autoActualQuantity : actualQuantity}
+                  actualQuantity={actualQuantity}
                   rollCount={rolls.length}
                   completedRolls={completedRolls}
                   finishWidthInch={header.finishWidthInch}

@@ -7,8 +7,9 @@ services:
     build:
       args:
         NGINX_CONFIG: nginx.https.conf
+    environment:
+      WS3_HTTPS_PORT: ${WS3_HTTPS_PORT:-443}
     ports:
-      - "${WS3_HTTP_PORT:-80}:80"
       - "${WS3_HTTPS_PORT:-443}:443"
     volumes:
       - "${WS3_TLS_DIR:-./infra/tls}:/etc/nginx/certs:ro"

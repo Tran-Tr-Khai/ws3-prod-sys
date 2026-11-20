@@ -9,7 +9,9 @@ import { LoginPage } from '../features/auth/LoginPage';
 import { WS3DataSnapshotPage } from '../features/orders/WS3DataSnapshotPage';
 import { WS3DataWarehousePage } from '../features/orders/WS3DataWarehousePage';
 import { useAuth } from '../auth/useAuth';
+import { canAccessDataWarehouse, canAccessPath } from './accessPolicy';
 
+/** Resolve authenticated MES routes and enforce role/machine access rules. */
 export default function App() {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -26,17 +28,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
-  const tenteringMachine = location.pathname.match(/^\/machine\/(TE-01|TE-02)\/(record|history)$/i);
-  const restrictedMachine = location.pathname.startsWith('/machine/buffing')
-    ? 'BU-01'
-    : (tenteringMachine?.[1].toUpperCase() ?? null);
-  if (
-    location.pathname.startsWith('/machine/unrolling') &&
-    !['ADMIN', 'SUPERVISOR', 'PRODUCTION_MANAGER'].includes(user.role)
-  )
-    return <Navigate to="/ws3" replace />;
-  if (user.role === 'OPERATOR' && restrictedMachine && !user.machineIds.includes(restrictedMachine))
-    return <Navigate to="/ws3" replace />;
+  if (!canAccessPath(location.pathname, user)) return <Navigate to="/ws3" replace />;
   return (
     <Routes>
       <Route path="/login" element={<Navigate to="/ws3" replace />} />
@@ -49,7 +41,9 @@ export default function App() {
       />
       <Route
         path="/ws3/admin/data-warehouse"
-        element={user.role === 'ADMIN' ? <WS3DataWarehousePage /> : <Navigate to="/ws3" replace />}
+        element={
+          canAccessDataWarehouse(user) ? <WS3DataWarehousePage /> : <Navigate to="/ws3" replace />
+        }
       />
       <Route path="/supervisor/data" element={<Navigate to="/ws3/supervisor/data" replace />} />
       <Route

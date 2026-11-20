@@ -45,19 +45,21 @@ export function MesResizableTable({
   className,
   ...tableProps
 }: MesResizableTableProps) {
-  const defaultWidths = useRef(initialWidths).current;
-  const [widths, setWidths] = useState(defaultWidths);
+  const [widths, setWidths] = useState(initialWidths);
   const resizeRef = useRef<ResizeState | null>(null);
 
   useEffect(() => {
-    setWidths(defaultWidths);
+    // Column definitions can arrive after the first render (for example when
+    // a data-warehouse response provides its headers). Reset the table model
+    // whenever that definition changes so every header gets a resize handle.
+    setWidths(initialWidths);
     try {
       const stored = window.localStorage.getItem(storageKey);
       if (!stored) return;
       const parsed: unknown = JSON.parse(stored);
       if (
         Array.isArray(parsed) &&
-        parsed.length === defaultWidths.length &&
+        parsed.length === initialWidths.length &&
         parsed.every((value) => typeof value === 'number' && Number.isFinite(value))
       ) {
         setWidths(
@@ -67,7 +69,7 @@ export function MesResizableTable({
     } catch {
       // A bad saved preference should never prevent the table from rendering.
     }
-  }, [defaultWidths, storageKey]);
+  }, [initialWidths, storageKey]);
 
   useEffect(() => {
     try {

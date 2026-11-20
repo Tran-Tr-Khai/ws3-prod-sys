@@ -6,20 +6,10 @@ import {
   type TenterRealtimeSample,
   type TenterRealtimeSnapshot,
 } from './tenteringRealtime';
+import type { TenteringDashboardOrder } from './tenteringRecordTypes';
+import { formatNumber } from '../../shared/formatters/number';
 import './TenteringLiveDashboard.css';
 import '../../components/mes/MesDataTable.css';
-
-export type TenteringDashboardOrder = {
-  sopNo: string;
-  customer: string;
-  itemDescription: string;
-  operatorName: string;
-  shift: string;
-  plannedQuantity: number | null;
-  actualQuantity: number | null;
-  rollCount: number;
-  progress: 'IN_PROGRESS' | 'COMPLETED';
-};
 
 type TenteringLiveDashboardProps = {
   activeSop: string;
@@ -37,8 +27,7 @@ type TenteringLiveDashboardProps = {
 };
 
 function numberText(value: number | null, language: string, maximumFractionDigits = 1) {
-  if (value === null || !Number.isFinite(value)) return '—';
-  return value.toLocaleString(language === 'vi' ? 'vi-VN' : 'en-GB', { maximumFractionDigits });
+  return formatNumber(value, language, maximumFractionDigits);
 }
 
 function asNumber(value: string) {

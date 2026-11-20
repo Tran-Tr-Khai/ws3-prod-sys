@@ -58,3 +58,23 @@ export async function requestJson<T>(
   const message = await apiErrorMessage(response, `${errorLabel} returned HTTP ${response.status}`);
   throw new ApiRequestError(message, response.status);
 }
+
+/**
+ * Send a same-session request whose successful response is a downloadable
+ * binary payload, such as an Excel report.
+ */
+export async function requestBlob(
+  path: string,
+  init: RequestInit = {},
+  errorLabel = 'API request',
+): Promise<Blob> {
+  const response = await fetch(apiUrl(path), {
+    credentials: 'include',
+    ...init,
+  });
+
+  if (response.ok) return response.blob();
+
+  const message = await apiErrorMessage(response, `${errorLabel} returned HTTP ${response.status}`);
+  throw new ApiRequestError(message, response.status);
+}

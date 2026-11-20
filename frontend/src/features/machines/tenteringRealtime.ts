@@ -31,10 +31,12 @@ const emptySnapshot: TenterRealtimeSnapshot = {
 
 const MOCK_QUERY_VALUE = 'tenter';
 
+/** Return whether the operator explicitly enabled the local Tenter fixture. */
 function isMockMode() {
   return new URLSearchParams(window.location.search).get('mock') === MOCK_QUERY_VALUE;
 }
 
+/** Generate one deterministic-looking sample of the Tenter signal groups. */
 function mockReadingValues(tick: number): TenterReadingValues {
   const phase = tick / 5;
   const speed = 80 + Math.sin(phase) * 2.5;
@@ -64,6 +66,7 @@ function mockReadingValues(tick: number): TenterReadingValues {
   };
 }
 
+/** Build the initial 30-minute fixture used by the dashboard preview. */
 function mockSnapshot(machineId: string, tick: number): TenterRealtimeSnapshot {
   const now = Date.now();
   const history = Array.from({ length: 30 }, (_, index) => {
@@ -93,16 +96,19 @@ function mockSnapshot(machineId: string, tick: number): TenterRealtimeSnapshot {
   };
 }
 
+/** Resolve the relay URL for a machine using the shared runtime configuration. */
 function websocketUrl(machineId: string) {
   return tenterRealtimeUrl(machineId);
 }
 
+/** Normalize the machine identifiers emitted by different Tenter integrations. */
 function machineAliases(machineId: string) {
   const normalized = machineId.trim().toUpperCase();
   const number = normalized.match(/^TE[-_ ]?(\d+)$/)?.[1];
   return new Set([normalized, number ? `TENTER ${Number(number)}` : '']);
 }
 
+/** Find and normalize one machine state from a relay state map. */
 function pickMachine(
   states: Record<string, unknown>,
   machineId: string,
@@ -125,6 +131,7 @@ function pickMachine(
   };
 }
 
+/** Read the first finite numeric value from a list of nested signal paths. */
 function nestedNumber(readings: TenterReadingValues, paths: string[][]) {
   for (const path of paths) {
     const group = readings[path[0]];
@@ -134,6 +141,7 @@ function nestedNumber(readings: TenterReadingValues, paths: string[][]) {
   return null;
 }
 
+/** Convert a relay machine state into one point for the dashboard history chart. */
 function toSample(machine: TenterMachineState): TenterRealtimeSample | null {
   const time = machine.timestamp ? Date.parse(machine.timestamp) : NaN;
   if (!Number.isFinite(time)) return null;
@@ -156,6 +164,7 @@ function toSample(machine: TenterMachineState): TenterRealtimeSample | null {
   };
 }
 
+/** Extract the selected machine from either supported relay message envelope. */
 function payloadMachine(payload: unknown, machineId: string) {
   if (!payload || typeof payload !== 'object') return null;
   const source = payload as { type?: unknown; payload?: unknown; tenter_states?: unknown };

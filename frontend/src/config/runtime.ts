@@ -1,15 +1,13 @@
 /**
  * Runtime endpoints used by the browser application.
  *
- * The fallback values keep local development usable without an `.env` file.
- * Docker builds set `VITE_API_BASE_URL=/` so Nginx proxies API requests
- * through the same origin.
+ * Vite proxies API and WebSocket requests locally. Nginx does the same in Docker.
  */
 function normalizedUrl(value: string | undefined, fallback: string): string {
   return (value?.trim() || fallback).replace(/\/+$/, '');
 }
 
-export const apiBaseUrl = normalizedUrl(import.meta.env.VITE_API_BASE_URL, 'http://localhost:8000');
+export const apiBaseUrl = normalizedUrl(import.meta.env.VITE_API_BASE_URL, '/');
 
 export const cameraAgentUrl = normalizedUrl(
   import.meta.env.VITE_CAMERA_AGENT_URL,

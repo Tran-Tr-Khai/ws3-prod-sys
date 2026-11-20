@@ -8,7 +8,7 @@ Nginx và Camera Agent cho các camera công nghiệp Hikrobot/MVS.
 | Mục đích | Chọn luồng |
 | --- | --- |
 | Code, debug API/UI, xem lỗi trực tiếp | [Chạy local](#3-chạy-local-để-phát-triển) |
-| Chạy nguyên hệ thống bằng container | [Chạy Docker](#4-chạy-toàn-hệ-thống-bằng-docker) |
+| Kiểm tra hoặc triển khai nguyên hệ thống | [Chạy staging và production](#4-chạy-staging-và-production) |
 
 Không chạy đồng thời backend local với backend Docker trên cùng port. Camera
 Agent luôn chạy trên máy được nối camera, độc lập với hai luồng trên.
@@ -28,7 +28,8 @@ Agent luôn chạy trên máy được nối camera, độc lập với hai lu�
 backend/       FastAPI, SQLAlchemy, Alembic, script quản trị và test
 frontend/      React/TypeScript/Vite và cấu hình Nginx
 camera-agent/  Cầu nối local tới camera Hikrobot/MVS
-docs/          Tài liệu phát triển, nghiệp vụ, triển khai và vận hành
+infra/compose/ Cấu hình Docker cho dev và triển khai
+environments/  Mẫu cấu hình staging và production
 scripts/       Tiện ích ở cấp repository
 ```
 
@@ -39,18 +40,15 @@ sản xuất. Chỉ commit các file `.env.example` không chứa secret.
 
 Các lệnh dưới đây chạy từ thư mục gốc repository trong PowerShell.
 
-### Backend và PostgreSQL
+### Khởi động dev
 
 ```powershell
-uv sync --project backend --group dev
-if (-not (Test-Path backend\.env)) { Copy-Item backend\.env.example backend\.env }
-docker compose up -d postgres
-uv run --project backend alembic -c backend\alembic.ini upgrade head
-uv run --directory backend python run.py
+.\scripts\ws3.cmd dev up
 ```
 
-Nếu cần đổi database hoặc CORS, mở `backend\.env` trước khi chạy migration.
-API chạy tại `http://localhost:8000`.
+Launcher tạo `.env` từ mẫu nếu chưa có, khởi động PostgreSQL thuộc project
+`ws3-dev`, áp dụng migration rồi mở hai terminal cho API và frontend. API mặc
+định ở cổng 8000, frontend ở 5173 và PostgreSQL dev ở 5433.
 
 Health check và tài liệu OpenAPI:
 
@@ -68,16 +66,15 @@ uv run --directory backend python -m app.db.create_user <username> <password> --
 
 ### Frontend
 
-Mở terminal thứ hai:
+Khi muốn chạy riêng frontend, dùng:
 
 ```powershell
-Set-Location frontend
-npm ci
-npm run dev
+npm.cmd --prefix frontend ci
+npm.cmd --prefix frontend run dev
 ```
 
-Frontend chạy tại `http://localhost:5173`. Endpoint phát triển mặc định được
-quản lý trong `frontend/src/config/runtime.ts`, nên không cần tạo file `.env`.
+Frontend chạy tại `http://localhost:5173`. Vite chuyển tiếp `/api` và `/ws`
+đến backend local.
 
 ### Camera Agent
 
@@ -95,77 +92,23 @@ ws3-camera-agent
 Health check: `http://127.0.0.1:8765/health`. Chi tiết cài MVS và xử lý camera
 xem [camera-agent/README.md](camera-agent/README.md).
 
-## 4. Chạy toàn hệ thống bằng Docker
+## 4. Chạy staging và production
 
-Đây là cách chạy gần với môi trường production. Tạo file cấu hình local từ
-mẫu rồi thay các giá trị bắt buộc:
-
-```powershell
-if (-not (Test-Path .env.production)) { Copy-Item .env.production.example .env.production }
-notepad .env.production
-```
-
-Trước khi chạy, bắt buộc thay `POSTGRES_PASSWORD` và `AUTH_SECRET_KEY`. Đặt
-`BACKEND_CORS_ORIGINS` theo đúng URL/IP người dùng truy cập, ví dụ
-`https://192.168.100.253`. Không dùng giá trị `REPLACE_WITH_...`.
-
-HTTP:
+Mỗi thư mục triển khai có một `.env` riêng. Tạo file từ mẫu [staging](environments/.env.staging.example)
+hoặc [production](environments/.env.production.example), rồi điền cổng, origin,
+đường dẫn chứng chỉ và thông tin đăng nhập của môi trường đó.
 
 ```powershell
-docker compose -p ws3 --env-file .env.production `
-  -f docker-compose.production.yml up -d --build
+.\scripts\ws3.cmd staging config -EnvFile ..\ws3-staging\.env
+.\scripts\ws3.cmd staging up -EnvFile ..\ws3-staging\.env
 ```
 
-Có thể kiểm tra cấu hình đã được Compose resolve trước khi tạo container:
+Nếu `.env` nằm ở root của checkout staging/prod, bỏ `-EnvFile`. Trên Ubuntu, dùng
+`pwsh -File ./scripts/ws3.ps1` trên Ubuntu.
 
-```powershell
-docker compose -p ws3 --env-file .env.production `
-  -f docker-compose.production.yml config --quiet
-```
-
-HTTPS:
-
-```powershell
-docker compose -p ws3 --env-file .env.production `
-  -f docker-compose.production.yml -f docker-compose.https.yml `
-  up -d --build
-```
-
-HTTPS yêu cầu certificate/key hợp lệ trong thư mục `WS3_TLS_DIR`. Nếu port 80
-hoặc 443 đang được ứng dụng khác sử dụng, hãy dừng stack gây xung đột hoặc đổi
-port trong `.env.production`.
-
-Overlay HTTPS hiện yêu cầu hai file sau trong `WS3_TLS_DIR`:
-
-```text
-ws3-lan.crt
-ws3-lan.key
-```
-
-Kiểm tra stack:
-
-```powershell
-docker compose -p ws3 --env-file .env.production `
-  -f docker-compose.production.yml ps
-docker compose -p ws3 --env-file .env.production `
-  -f docker-compose.production.yml logs --tail=100 backend web
-```
-
-Dừng stack nhưng giữ volume database:
-
-```powershell
-docker compose -p ws3 --env-file .env.production `
-  -f docker-compose.production.yml -f docker-compose.https.yml down
-```
-
-Không dùng `down -v` nếu chưa có chủ đích xóa database và media volume.
-
-Nếu gặp `port is already allocated`, kiểm tra container đang chiếm port:
-
-```powershell
-docker ps --format "table {{.Names}}\t{{.Ports}}"
-docker compose -p ws3 ps
-```
+Staging và production dùng cùng stack HTTPS. Production giữ project `ws3`;
+staging dùng `ws3-staging`. Lệnh `down` giữ volume. Khi chuyển từ `.env.production`
+cũ, thêm `APP_ENV=production` và giữ nguyên project `ws3`, database và chứng chỉ.
 
 ## 5. Các file cấu hình quan trọng
 
@@ -175,34 +118,22 @@ docker compose -p ws3 ps
 | `backend/uv.lock` | Khóa chính xác phiên bản dependency; Docker dùng file này với `--frozen`. |
 | `backend/Dockerfile` | Đóng gói API backend thành image Docker. |
 | `backend/alembic.ini` | Cấu hình vị trí migration và logging của Alembic; database URL được lấy từ Settings. |
-| `docker-compose.yml` | PostgreSQL tối giản cho local development. |
-| `docker-compose.production.yml` | PostgreSQL, backend và web cho stack production-like. |
-| `docker-compose.https.yml` | Overlay bật HTTPS và mount certificate cho Nginx. |
-| `backend/.env.example` | Mẫu biến môi trường local của backend. |
+| `infra/compose/docker-compose.yml` | PostgreSQL tối giản cho local development. |
+| `infra/compose/docker-compose.production.yml` | PostgreSQL, backend và web cho stack production-like. |
+| `infra/compose/docker-compose.https.yml` | Overlay bật HTTPS và mount certificate cho Nginx. |
+| `.env.example` | Mẫu cấu hình local dùng chung cho backend và PostgreSQL. |
 | `frontend/src/config/runtime.ts` | Endpoint mặc định của frontend local và logic chọn URL runtime. |
-| `.env.production.example` | Mẫu biến Compose production; không chứa secret thật. |
+| `environments/.env.production.example` | Mẫu biến Compose production; không chứa secret thật. |
 
 ## 6. Kiểm tra trước khi gửi code
 
 ```powershell
 Set-Location frontend
-npm run lint
+npm run check
 npm run build
 Set-Location ..
 uv run --directory backend ruff check app scripts tests
 uv run --directory backend python -m unittest discover -s tests -v
 ```
 
-Migration mới phải được kiểm tra trên PostgreSQL riêng. Đọc
-[docs/deployment/alembic-safety.md](docs/deployment/alembic-safety.md) trước khi
-thay đổi schema hoặc deploy.
-
-## 7. Tài liệu chi tiết
-
-- [Tài liệu phát triển](docs/development.md)
-- [Quy ước API](docs/api-conventions.md)
-- [Kiến trúc và dữ liệu](docs/architecture.md)
-- [Luồng MES và phân quyền](docs/operations/production-workflows.md)
-- [Triển khai production](docs/deployment/production.md)
-- [An toàn Alembic](docs/deployment/alembic-safety.md)
-- [Xóa dữ liệu test](docs/operations/clear-test-data.md)
+Migration mới phải được kiểm tra trên PostgreSQL riêng trước khi deploy.

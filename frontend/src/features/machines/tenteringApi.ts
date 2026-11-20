@@ -1,4 +1,4 @@
-import { apiUrl, ApiRequestError, requestJson } from '../../shared/api/http';
+import { ApiRequestError, requestBlob, requestJson } from '../../shared/api/http';
 
 export type TenteringRollEntry = {
   id: number;
@@ -93,11 +93,7 @@ export async function downloadTenteringReport(filters: {
   const params = new URLSearchParams({ machine_id: filters.machineId, language: filters.language });
   if (filters.savedDate) params.set('saved_date', filters.savedDate);
   if (filters.query?.trim()) params.set('q', filters.query.trim());
-  const response = await fetch(apiUrl(`/api/tentering/orders/export?${params.toString()}`), {
-    credentials: 'include',
-  });
-  if (!response.ok) throw new Error(`Tentering API returned HTTP ${response.status}`);
-  return response.blob();
+  return requestBlob(`/api/tentering/orders/export?${params.toString()}`, {}, 'Tentering API');
 }
 
 /** Find a saved SOP for one machine, returning null only when it does not exist. */

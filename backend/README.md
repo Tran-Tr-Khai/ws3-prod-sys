@@ -8,16 +8,11 @@ data, Buffing, Unrolling và Tentering realtime.
 Từ thư mục gốc repository:
 
 ```powershell
-uv sync --project backend --group dev
-if (-not (Test-Path backend\.env)) { Copy-Item backend\.env.example backend\.env }
-docker compose up -d postgres
-uv run --project backend alembic -c backend\alembic.ini upgrade head
-uv run --directory backend python run.py
+.\scripts\ws3.cmd dev up
 ```
 
-Không chạy lại `Copy-Item` nếu `backend/.env` đã tồn tại. File này là cấu hình
-local và không được commit. Settings tự resolve đúng file dù lệnh được chạy từ
-root hoặc từ thư mục `backend`.
+Backend đọc `.env` của repo dù khởi chạy từ root hay từ thư mục `backend`.
+PostgreSQL dev mặc định dùng cổng 5433. Mẫu cấu hình nằm ở root `.env.example`.
 
 API mặc định:
 
@@ -59,8 +54,5 @@ PostgreSQL disposable có quyền tạo/xóa database test.
 - `uv.lock`: phiên bản dependency đã khóa, Docker dùng với `--frozen`.
 - `Dockerfile`: image backend được cài dependency bằng `uv`.
 - `alembic.ini`: vị trí migration và logging Alembic.
-- `.env.example`: mẫu cấu hình backend local (`backend/.env.example` khi nhìn từ root).
+- Root `.env`: cấu hình local dùng chung; tạo từ `.env.example` ở root repository.
 - `alembic/README`: quy tắc migration và baseline hiện tại.
-
-Đọc tài liệu repository tại [../docs/README.md](../docs/README.md) trước khi
-thay đổi database hoặc API contract.

@@ -13,6 +13,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(setUser)
       .finally(() => setLoading(false));
   }, []);
+  /** Authenticate the operator and publish the returned session scope. */
   const login = async (username: string, password: string): Promise<LoginResult> => {
     try {
       setUser(await authApi.login(username, password));
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         : 'invalidCredentials';
     }
   };
+  /** End the server session and clear local authentication state. */
   const logout = async () => {
     try {
       await authApi.logout();
